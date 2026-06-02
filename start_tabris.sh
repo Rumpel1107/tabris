@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# --- Check if Ollama is running ---
-if ! pgrep -x "ollama" > /dev/null; then
-    echo "Iniciando Ollama..."
-    ollama serve > /home/rumpel/tabris/ollama.log 2>&1 &
+# --- Check if Ollama service is running ---
+if ! systemctl is-active --quiet ollama; then
+    echo "Starting Ollama..."
+    sudo systemctl start ollama
     sleep 3
 else
-    echo "Ollama ya esta corriendo."
+    echo "Ollama is already running."
 fi
 
 # --- Check if venv is active and activate if needed ---
 if [[ "$VIRTUAL_ENV" == "" ]]; then
-    echo "Activando entorno virtual..."
-    source /home/rumpel/tabris/venv/bin/activate
+    echo "Activating virtual environment..."
+    source ~/Projects/tabris/venv/bin/activate
 else
-    echo "Entorno virtual ya esta activo."
+    echo "Virtual environment is already active."
 fi
 
 # --- Start Tabris ---
-echo "Iniciando Tabris..."
-cd /home/rumpel/tabris
+echo "Starting Tabris..."
+cd ~/Projects/tabris
 python tabris.py

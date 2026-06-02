@@ -1,4 +1,5 @@
 import ollama
+import config
 
 # --- Memory Update ---
 # Gemma analyzes the conversation and proposes updates to memory.md
@@ -39,7 +40,7 @@ Do not add any explanation outside of this format."""
     print("\nTabris: Analizando la conversacion para actualizar la memoria...\n")
 
     response = ollama.chat(
-        model="gemma4:e2b",
+        model = config.GENERAL_MODEL,
         messages=[{"role": "user", "content": analysis_prompt}]
     )
 

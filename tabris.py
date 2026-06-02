@@ -1,12 +1,15 @@
 import ollama
 import memory_manager
+import config
 
 # --- Memory ---
 # Opens memory.md and loads its full content as Tabris context
 def load_memory(path="memory.md"):
     try:
         with open(path, "r") as memory_file:
-            return memory_file.read()
+            content = memory_file.read()
+            content = content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
+            return content
     except FileNotFoundError:
         return "No memory file found."
 
@@ -17,8 +20,8 @@ def load_memory(path="memory.md"):
 def route_message(user_input):
     code_keywords = ["código", "code", "error", "bug", "función", "script", "python"]
     if any(word in user_input.lower() for word in code_keywords):
-        return "qwen2.5-coder:7b"
-    return "gemma4:e2b"
+        return config.CODE_MODEL
+    return config.GENERAL_MODEL
 
 
 # --- Main conversation loop ---
@@ -31,7 +34,7 @@ def chat():
         }
     ]
 
-    print("Tabris activo. Escribe 'salir' para terminar.\n")
+    print(config.AGENT_NAME + " activo. Escribe 'salir' para terminar.\n")
 
     while True:
         user_input = input("Tú: ")
@@ -51,7 +54,7 @@ def chat():
         reply = response.message.content
 
         conversation_history.append({"role": "assistant", "content": reply})
-        print(f"\nTabris ({model}): {reply}\n")
+        print(f"\n" + config.AGENT_NAME + " ({model}): {reply}\n")
         
 
 if __name__ == "__main__":
