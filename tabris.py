@@ -50,8 +50,13 @@ def chat():
         model = route_message(user_input)
         conversation_history.append({"role": "user", "content": user_input})
 
-        response = ollama.chat(model=model, messages=conversation_history)
-        reply = response.message.content
+        try:
+            response = ollama.chat(model=model, messages=conversation_history)
+            reply = response.message.content
+        except Exception as e:
+            print(f"Error al obtener respuesta del modelo: {e}\n")
+            conversation_history.pop()
+            continue
 
         conversation_history.append({"role": "assistant", "content": reply})
         print(f"\n" + config.AGENT_NAME + " ({model}): {reply}\n")

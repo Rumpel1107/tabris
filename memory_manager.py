@@ -72,6 +72,7 @@ def replace_section(content, section_header, new_content):
     lines = content.split("\n")
     result = []
     inside_section = False
+    section_level = len(section_header.split()[0])
 
     for line in lines:
         if line.strip() == section_header.strip():
@@ -80,8 +81,10 @@ def replace_section(content, section_header, new_content):
             result.append(new_content)
             continue
 
-        if inside_section and line.startswith("#"):
-            inside_section = False
+        if inside_section:
+            header_symbols = len(line.split()[0]) if line.startswith("#") else 0
+            if line.startswith("#") and header_symbols <= section_level:
+                inside_section = False
 
         if not inside_section:
             result.append(line)
