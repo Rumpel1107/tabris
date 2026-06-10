@@ -3,7 +3,6 @@ import memory_manager
 import config
 
 # --- Memory ---
-# Opens memory.md and loads its full content as Tabris context
 def load_memory(path="memory.md"):
     try:
         with open(path, "r") as memory_file:
@@ -15,8 +14,6 @@ def load_memory(path="memory.md"):
 
 
 # --- Router ---
-# Decides which model responds based on keywords in the message
-# Note: this will be replaced by an LLM-based router in a future step
 def route_message(user_input):
     code_keywords = ["código", "code", "error", "bug", "función", "script", "python"]
     if any(word in user_input.lower() for word in code_keywords):
