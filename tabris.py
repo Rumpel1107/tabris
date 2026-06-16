@@ -3,7 +3,7 @@ import memory_manager
 import config
 
 # --- Memory ---
-def load_memory(path="memory.md"):
+def load_memory(path=config.MEMORY_PATH):
     try:
         with open(path, "r") as memory_file:
             content = memory_file.read()

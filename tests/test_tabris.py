@@ -3,11 +3,13 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import unittest
+import io
 from memory_manager import parse_memory_update, update_memory, replace_section
 from tabris import route_message
 from config import CODE_MODEL, GENERAL_MODEL
 from unittest.mock import patch, MagicMock, mock_open
 
+mock_file = mock_open(read_data="### Roadmap\nold content")
 
 class TestParseMemoryUpdate(unittest.TestCase):
 
@@ -41,7 +43,7 @@ class TestUpdateMemory(unittest.TestCase):
         update_memory([], memory_path="memory.md")
         mock_chat.assert_not_called()
         
-    @patch("builtins.open", mock_open(read_data="# memoria falsa"))
+    @patch("builtins.open", mock_open(read_data="# false memory"))
     @patch("ollama.chat")
     def test_no_changes(self, mock_chat):
         mock_chat.return_value.message.content = "HAS_CHANGES: no"
@@ -55,6 +57,31 @@ class TestUpdateMemory(unittest.TestCase):
         mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_input.assert_called_once()
+    
+    @patch("builtins.open", mock_file)
+    @patch("builtins.input", return_value="no")
+    @patch("ollama.chat")
+    def test_changes_rejected(self, mock_chat, mock_input):
+        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
+        update_memory([], memory_path="memory.md")
+        mock_input.assert_called_once()
+        mock_file().write.assert_not_called()
+    
+    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
+    @patch("builtins.input")
+    @patch("ollama.chat", side_effect=Exception("connection refused"))
+    def test_connection_error(self, mock_chat, mock_input):
+        update_memory([], memory_path="memory.md")
+        mock_input.assert_not_called()
+    
+    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
+    @patch("builtins.input", return_value="si")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    @patch("ollama.chat")
+    def test_changes_confirmed_without_section(self, mock_chat, mock_stdout, mock_input):
+        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nCONTENT:\nnew content"
+        update_memory([], memory_path="memory.md")
+        self.assertIn("no se pudo determinar la sección", mock_stdout.getvalue().lower())
 
 
 class TestReplaceSection(unittest.TestCase):
@@ -86,7 +113,7 @@ class TestRouteMessage(unittest.TestCase):
         self.assertEqual(route_message("I have a bug in my code"), CODE_MODEL)
 
     def test_routes_code_keyword_spanish(self):
-        self.assertEqual(route_message("tengo un error en mi función"), CODE_MODEL)
+        self.assertEqual(route_message("Tengo un error en mi función"), CODE_MODEL)
 
     def test_routes_general_message(self):
         self.assertEqual(route_message("what is machine learning?"), GENERAL_MODEL)

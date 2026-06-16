@@ -68,15 +68,18 @@ Do not add any explanation outside of this format."""
         print(f"{config.AGENT_NAME}: Cambios propuestos en '{section}':\n\n{updates}\n")
         confirmation = input("Confirmas estos cambios? (si/no): ").strip().lower()
 
-        if confirmation == "si" and section:
-            updated_memory = replace_section(current_memory, section, updates)
-            try:
-                with open(memory_path, "w") as memory_file:
-                    memory_file.write(updated_memory)
-            except Exception as e:
-                print(f"{config.AGENT_NAME}: Error al guardar la memoria: {e}")
-                return
-            print(f"{config.AGENT_NAME}: Memoria actualizada.")
+        if confirmation == "si":
+            if section:
+                updated_memory = replace_section(current_memory, section, updates)
+                try:
+                    with open(memory_path, "w") as memory_file:
+                        memory_file.write(updated_memory)
+                except Exception as e:
+                    print(f"{config.AGENT_NAME}: Error al guardar la memoria: {e}")
+                    return
+                print(f"{config.AGENT_NAME}: Memoria actualizada.")
+            else:
+                print(f"{config.AGENT_NAME}: No se pudo determinar la sección a actualizar.")
         else:
             print(f"{config.AGENT_NAME}: No se realizaron actualizaciones en la memoria.")
     else:
