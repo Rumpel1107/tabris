@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 ---
 
@@ -115,6 +115,7 @@ Evolution path — build the step you need, not the whole ladder:
 | M0 (now) | `memory.md`, single user, whole file as system prompt | Keep during Phase 1–2 |
 | M1 | SQLite: `users`, `facts` (persistent profile/preferences), `messages` (recent history). System prompt assembled from facts + last N messages. | Phase 3 — when Telegram lands (Telegram gives you user IDs for free) |
 | M2 | Per-user profiles + per-project context; summarization of old history | When a second real user exists. **Do not build before.** |
+| M3 (candidate) | Graph / GraphRAG memory: facts stored as entities + relations, retrieval by traversing connections (or plain embeddings-RAG as the cheaper precursor). | **Only if M1/M2 prove insufficient.** Entry criteria, ALL must hold: (1) plain embeddings-RAG over `facts` returns disconnected fragments the model can't relate on its own; (2) more than one real user with richly interrelated facts; (3) a need to explain *why* a memory was recalled. Until then this is over-engineering — see §9 scope-creep risk. Cheaper middle ground reachable from M1: a `fact_links(fact_id, related_fact_id, relation)` table = navigable relations on SQLite, no graph DB. |
 
 Principles: persistent facts ≠ conversation history (separate tables); every memory write keeps
 a backup or is transactional; human-in-the-loop confirmation stays for profile-level changes.
@@ -159,24 +160,25 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 | 17 (F2) | **Backup before memory writes** | `update_memory()` overwrites `memory.md` directly → data-loss risk if the model output is malformed and the user confirms. Before writing, copy current file to `memory.md.bak` (e.g. `shutil.copy2`). | ✅ |
 | 18 (F3) | **Bound conversation history** | `conversation_history` grows without limit → silent truncation drops the system prompt (see §4.4). Keep system prompt + last N messages when calling the model. Done via pure `build_messages()` helper (`history[:1] + history[1:][-MAX_HISTORY*2:]`); `num_ctx` now passed to `ollama.chat`; new config `MAX_HISTORY=10`, `NUM_CTX=8192`. Full history still saved at exit. 3 tests added. **Note:** rolling-summary memory deferred to Phase 2/3 (depends on summarizer reliability — weak on local 8b; viable on API models + fits M1). | ✅ |
 | 19 (F4) | **Use `config.MEMORY_PATH` everywhere** | `load_memory()` hardcodes `"memory.md"` default instead of `config.MEMORY_PATH`. | ✅ |
-| 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ⬜ |
+| 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ✅ |
 | 21 (F6) | **Router false positives** | Keywords like "python"/"error" send everything to the code model ("¿qué error cometí al planear mi semana?"). Acceptable short-term; superseded by LLM-based router in Phase 3. Optional cheap improvement: require ≥2 keyword hits. | ⬜ (low) |
-| 22 (F7) | **Graceful exit + streaming (UX)** | Handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. | ⬜ (low) |
+| 22 (F7) | **Graceful exit + streaming (UX)** | Handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Also expand exit phrase recognition beyond `"salir"` (add `"exit"`, `"quit"`, `"adiós"`, `"bye"`) — cheap fix, no LLM needed. Context-aware exit intent deferred to Phase 3 (folds into item 31). | ⬜ (low) |
 
 ### Phase 2 — API migration (the pivot)
 23. ⬜ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
 24. ⬜ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
-25. ⬜ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback).
+25. ⬜ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
 26. ⬜ Implement provider fallback on error (try primary → fallback → friendly error).
 27. ⬜ Update tests; add tests for provider selection and fallback (mock the APIs).
+- ⬜ **Multilingual UI strings:** create `strings.py` with message dictionary (`es` / `en`) + `LANGUAGE = "auto"` in `config.py`. Replace all hardcoded user-facing strings in `main.py` and `memory_manager.py` with `MESSAGES[lang][key]` lookups. Language defaults to `config.LANGUAGE`; auto-detection by first message deferred to Phase 3.
 > Exit criterion: Tabris runs end-to-end with zero local model dependency.
 
 ### Phase 3 — Telegram + memory v1
 28. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
 29. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
 30. ⬜ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`.
-31. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role.
-32. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`).
+31. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit` — exit intent replaces the hardcoded phrase list from item 22.
+32. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
 
 ### Phase 4 — Deploy (always-on)
 33. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.

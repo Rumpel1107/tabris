@@ -6,13 +6,28 @@ import config
 def parse_memory_update(raw_response):
     has_changes = "HAS_CHANGES: yes" in raw_response
     if not has_changes:
-        return False, None, None
-
-    section_line = [l for l in raw_response.split("\n") if l.startswith("SECTION:")]
-    section = section_line[0].replace("SECTION:", "").strip() if section_line else None
-    content = raw_response.split("CONTENT:")[-1].strip()
-
-    return True, section, content
+        return False, None, None, None
+    
+    section_lines = [l for l in raw_response.split("\n") if l.startswith("SECTION:")]
+    content_blocks = raw_response.split("CONTENT:")
+    
+    if len(section_lines) > 1:
+        return False, None, None, "Respuesta con multiples secciones" #Response with multiple SECTION headers
+    
+    if len(content_blocks) > 2:
+        return False, None, None, "Respuesta con multiples bloques de CONTENT"
+    
+    if len(content_blocks) < 2:
+        return False, None, None, "Respuesta sin bloque de CONTENT"
+    
+    section = section_lines[0].replace("SECTION:", "").strip() if section_lines else None
+    
+    if section_lines and not section:
+        return False, None, None, "SECTION vacio en la respuesta"
+    
+    content = content_blocks[-1].strip()
+    
+    return True, section, content, None
 
 
 def update_memory(conversation_history, memory_path="memory.md"):
@@ -23,7 +38,7 @@ def update_memory(conversation_history, memory_path="memory.md"):
     except FileNotFoundError:
         print(f"{config.AGENT_NAME}: No se encontró el archivo de memoria '{memory_path}'.")
         return
-
+    
     conversation_text = "\n".join(
         f"{msg['role'].upper()}: {msg['content']}"
         for msg in conversation_history
@@ -63,7 +78,10 @@ Do not add any explanation outside of this format."""
         return
 
     raw_response = response.message.content.strip()
-    has_changes, section, updates = parse_memory_update(raw_response)
+    has_changes, section, updates, error = parse_memory_update(raw_response)
+    if error:
+        print(f"{config.AGENT_NAME}: Respuesta del modelo invalida - {error}. No se actualizo la memoria.")
+        return
 
     if has_changes:
         print(f"{config.AGENT_NAME}: Cambios propuestos en '{section}':\n\n{updates}\n")

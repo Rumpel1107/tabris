@@ -15,24 +15,42 @@ class TestParseMemoryUpdate(unittest.TestCase):
 
     def test_no_changes(self):
         response = "HAS_CHANGES: no"
-        has_changes, section, content = parse_memory_update(response)
+        has_changes, section, content, error = parse_memory_update(response)
         self.assertFalse(has_changes)
         self.assertIsNone(section)
         self.assertIsNone(content)
-
+    
     def test_with_changes(self):
         response = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content here"
-        has_changes, section, content = parse_memory_update(response)
+        has_changes, section, content, error = parse_memory_update(response)
         self.assertTrue(has_changes)
         self.assertEqual(section, "### Roadmap")
         self.assertIn("new content here", content)
-
+    
     def test_missing_section(self):
         response = "HAS_CHANGES: yes\nCONTENT:\nsome content"
-        has_changes, section, content = parse_memory_update(response)
+        has_changes, section, content, error = parse_memory_update(response)
         self.assertTrue(has_changes)
         self.assertIsNone(section)
         self.assertIn("some content", content)
+    
+    def test_multiple_sections(self):
+        response = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\ncontent A\nSECTION: ### B\nCONTENT:\ncontent B"
+        has_changes, section, content, error = parse_memory_update(response)
+        self.assertFalse(has_changes)
+        self.assertIsNotNone(error)
+    
+    def test_missing_content_block(self):
+        response = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nno content keyword here"
+        has_changes, section, content, error = parse_memory_update(response)
+        self.assertFalse(has_changes)
+        self.assertIsNotNone(error)
+    
+    def test_empty_section_value(self):
+        response = "HAS_CHANGES: yes\nSECTION:   \nCONTENT:\nsome content"
+        has_changes, section, content, error = parse_memory_update(response)
+        self.assertFalse(has_changes)
+        self.assertIsNotNone(error)
 
 
 class TestUpdateMemory(unittest.TestCase):
@@ -92,6 +110,16 @@ class TestUpdateMemory(unittest.TestCase):
         mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_copy2.assert_called_once_with("memory.md", "memory.md.bak")
+    
+    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
+    @patch("builtins.input")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    @patch("ollama.chat")
+    def test_malformed_response(self, mock_chat, mock_stdout, mock_input):
+        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\nA\nSECTION: ### B\nCONTENT:\nB"
+        update_memory([], memory_path="memory.md")
+        mock_input.assert_not_called()
+        self.assertIn("invalida", mock_stdout.getvalue().lower())
 
 
 class TestReplaceSection(unittest.TestCase):
