@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 ---
 
@@ -155,9 +155,9 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 
 | # | Fix | Detail | Status |
 |---|---|---|---|
-| 16 (F1) | **f-string bug in `tabris.py`** | `print(f"\n" + config.AGENT_NAME + " ({model}): {reply}\n")` — only the first literal is an f-string, so `{model}` and `{reply}` print literally. Fix: `print(f"\n{config.AGENT_NAME} ({model}): {reply}\n")`. | ⬜ |
-| 17 (F2) | **Backup before memory writes** | `update_memory()` overwrites `memory.md` directly → data-loss risk if the model output is malformed and the user confirms. Before writing, copy current file to `memory.md.bak` (e.g. `shutil.copy2`). | ⬜ |
-| 18 (F3) | **Bound conversation history** | `conversation_history` grows without limit → silent truncation drops the system prompt (see §4.4). Keep system prompt + last N messages when calling the model. | ⬜ |
+| 16 (F1) | **f-string bug in `tabris.py`** | `print(f"\n" + config.AGENT_NAME + " ({model}): {reply}\n")` — only the first literal is an f-string, so `{model}` and `{reply}` print literally. Fix: `print(f"\n{config.AGENT_NAME} ({model}): {reply}\n")`. | ✅ |
+| 17 (F2) | **Backup before memory writes** | `update_memory()` overwrites `memory.md` directly → data-loss risk if the model output is malformed and the user confirms. Before writing, copy current file to `memory.md.bak` (e.g. `shutil.copy2`). | ✅ |
+| 18 (F3) | **Bound conversation history** | `conversation_history` grows without limit → silent truncation drops the system prompt (see §4.4). Keep system prompt + last N messages when calling the model. Done via pure `build_messages()` helper (`history[:1] + history[1:][-MAX_HISTORY*2:]`); `num_ctx` now passed to `ollama.chat`; new config `MAX_HISTORY=10`, `NUM_CTX=8192`. Full history still saved at exit. 3 tests added. **Note:** rolling-summary memory deferred to Phase 2/3 (depends on summarizer reliability — weak on local 8b; viable on API models + fits M1). | ✅ |
 | 19 (F4) | **Use `config.MEMORY_PATH` everywhere** | `load_memory()` hardcodes `"memory.md"` default instead of `config.MEMORY_PATH`. | ✅ |
 | 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ⬜ |
 | 21 (F6) | **Router false positives** | Keywords like "python"/"error" send everything to the code model ("¿qué error cometí al planear mi semana?"). Acceptable short-term; superseded by LLM-based router in Phase 3. Optional cheap improvement: require ≥2 keyword hits. | ⬜ (low) |

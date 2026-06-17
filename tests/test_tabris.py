@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import unittest
 import io
 from memory_manager import parse_memory_update, update_memory, replace_section
-from tabris import route_message
-from config import CODE_MODEL, GENERAL_MODEL
+from tabris import route_message, build_messages
+from config import CODE_MODEL, GENERAL_MODEL, MAX_HISTORY
 from unittest.mock import patch, MagicMock, mock_open
 
 mock_file = mock_open(read_data="### Roadmap\nold content")
@@ -50,10 +50,11 @@ class TestUpdateMemory(unittest.TestCase):
         update_memory([], memory_path="memory.md")
         mock_chat.assert_called_once()
     
+    @patch("memory_manager.shutil.copy2")
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input", return_value="si")
     @patch("ollama.chat")
-    def test_changes_confirmed(self, mock_chat, mock_input,):
+    def test_changes_confirmed(self, mock_chat, mock_input, mock_copy2):
         mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_input.assert_called_once()
@@ -82,6 +83,15 @@ class TestUpdateMemory(unittest.TestCase):
         mock_chat.return_value.message.content = "HAS_CHANGES: yes\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         self.assertIn("no se pudo determinar la sección", mock_stdout.getvalue().lower())
+    
+    @patch("memory_manager.shutil.copy2")
+    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
+    @patch("builtins.input", return_value="si")
+    @patch("ollama.chat")
+    def test_backup_created_before_write(self, mock_chat, mock_input, mock_copy2):
+        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
+        update_memory([], memory_path="memory.md")
+        mock_copy2.assert_called_once_with("memory.md", "memory.md.bak")
 
 
 class TestReplaceSection(unittest.TestCase):
@@ -105,6 +115,30 @@ class TestReplaceSection(unittest.TestCase):
         self.assertNotIn("old content", result)
         self.assertNotIn("step 1", result)
         self.assertIn("## Other", result)
+
+
+class TestBuildMessages(unittest.TestCase):
+
+    def test_keeps_all_when_under_limit(self):
+        history = [{"role": "system", "content": "sys"}]
+        history += [{"role": "user", "content": f"m{i}"} for i in range(4)]
+        result = build_messages(history)
+        self.assertEqual(len(result), 5)
+        self.assertEqual(result[0]["role"], "system")
+
+    def test_truncates_when_over_limit(self):
+        history = [{"role": "system", "content": "sys"}]
+        history += [{"role": "user", "content": f"m{i}"} for i in range(50)]
+        result = build_messages(history)
+        self.assertEqual(len(result), MAX_HISTORY * 2 + 1)
+        self.assertEqual(result[0]["role"], "system")
+
+    def test_system_prompt_always_first(self):
+        history = [{"role": "system", "content": "sys"}]
+        history += [{"role": "user", "content": f"m{i}"} for i in range(50)]
+        result = build_messages(history)
+        self.assertEqual(result[0]["content"], "sys")
+        self.assertEqual(result[-1]["content"], "m49")
 
 
 class TestRouteMessage(unittest.TestCase):

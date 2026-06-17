@@ -1,3 +1,4 @@
+import shutil
 import ollama
 import config
 
@@ -72,6 +73,7 @@ Do not add any explanation outside of this format."""
             if section:
                 updated_memory = replace_section(current_memory, section, updates)
                 try:
+                    shutil.copy2(memory_path, memory_path + ".bak")
                     with open(memory_path, "w") as memory_file:
                         memory_file.write(updated_memory)
                 except Exception as e:
