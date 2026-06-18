@@ -20,4 +20,4 @@ fi
 # --- Start Tabris ---
 echo "Starting Tabris..."
 cd ~/Projects/tabris
-python tabris.py
+python main.py

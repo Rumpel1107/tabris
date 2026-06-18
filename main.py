@@ -1,6 +1,7 @@
 import ollama
-import memory_manager
 import config
+
+from core import memory_manager
 
 # --- Memory ---
 def load_memory(path=config.MEMORY_PATH):
