@@ -10,6 +10,13 @@ AGENT_NAME = "Tabris"
 GENERAL_MODEL = "llama3.1:8b"
 CODE_MODEL = "qwen2.5-coder:7b"
 
+# --- Role → Provider mapping ---
+AGENT_ROLES = {
+    "general": {"provider": "ollama", "model": "llama3.1:8b"},
+    "code":    {"provider": "deepseek", "model": "deepseek-chat"},
+    "router":  {"provider": "groq",     "model": "llama-3.1-8b-instant"},
+}
+
 # --- Memory Configuration ---
 MEMORY_PATH = "memory.md"
 
