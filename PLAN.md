@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-18 (Phase 2 item 24 done)
+Last updated: 2026-06-18 (Phase 2 item 25 done)
 
 ---
 
@@ -16,13 +16,9 @@ Last updated: 2026-06-18 (Phase 2 item 24 done)
 - Based in Colombia. Currently without formal employment.
 
 ### Why (in priority order)
-1. **Income, soon.** Generate income as an independent (freelance / SaaS) before runway ends.
-2. **Employability fallback.** If the independent route doesn't sustain in time, the technical skills built here must be enough to get hired as a Dev / FDE / Technical PM.
-3. **Learning.** Every task must teach transferable skills, not just produce output.
-   Understanding > executing.
-
-**Design consequence:** every hour invested must pay twice — advance the product AND build
-portfolio/employable skills. Avoid work that does neither.
+1. **Independent income — the definition of success.** Generate revenue as an independent (SaaS / product / freelance) before runway ends. This is THE goal.
+2. **Learning that serves #1.** Every hour learns something transferable, but learning is now subordinate to shipping a sellable product.
+3. **Employability — Plan B financing only.** A technical job is a fallback IF the support fund is exhausted, NOT a parallel objective. Do not optimize for it..
 
 ### What Tabris is
 A personal, always-on, multi-agent AI assistant (JARVIS-style) that acts as **PM, Dev and Tutor**:
@@ -167,7 +163,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 ### Phase 2 — API migration (the pivot)
 23. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
 24. ✅ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
-25. ⬜ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
+25. ✅ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
 26. ⬜ Implement provider fallback on error (try primary → fallback → friendly error).
 27. ⬜ Update tests; add tests for provider selection and fallback (mock the APIs).
 - ⬜ **Multilingual UI strings:** create `strings.py` with message dictionary (`es` / `en`) + `LANGUAGE = "auto"` in `config.py`. Replace all hardcoded user-facing strings in `main.py` and `memory_manager.py` with `MESSAGES[lang][key]` lookups. Language defaults to `config.LANGUAGE`; auto-detection by first message deferred to Phase 3.
@@ -218,11 +214,14 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 | 5 | Account reconciliation tool | 3 | 4 | 4 | 2 | 13 | Backlog — monetizable (freelance accountants/SMBs) but needs domain depth and real user input. Revisit after #2 ships and brings contact with that audience. |
 | 6 | Reading app | 3 | 2 | 4 | 3 | 12 | Backlog — personal value, crowded market. |
 | 7 | Streaming platform | 1 | 2 | 1 | 1 | 5 | On hold (as already agreed) — infrastructure cost and complexity are incompatible with current constraints. |
+| 8 | Documentation generator (video→manual) | 2 | ? | 4 | 2 | — | Backlog / UNVALIDATED. Crowded market (Scribe, Tango, Guidde, Docsie). Validate willingness-to-pay with the people who requested it BEFORE any build. Outside the financial-domain edge. |
 
-**Sequence:** #1 (fast, foundational) → #2 (flagship) → re-evaluate with real data.
-**Income reality check:** SaaS revenue is a months-long bet. The faster income paths this plan
-feeds are (a) freelance gigs enabled by a visible portfolio, and (b) Dev/FDE employability.
-Treat #2's launch as a learning+portfolio milestone first, revenue second.
+**Sequence:**
+- Tabris: finish FUNCTIONAL phase only, then FREEZE. Definition of done:
+  Responds from Telegram with persistent memory.
+  Everything beyond = backlog.
+- Then → Renta liquidator as flagship wedge. Start with an Excel version (validates logic + willingness to pay before any code).
+- Tax season makes this time-sensitive: prioritize accordingly.
 
 ---
 
@@ -247,6 +246,7 @@ A repo/demo goes public only when ALL are true:
 - Never assume — confirm context first. Cite sources or mark inferences as such.
 - Document everything for future replication.
 - Human-in-the-loop for anything destructive (memory writes, file changes, deletions).
+- **Vibe-coding boundary:** scaffolding (UI, framework, deploy, boilerplate) may be generated fast without deep understanding. Domain logic (tax/payroll calculations) must be fully understood, owned, and tested — it IS the product and the defensible edge. Rule of thumb: vibe-code how it looks; understand how it calculates.
 
 ## 9. Known Risks
 
