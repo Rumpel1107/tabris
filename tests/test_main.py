@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import unittest
 from main import route_message, build_messages
-from config import CODE_MODEL, GENERAL_MODEL, MAX_HISTORY
+from config import MAX_HISTORY
 from unittest.mock import patch, MagicMock, mock_open
 
 
@@ -35,13 +35,13 @@ class TestBuildMessages(unittest.TestCase):
 class TestRouteMessage(unittest.TestCase):
 
     def test_routes_code_keyword_english(self):
-        self.assertEqual(route_message("I have a bug in my code"), CODE_MODEL)
+        self.assertEqual(route_message("I have a bug in my code"), "code")
 
     def test_routes_code_keyword_spanish(self):
-        self.assertEqual(route_message("Tengo un error en mi función"), CODE_MODEL)
+        self.assertEqual(route_message("Tengo un error en mi función"), "code")
 
     def test_routes_general_message(self):
-        self.assertEqual(route_message("what is machine learning?"), GENERAL_MODEL)
+        self.assertEqual(route_message("what is machine learning?"), "general")
 
 
 if __name__ == "__main__":

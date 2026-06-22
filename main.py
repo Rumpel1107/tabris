@@ -1,7 +1,6 @@
-import ollama
 import config
 
-from core import memory_manager
+from core import memory_manager, providers
 
 # --- Memory ---
 def load_memory(path=config.MEMORY_PATH):
@@ -17,8 +16,8 @@ def load_memory(path=config.MEMORY_PATH):
 def route_message(user_input):
     code_keywords = ["código", "code", "error", "bug", "función", "script", "python"]
     if any(word in user_input.lower() for word in code_keywords):
-        return config.CODE_MODEL
-    return config.GENERAL_MODEL
+        return "code"
+    return "general"
 
 # --- Context window ---
 def build_messages(conversation_history):
@@ -47,20 +46,19 @@ def chat():
             memory_manager.update_memory(conversation_history)
             break
 
-        model = route_message(user_input)
+        role = route_message(user_input)
         conversation_history.append({"role": "user", "content": user_input})
 
         try:
             bounded_messages = build_messages(conversation_history)
-            response = ollama.chat(model=model, messages=bounded_messages, options={"num_ctx": config.NUM_CTX})
-            reply = response.message.content
+            reply = providers.chat(role, bounded_messages)
         except Exception as e:
             print(f"Error al obtener respuesta del modelo: {e}\n")
             conversation_history.pop()
             continue
 
         conversation_history.append({"role": "assistant", "content": reply})
-        print(f"\n{config.AGENT_NAME} ({model}): {reply}\n")
+        print(f"\n{config.AGENT_NAME} ({role}): {reply}\n")
         
 
 if __name__ == "__main__":

@@ -6,10 +6,6 @@ load_dotenv()
 # --- Agent Configuration ---
 AGENT_NAME = "Tabris"
 
-# --- Model Configuration ---
-GENERAL_MODEL = "llama3.1:8b"
-CODE_MODEL = "qwen2.5-coder:7b"
-
 # --- Role → Provider mapping ---
 AGENT_ROLES = {
     "general": {"provider": "ollama", "model": "llama3.1:8b"},

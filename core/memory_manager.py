@@ -1,7 +1,7 @@
 import shutil
-import ollama
 import config
 
+from core import providers
 
 def parse_memory_update(raw_response):
     has_changes = "HAS_CHANGES: yes" in raw_response
@@ -69,15 +69,14 @@ Do not add any explanation outside of this format."""
     print(f"\n{config.AGENT_NAME}: Analizando la conversacion para actualizar la memoria...\n")
     
     try:
-        response = ollama.chat(
-            model=config.GENERAL_MODEL,
-            messages=[{"role": "user", "content": analysis_prompt}]
-            )
+        raw_response = providers.chat(
+            "general",
+            [{"role": "user", "content": analysis_prompt}]
+        ).strip()
     except Exception as e:
         print(f"{config.AGENT_NAME}: Error al conectar con el modelo: {e}")
         return
 
-    raw_response = response.message.content.strip()
     has_changes, section, updates, error = parse_memory_update(raw_response)
     if error:
         print(f"{config.AGENT_NAME}: Respuesta del modelo invalida - {error}. No se actualizo la memoria.")
