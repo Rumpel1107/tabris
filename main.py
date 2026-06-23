@@ -1,4 +1,5 @@
 import config
+import time
 
 from core.strings import msg
 
@@ -25,6 +26,16 @@ def route_message(user_input):
 def build_messages(conversation_history):
     return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
 
+MEMORY_TRIGGER_EXCHANGES = 5
+MEMORY_TRIGGER_SECONDS = 300
+
+def should_trigger_memory(exchange_count, last_trigger_time):
+    if exchange_count >= MEMORY_TRIGGER_EXCHANGES:
+        return True
+    if time.time() - last_trigger_time >= MEMORY_TRIGGER_SECONDS:
+        return True
+    return False
+
 # --- Main conversation loop ---
 def chat():
     memory = load_memory()
@@ -34,6 +45,8 @@ def chat():
             "content": memory
         }
     ]
+    exchange_count = 0
+    last_trigger_time = time.time()
 
     print(msg("startup", agent=config.AGENT_NAME, exit_cmd=msg("exit_command")))
 
@@ -61,7 +74,13 @@ def chat():
 
         conversation_history.append({"role": "assistant", "content": reply})
         print(msg("agent_reply", agent=config.AGENT_NAME, role=role, reply=reply))
-        
+
+        exchange_count += 1
+        if should_trigger_memory(exchange_count, last_trigger_time):
+            memory_manager.update_memory(conversation_history)
+            exchange_count = 0
+            last_trigger_time = time.time()
+
 
 if __name__ == "__main__":
     chat()

@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-22 (Phase 2 complete)
+Last updated: 2026-06-23 (Phase 3 items 27-28 complete)
 
 ---
 
@@ -172,8 +172,8 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 ### Phase 3 — Memory v1 + Telegram
 > Reorder rationale: build the brain before connecting the interface. Telegram connects last so it lands on a fully functional system.
 
-27. ⬜ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
-28. ⬜ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
+27. ✅ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
+28. ✅ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
 29. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases).
 30. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
 31. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
