@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-22 (Phase 2 items 26-27 done)
+Last updated: 2026-06-22 (Phase 2 complete)
 
 ---
 
@@ -141,7 +141,7 @@ pending ones ⬜. `> Exit criterion` lines define when a phase is done.
 9. ✅ Project pushed to GitHub (private repo)
 10. ✅ config.py created for environment configuration
 
-### Phase 1 — Stabilize & complete base system  🔧 in progress
+### Phase 1 — Stabilize & complete base system  ✅
 11. ✅ requirements.txt added
 12. ✅ try/except error handling in tabris.py main loop
 13. ✅ replace_section() bug fixed in memory_manager.py
@@ -158,45 +158,57 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 | 19 (F4) | **Use `config.MEMORY_PATH` everywhere** | `load_memory()` hardcodes `"memory.md"` default instead of `config.MEMORY_PATH`. | ✅ |
 | 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ✅ |
 
-> F6 (router false positives) and F7 (graceful exit + streaming) were relocated to Phase 3, where they are naturally resolved (see items 29 and 31). All Phase 1 fixes above are ✅.
+> F6 (router false positives) and F7 (graceful exit + streaming) were relocated to Phase 3, where they are naturally resolved (see items 29 and 33). All Phase 1 fixes above are ✅.
 
-### Phase 2 — API migration (the pivot)
-23. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
-24. ✅ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
-25. ✅ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
-26. ✅ Implement provider fallback on error (try primary → fallback → friendly error).
-27. ✅ Update tests; add tests for provider selection and fallback (mock the APIs).
-- ⬜ **Multilingual UI strings:** create `strings.py` with message dictionary (`es` / `en`) + `LANGUAGE = "auto"` in `config.py`. Replace all hardcoded user-facing strings in `main.py` and `memory_manager.py` with `MESSAGES[lang][key]` lookups. Language defaults to `config.LANGUAGE`; auto-detection by first message deferred to Phase 3.
+### Phase 2 — API migration (the pivot)  ✅
+21. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
+22. ✅ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
+23. ✅ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
+24. ✅ Implement provider fallback on error (try primary → fallback → friendly error).
+25. ✅ Update tests; add tests for provider selection and fallback (mock the APIs).
+26. ✅ Multilingual UI strings: `core/strings.py` with `es`/`en` dictionary + `LANGUAGE = "es"` in `config.py`; all user-facing strings in `main.py` and `memory_manager.py` use `msg(key, **kwargs)`. Auto-detection deferred to item 30.
 > Exit criterion: Tabris runs end-to-end with zero local model dependency.
 
-### Phase 3 — Telegram + memory v1
-28. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
-29. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
-- ⬜ **CLI UX (F7 remainder):** handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the CLI adapter work above.
-30. ⬜ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`.
-31. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases).
-32. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
+### Phase 3 — Memory v1 + Telegram
+> Reorder rationale: build the brain before connecting the interface. Telegram connects last so it lands on a fully functional system.
+
+27. ⬜ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
+28. ⬜ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
+29. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases).
+30. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
+31. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
+32. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
+33. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
 
 ### Phase 4 — Deploy (always-on)
-33. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
-34. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables.
-35. ⬜ Basic ops: logs, restart-on-failure, weekly SQLite backup (cron + copy).
+34. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
+35. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables.
+36. ⬜ Basic ops: logs, restart-on-failure, weekly SQLite backup (cron + copy).
 > Exit criterion: Rumpel talks to Tabris from his phone with his PC off.
 
 ### Phase 5 — Portfolio (transversal: starts during Phase 2)
-36. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot.
-37. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
-38. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
-39. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
-40. ⬜ GitHub profile README + pin Tabris.
+37. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot.
+38. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
+39. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
+40. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
+41. ⬜ GitHub profile README + pin Tabris.
 
 ### Phase 6 — First pipeline project
-41. ⬜ Habit & Task Tracker (see §6): CLI + SQLite first, then minimal API (FastAPI), then it becomes Tabris's first **tool** (Phase 7 preview: Tabris reads/writes the tracker on your behalf).
+42. ⬜ Habit & Task Tracker (see §6): CLI + SQLite first, then minimal API (FastAPI), then it becomes Tabris's first **tool** (Phase 7 preview: Tabris reads/writes the tracker on your behalf).
 
 ### Phase 7 — Multi-agent & tools (deferred)
-42. ⬜ Tool use with human-in-the-loop (CRUD on project files, tracker access).
-43. ⬜ PM / Dev / Tutor role structure on top of the role→provider map.
-44. ⬜ Specialized agents by strength (research, documents, images) as budget allows.
+> Precondition: tool use needs a function-calling-capable provider. Add a "tools" role to `AGENT_ROLES` pointing to a strong model (DeepSeek/Gemini); the cheap router models are insufficient.
+
+43. ⬜ Tool use with human-in-the-loop (CRUD on project files, tracker access).
+44. ⬜ PM / Dev / Tutor role structure on top of the role→provider map.
+45. ⬜ Specialized agents by strength (research, documents, images) as budget allows.
+
+### Phase 8 — Integrations & scheduling (candidate, post-freeze)
+46. ⬜ Time awareness: inject current datetime into system prompt context.
+47. ⬜ Task scheduler: APScheduler (or similar) so Tabris can fire reminders and timed actions from a persistent server.
+48. ⬜ Google Workspace integration: Calendar, Gmail, Drive — via OAuth + function calling.
+49. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
+> Entry criteria: Tabris stable in production (Phase 4 done) + tool use layer in place (Phase 7 done).
 
 ---
 

@@ -1,5 +1,7 @@
 import config
 
+from core.strings import msg
+
 from core import memory_manager, providers
 
 # --- Memory ---
@@ -10,7 +12,7 @@ def load_memory(path=config.MEMORY_PATH):
             content = content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
             return content
     except FileNotFoundError:
-        return "No memory file found."
+        return msg("no_memory_file")
 
 # --- Router ---
 def route_message(user_input):
@@ -33,16 +35,16 @@ def chat():
         }
     ]
 
-    print(config.AGENT_NAME + " activo. Escribe 'salir' para terminar.\n")
+    print(msg("startup", agent=config.AGENT_NAME, exit_cmd=msg("exit_command")))
 
     while True:
-        user_input = input("Tú: ")
+        user_input = input(msg("user_prompt"))
 
         # Ignore empty messages
         if not user_input.strip():
             continue
         
-        if user_input.lower() == "salir":
+        if user_input.lower() == msg("exit_command"):
             memory_manager.update_memory(conversation_history)
             break
 
@@ -53,12 +55,12 @@ def chat():
             bounded_messages = build_messages(conversation_history)
             reply = providers.chat(role, bounded_messages)
         except Exception as e:
-            print(f"Error al obtener respuesta del modelo: {e}\n")
+            print(msg("model_error", agent=config.AGENT_NAME, error=e))
             conversation_history.pop()
             continue
 
         conversation_history.append({"role": "assistant", "content": reply})
-        print(f"\n{config.AGENT_NAME} ({role}): {reply}\n")
+        print(msg("agent_reply", agent=config.AGENT_NAME, role=role, reply=reply))
         
 
 if __name__ == "__main__":
