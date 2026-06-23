@@ -8,9 +8,22 @@ AGENT_NAME = "Tabris"
 
 # --- Role → Provider mapping ---
 AGENT_ROLES = {
-    "general": {"provider": "ollama", "model": "llama3.1:8b"},
-    "code":    {"provider": "deepseek", "model": "deepseek-chat"},
-    "router":  {"provider": "groq",     "model": "llama-3.1-8b-instant"},
+    "general": [
+        {"provider": "gemini", "model": "gemini-2.5-flash"},
+        {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
+        {"provider": "ollama", "model": "llama3.1:8b"},
+    ],
+    "code": [
+        {"provider": "deepseek",   "model": "deepseek-chat"},
+        {"provider": "openrouter", "model": "z-ai/glm-5.2"},
+        {"provider": "groq",       "model": "moonshotai/kimi-k2-instruct"},
+        {"provider": "ollama",     "model": "llama3.1:8b"},
+    ],
+    "router": [
+        {"provider": "groq",   "model": "llama-3.1-8b-instant"},
+        {"provider": "gemini", "model": "gemini-2.5-flash"},
+        {"provider": "ollama", "model": "llama3.1:8b"},
+    ],
 }
 
 # --- Memory Configuration ---
@@ -24,4 +37,5 @@ NUM_CTX = 8192      # token context window Ollama should use (overrides its smal
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
