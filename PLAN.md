@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-18 (Phase 2 item 25 done)
+Last updated: 2026-06-22 (Phase 2 items 26-27 done)
 
 ---
 
@@ -164,8 +164,8 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 23. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
 24. ✅ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
 25. ✅ Migrate `tabris.py` and `memory_manager.py` to use `chat()` instead of `ollama.chat()`. Keep `ollama` as one more provider in the map (offline fallback). Rename `tabris.py` → `main.py` here (agent name lives in `config.py`; the entry-point file should be generic).
-26. ⬜ Implement provider fallback on error (try primary → fallback → friendly error).
-27. ⬜ Update tests; add tests for provider selection and fallback (mock the APIs).
+26. ✅ Implement provider fallback on error (try primary → fallback → friendly error).
+27. ✅ Update tests; add tests for provider selection and fallback (mock the APIs).
 - ⬜ **Multilingual UI strings:** create `strings.py` with message dictionary (`es` / `en`) + `LANGUAGE = "auto"` in `config.py`. Replace all hardcoded user-facing strings in `main.py` and `memory_manager.py` with `MESSAGES[lang][key]` lookups. Language defaults to `config.LANGUAGE`; auto-detection by first message deferred to Phase 3.
 > Exit criterion: Tabris runs end-to-end with zero local model dependency.
 

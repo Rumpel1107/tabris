@@ -53,41 +53,41 @@ class TestParseMemoryUpdate(unittest.TestCase):
 
 
 class TestUpdateMemory(unittest.TestCase):
-
+    
     @patch("builtins.open", side_effect=FileNotFoundError)
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_file_not_found(self, mock_chat, mock_open):
         update_memory([], memory_path="memory.md")
         mock_chat.assert_not_called()
-        
+    
     @patch("builtins.open", mock_open(read_data="# false memory"))
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_no_changes(self, mock_chat):
-        mock_chat.return_value.message.content = "HAS_CHANGES: no"
+        mock_chat.return_value = "HAS_CHANGES: no"
         update_memory([], memory_path="memory.md")
         mock_chat.assert_called_once()
     
     @patch("core.memory_manager.shutil.copy2")
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input", return_value="si")
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_changes_confirmed(self, mock_chat, mock_input, mock_copy2):
-        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
+        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_input.assert_called_once()
     
     @patch("builtins.open", mock_file)
     @patch("builtins.input", return_value="no")
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_changes_rejected(self, mock_chat, mock_input):
-        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
+        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_input.assert_called_once()
         mock_file().write.assert_not_called()
     
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input")
-    @patch("ollama.chat", side_effect=Exception("connection refused"))
+    @patch("core.providers.chat", side_effect=Exception("connection refused"))
     def test_connection_error(self, mock_chat, mock_input):
         update_memory([], memory_path="memory.md")
         mock_input.assert_not_called()
@@ -95,27 +95,27 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input", return_value="si")
     @patch("sys.stdout", new_callable=io.StringIO)
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_changes_confirmed_without_section(self, mock_chat, mock_stdout, mock_input):
-        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nCONTENT:\nnew content"
+        mock_chat.return_value = "HAS_CHANGES: yes\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         self.assertIn("no se pudo determinar la sección", mock_stdout.getvalue().lower())
     
     @patch("core.memory_manager.shutil.copy2")
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input", return_value="si")
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_backup_created_before_write(self, mock_chat, mock_input, mock_copy2):
-        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
+        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
         update_memory([], memory_path="memory.md")
         mock_copy2.assert_called_once_with("memory.md", "memory.md.bak")
     
     @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input")
     @patch("sys.stdout", new_callable=io.StringIO)
-    @patch("ollama.chat")
+    @patch("core.providers.chat")
     def test_malformed_response(self, mock_chat, mock_stdout, mock_input):
-        mock_chat.return_value.message.content = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\nA\nSECTION: ### B\nCONTENT:\nB"
+        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\nA\nSECTION: ### B\nCONTENT:\nB"
         update_memory([], memory_path="memory.md")
         mock_input.assert_not_called()
         self.assertIn("invalida", mock_stdout.getvalue().lower())
