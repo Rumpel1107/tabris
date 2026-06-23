@@ -29,6 +29,7 @@ AGENT_ROLES = {
 
 # --- Memory Configuration ---
 MEMORY_PATH = "memory.md"
+DB_PATH = f"{AGENT_NAME.lower()}.db"
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
