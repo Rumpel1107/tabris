@@ -253,6 +253,20 @@ class TestGetOrCreateUser(unittest.TestCase):
         second_id = get_or_create_user(self.db_path, "Rumpel", "es")
         self.assertEqual(first_id, second_id)
 
+class TestForeignKeyEnforcement(unittest.TestCase):
+    
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp.name, "test.db")
+        init_db(self.db_path)
+    
+    def tearDown(self):
+        self.tmp.cleanup()
+    
+    def test_save_fact_with_nonexistent_user_raises(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            save_fact(self.db_path, 999, "Hecho huérfano")
+
 
 if __name__ == "__main__":
     unittest.main()

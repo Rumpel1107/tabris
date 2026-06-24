@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-24 (Phase 3: M1 wired e2e; deep code-review findings folded into roadmap)
+Last updated: 2026-06-24 (Phase 3: item 28b DB hardening ✅)
 
 ---
 
@@ -183,7 +183,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 27. ✅ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
 28. ✅ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
 > ✅ Integration debt (items 27-28) RESOLVED: the SQLite layer is wired into `main.py` end-to-end. System prompt = `persona.md` (static identity) + `facts` from the DB; conversation history seeded from and persisted to `messages`; the memory trigger distills new facts to the `facts` table (human-in-the-loop). `load_memory`/`memory.md`/`parse_memory_update`/`replace_section` retired; file paths anchored to project root (cwd-independent). Verified by `tests/test_e2e_smoke.py`.
-28b. ⬜ DB layer hardening (do before 28c — it is the foundation under every DB write that 28c adds). Source: deep code review 2026-06-24. Scenarios to satisfy:
+28b. ✅ DB layer hardening (do before 28c — it is the foundation under every DB write that 28c adds). Source: deep code review 2026-06-24. Scenarios to satisfy:
    - **FK enforcement.** `PRAGMA foreign_keys = ON` is per-connection and defaults to OFF; today only `init_db` sets it, so every other `core/db.py` function opens a bare connection and the `REFERENCES users(id)` constraints are silently NOT validated (a `fact`/`message` with a non-existent `user_id` inserts cleanly). Fix: a single `_connect(db_path)` helper that always sets the pragma + `row_factory = sqlite3.Row`, used by every db function.
    - **No connection leaks.** Functions use `conn = sqlite3.connect(...)` … `conn.close()` with no `with`/`try-finally`, so an exception mid-function leaks the connection — accumulates in an always-on service. Fix: `with sqlite3.connect(...)` (auto commit/rollback) or the `_connect` helper inside `try/finally`.
    - **Centralize trigger constants.** Move `MEMORY_TRIGGER_EXCHANGES` and `MEMORY_TRIGGER_SECONDS` from `main.py` to `config.py` (one tuning location, consistent with the rest of config).

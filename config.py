@@ -32,6 +32,8 @@ AGENT_ROLES = {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONA_PATH = os.path.join(BASE_DIR, "persona.md")
 DB_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}.db")
+MEMORY_TRIGGER_EXCHANGES = 5
+MEMORY_TRIGGER_SECONDS = 300
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model

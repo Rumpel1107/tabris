@@ -1,8 +1,13 @@
 import sqlite3
 
-def init_db(db_path):
+def _connect(db_path):
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db(db_path):
+    conn = _connect(db_path)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +37,7 @@ def init_db(db_path):
     conn.close()
 
 def create_user(db_path, name, language="en"):
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     cursor = conn.execute(
         "INSERT INTO users (name, language) VALUES (?, ?)",
         (name, language)
@@ -43,8 +48,7 @@ def create_user(db_path, name, language="en"):
     return user_id
 
 def get_user(db_path, user_id):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = _connect(db_path)
     row = conn.execute(
         "SELECT * FROM users WHERE id=?",
         (user_id,)
@@ -53,7 +57,7 @@ def get_user(db_path, user_id):
     return dict(row) if row else None
 
 def save_fact(db_path, user_id, content):
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     cursor = conn.execute(
         "INSERT INTO facts (user_id, content) VALUES (?, ?)",
         (user_id, content)
@@ -64,8 +68,7 @@ def save_fact(db_path, user_id, content):
     return fact_id
 
 def get_facts(db_path, user_id):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = _connect(db_path)
     rows = conn.execute(
         "SELECT * FROM facts WHERE user_id=? AND is_active=1 ORDER BY created_at",
         (user_id,)
@@ -74,7 +77,7 @@ def get_facts(db_path, user_id):
     return [dict(row) for row in rows]
 
 def save_message(db_path, user_id, role, content):
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     conn.execute(
         "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)",
         (user_id, role, content)
@@ -83,8 +86,7 @@ def save_message(db_path, user_id, role, content):
     conn.close()
 
 def get_messages(db_path, user_id, limit=20):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = _connect(db_path)
     rows = conn.execute(
         """SELECT * FROM messages WHERE user_id=?
         ORDER BY id DESC LIMIT ?""",
@@ -94,8 +96,7 @@ def get_messages(db_path, user_id, limit=20):
     return list(reversed([dict(row) for row in rows]))
 
 def find_user_by_name(db_path, name):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = _connect(db_path)
     row = conn.execute(
         "SELECT * FROM users WHERE name=?",
         (name,)
@@ -110,7 +111,7 @@ def get_or_create_user(db_path, name, language="en"):
     return create_user(db_path, name, language)
 
 def deactivate_fact(db_path, fact_id):
-    conn = sqlite3.connect(db_path)
+    conn = _connect(db_path)
     conn.execute(
         "UPDATE facts SET is_active=0 WHERE id=?",
         (fact_id,)

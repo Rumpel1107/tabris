@@ -29,13 +29,10 @@ def build_system_prompt(persona, facts):
     facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
     return f"{persona}\n\n## What I know about the user\n{facts_block}"
 
-MEMORY_TRIGGER_EXCHANGES = 5
-MEMORY_TRIGGER_SECONDS = 300
-
 def should_trigger_memory(exchange_count, last_trigger_time):
-    if exchange_count >= MEMORY_TRIGGER_EXCHANGES:
+    if exchange_count >= config.MEMORY_TRIGGER_EXCHANGES:
         return True
-    if time.time() - last_trigger_time >= MEMORY_TRIGGER_SECONDS:
+    if time.time() - last_trigger_time >= config.MEMORY_TRIGGER_SECONDS:
         return True
     return False
 
