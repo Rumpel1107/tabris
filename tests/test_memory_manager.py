@@ -2,143 +2,91 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import tempfile
 import unittest
-import io
-from core.memory_manager import parse_memory_update, update_memory, replace_section
-from unittest.mock import patch, MagicMock, mock_open
-
-mock_file = mock_open(read_data="### Roadmap\nold content")
+from core.db import init_db, create_user, get_facts
+from core.memory_manager import update_memory, parse_facts_response
+from unittest.mock import patch
 
 
-class TestParseMemoryUpdate(unittest.TestCase):
-
-    def test_no_changes(self):
-        response = "HAS_CHANGES: no"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertFalse(has_changes)
-        self.assertIsNone(section)
-        self.assertIsNone(content)
+class TestParseFactsResponse(unittest.TestCase):
     
-    def test_with_changes(self):
-        response = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content here"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertTrue(has_changes)
-        self.assertEqual(section, "### Roadmap")
-        self.assertIn("new content here", content)
+    def test_no_new_facts(self):
+        has_facts, facts, error = parse_facts_response("HAS_NEW_FACTS: no")
+        self.assertFalse(has_facts)
+        self.assertEqual(facts, [])
+        self.assertIsNone(error)
     
-    def test_missing_section(self):
-        response = "HAS_CHANGES: yes\nCONTENT:\nsome content"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertTrue(has_changes)
-        self.assertIsNone(section)
-        self.assertIn("some content", content)
+    def test_extracts_multiple_facts(self):
+        response = "HAS_NEW_FACTS: yes\nFACTS:\n- Likes short answers\n- Works on TaxL"
+        has_facts, facts, error = parse_facts_response(response)
+        self.assertTrue(has_facts)
+        self.assertEqual(facts, ["Likes short answers", "Works on TaxL"])
+        self.assertIsNone(error)
     
-    def test_multiple_sections(self):
-        response = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\ncontent A\nSECTION: ### B\nCONTENT:\ncontent B"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertFalse(has_changes)
+    def test_strips_bullets_and_whitespace(self):
+        response = "HAS_NEW_FACTS: yes\nFACTS:\n-   Lives in Colombia  \n-Uses VS Code"
+        has_facts, facts, error = parse_facts_response(response)
+        self.assertEqual(facts, ["Lives in Colombia", "Uses VS Code"])
+    
+    def test_yes_but_no_facts_is_error(self):
+        response = "HAS_NEW_FACTS: yes\nFACTS:"
+        has_facts, facts, error = parse_facts_response(response)
+        self.assertFalse(has_facts)
+        self.assertEqual(facts, [])
         self.assertIsNotNone(error)
-    
-    def test_missing_content_block(self):
-        response = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nno content keyword here"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertFalse(has_changes)
-        self.assertIsNotNone(error)
-    
-    def test_empty_section_value(self):
-        response = "HAS_CHANGES: yes\nSECTION:   \nCONTENT:\nsome content"
-        has_changes, section, content, error = parse_memory_update(response)
-        self.assertFalse(has_changes)
-        self.assertIsNotNone(error)
-
 
 class TestUpdateMemory(unittest.TestCase):
     
-    @patch("builtins.open", side_effect=FileNotFoundError)
-    @patch("core.providers.chat")
-    def test_file_not_found(self, mock_chat, mock_open):
-        update_memory([], memory_path="memory.md")
-        mock_chat.assert_not_called()
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp.name, "test.db")
+        init_db(self.db_path)
+        self.user_id = create_user(self.db_path, "Rumpel", "es")
     
-    @patch("builtins.open", mock_open(read_data="# false memory"))
-    @patch("core.providers.chat")
-    def test_no_changes(self, mock_chat):
-        mock_chat.return_value = "HAS_CHANGES: no"
-        update_memory([], memory_path="memory.md")
-        mock_chat.assert_called_once()
+    def tearDown(self):
+        self.tmp.cleanup()
     
-    @patch("core.memory_manager.shutil.copy2")
-    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input", return_value="si")
     @patch("core.providers.chat")
-    def test_changes_confirmed(self, mock_chat, mock_input, mock_copy2):
-        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
-        update_memory([], memory_path="memory.md")
-        mock_input.assert_called_once()
+    def test_saves_confirmed_facts(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_NEW_FACTS: yes\nFACTS:\n- Likes short answers\n- Works on TaxL"
+        update_memory([], self.db_path, self.user_id)
+        contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
+        self.assertIn("Likes short answers", contents)
+        self.assertIn("Works on TaxL", contents)
     
-    @patch("builtins.open", mock_file)
     @patch("builtins.input", return_value="no")
     @patch("core.providers.chat")
-    def test_changes_rejected(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
-        update_memory([], memory_path="memory.md")
-        mock_input.assert_called_once()
-        mock_file().write.assert_not_called()
+    def test_rejected_facts_not_saved(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_NEW_FACTS: yes\nFACTS:\n- Should not be saved"
+        update_memory([], self.db_path, self.user_id)
+        contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
+        self.assertNotIn("Should not be saved", contents)
     
-    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
+    @patch("builtins.input")
+    @patch("core.providers.chat")
+    def test_no_new_facts_saves_nothing(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_NEW_FACTS: no"
+        update_memory([], self.db_path, self.user_id)
+        self.assertEqual(get_facts(self.db_path, self.user_id), [])
+        mock_input.assert_not_called()
+    
     @patch("builtins.input")
     @patch("core.providers.chat", side_effect=Exception("connection refused"))
-    def test_connection_error(self, mock_chat, mock_input):
-        update_memory([], memory_path="memory.md")
+    def test_connection_error_handled(self, mock_chat, mock_input):
+        update_memory([], self.db_path, self.user_id)
+        self.assertEqual(get_facts(self.db_path, self.user_id), [])
         mock_input.assert_not_called()
     
-    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
-    @patch("builtins.input", return_value="si")
-    @patch("sys.stdout", new_callable=io.StringIO)
-    @patch("core.providers.chat")
-    def test_changes_confirmed_without_section(self, mock_chat, mock_stdout, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes\nCONTENT:\nnew content"
-        update_memory([], memory_path="memory.md")
-        self.assertIn("no se pudo determinar la sección", mock_stdout.getvalue().lower())
-    
-    @patch("core.memory_manager.shutil.copy2")
-    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
-    @patch("builtins.input", return_value="si")
-    @patch("core.providers.chat")
-    def test_backup_created_before_write(self, mock_chat, mock_input, mock_copy2):
-        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### Roadmap\nCONTENT:\nnew content"
-        update_memory([], memory_path="memory.md")
-        mock_copy2.assert_called_once_with("memory.md", "memory.md.bak")
-    
-    @patch("builtins.open", mock_open(read_data="### Roadmap\nold content"))
     @patch("builtins.input")
-    @patch("sys.stdout", new_callable=io.StringIO)
     @patch("core.providers.chat")
-    def test_malformed_response(self, mock_chat, mock_stdout, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes\nSECTION: ### A\nCONTENT:\nA\nSECTION: ### B\nCONTENT:\nB"
-        update_memory([], memory_path="memory.md")
+    def test_malformed_response_not_saved(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_NEW_FACTS: yes\nFACTS:"
+        update_memory([], self.db_path, self.user_id)
+        self.assertEqual(get_facts(self.db_path, self.user_id), [])
         mock_input.assert_not_called()
-        self.assertIn("invalida", mock_stdout.getvalue().lower())
 
 
-class TestReplaceSection(unittest.TestCase):
-
-    def test_basic_replacement(self):
-        content = "# Title\n\n### Roadmap\nold content\n\n## Other\nother content"
-        result = replace_section(content, "### Roadmap", "new content")
-        self.assertIn("new content", result)
-        self.assertNotIn("old content", result)
-
-    def test_preserves_other_sections(self):
-        content = "# Title\n\n### Roadmap\nold content\n\n## Other\nother content"
-        result = replace_section(content, "### Roadmap", "new content")
-        self.assertIn("## Other", result)
-        self.assertIn("other content", result)
-        
-    def test_handles_internal_subheadings(self):
-        content = "# Title\n\n### Roadmap\nold content\n#### Phase 1\nstep 1\n\n## Other\nother"
-        result = replace_section(content, "### Roadmap", "new content\n#### Phase 1\nnew step")
-        self.assertIn("new content", result)
-        self.assertNotIn("old content", result)
-        self.assertNotIn("step 1", result)
-        self.assertIn("## Other", result)
+if __name__ == "__main__":
+    unittest.main()

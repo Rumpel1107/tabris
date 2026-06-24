@@ -4,16 +4,13 @@ import time
 from core.strings import msg
 
 from core import memory_manager, providers
+from core.db import init_db, get_or_create_user, get_facts, get_messages, save_message
 
 # --- Memory ---
-def load_memory(path=config.MEMORY_PATH):
-    try:
-        with open(path, "r") as memory_file:
-            content = memory_file.read()
-            content = content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
-            return content
-    except FileNotFoundError:
-        return msg("no_memory_file")
+def load_persona(path=config.PERSONA_PATH):
+    with open(path, "r") as persona_file:
+        content = persona_file.read()
+    return content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
 
 # --- Router ---
 def route_message(user_input):
@@ -25,6 +22,12 @@ def route_message(user_input):
 # --- Context window ---
 def build_messages(conversation_history):
     return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
+
+def build_system_prompt(persona, facts):
+    if not facts:
+        return persona
+    facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
+    return f"{persona}\n\n## What I know about the user\n{facts_block}"
 
 MEMORY_TRIGGER_EXCHANGES = 5
 MEMORY_TRIGGER_SECONDS = 300
@@ -38,32 +41,39 @@ def should_trigger_memory(exchange_count, last_trigger_time):
 
 # --- Main conversation loop ---
 def chat():
-    memory = load_memory()
-    conversation_history = [
-        {
-            "role": "system",
-            "content": memory
-        }
+    db_path = config.DB_PATH
+    init_db(db_path)
+    user_id = get_or_create_user(db_path, config.USER_NAME, config.LANGUAGE)
+    
+    persona = load_persona()
+    facts = get_facts(db_path, user_id)
+    system_prompt = build_system_prompt(persona, facts)
+    
+    conversation_history = [{"role": "system", "content": system_prompt}]
+    past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)
+    conversation_history += [
+        {"role": message["role"], "content": message["content"]}
+        for message in past_messages
     ]
+    
     exchange_count = 0
     last_trigger_time = time.time()
-
+    
     print(msg("startup", agent=config.AGENT_NAME, exit_cmd=msg("exit_command")))
-
+    
     while True:
         user_input = input(msg("user_prompt"))
-
-        # Ignore empty messages
+        
         if not user_input.strip():
             continue
         
         if user_input.lower() == msg("exit_command"):
-            memory_manager.update_memory(conversation_history)
+            memory_manager.update_memory(conversation_history, db_path, user_id)
             break
-
+        
         role = route_message(user_input)
         conversation_history.append({"role": "user", "content": user_input})
-
+        
         try:
             bounded_messages = build_messages(conversation_history)
             reply = providers.chat(role, bounded_messages)
@@ -71,13 +81,15 @@ def chat():
             print(msg("model_error", agent=config.AGENT_NAME, error=e))
             conversation_history.pop()
             continue
-
+        
         conversation_history.append({"role": "assistant", "content": reply})
+        save_message(db_path, user_id, "user", user_input)
+        save_message(db_path, user_id, "assistant", reply)
         print(msg("agent_reply", agent=config.AGENT_NAME, role=role, reply=reply))
-
+        
         exchange_count += 1
         if should_trigger_memory(exchange_count, last_trigger_time):
-            memory_manager.update_memory(conversation_history)
+            memory_manager.update_memory(conversation_history, db_path, user_id)
             exchange_count = 0
             last_trigger_time = time.time()
 

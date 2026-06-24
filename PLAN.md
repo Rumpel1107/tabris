@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-23 (Phase 3 items 27-28 complete)
+Last updated: 2026-06-24 (Phase 3: M1 wired e2e; deep code-review findings folded into roadmap)
 
 ---
 
@@ -116,6 +116,14 @@ Evolution path — build the step you need, not the whole ladder:
 Principles: persistent facts ≠ conversation history (separate tables); every memory write keeps
 a backup or is transactional; human-in-the-loop confirmation stays for profile-level changes.
 
+**Fact lifecycle rule:** facts are append-only — never edited in place, never hard-deleted.
+A fact that becomes false or obsolete is *retired* via soft-delete (`is_active=0`), preserving
+history. A change of information = retire the stale fact + insert the corrected one (never an
+in-place `UPDATE` of `content`). Only `is_active=1` facts feed the system prompt. Obsolescence is
+detected during distillation (the LLM receives known facts *with their `id`* and returns two sets:
+new facts to add + `id`s to retire, with reason); additions and retirements are confirmed together
+by the user before any write.
+
 ### 4.4 Context window management (applies at every stage)
 - History sent to the model must be **bounded**: system prompt + last N exchanges (start N=10).
 - Reason: providers/local models truncate silently from the top when context overflows — the
@@ -174,7 +182,17 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 
 27. ✅ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
 28. ✅ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
-29. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases).
+> ✅ Integration debt (items 27-28) RESOLVED: the SQLite layer is wired into `main.py` end-to-end. System prompt = `persona.md` (static identity) + `facts` from the DB; conversation history seeded from and persisted to `messages`; the memory trigger distills new facts to the `facts` table (human-in-the-loop). `load_memory`/`memory.md`/`parse_memory_update`/`replace_section` retired; file paths anchored to project root (cwd-independent). Verified by `tests/test_e2e_smoke.py`.
+28b. ⬜ DB layer hardening (do before 28c — it is the foundation under every DB write that 28c adds). Source: deep code review 2026-06-24. Scenarios to satisfy:
+   - **FK enforcement.** `PRAGMA foreign_keys = ON` is per-connection and defaults to OFF; today only `init_db` sets it, so every other `core/db.py` function opens a bare connection and the `REFERENCES users(id)` constraints are silently NOT validated (a `fact`/`message` with a non-existent `user_id` inserts cleanly). Fix: a single `_connect(db_path)` helper that always sets the pragma + `row_factory = sqlite3.Row`, used by every db function.
+   - **No connection leaks.** Functions use `conn = sqlite3.connect(...)` … `conn.close()` with no `with`/`try-finally`, so an exception mid-function leaks the connection — accumulates in an always-on service. Fix: `with sqlite3.connect(...)` (auto commit/rollback) or the `_connect` helper inside `try/finally`.
+   - **Centralize trigger constants.** Move `MEMORY_TRIGGER_EXCHANGES` and `MEMORY_TRIGGER_SECONDS` from `main.py` to `config.py` (one tuning location, consistent with the rest of config).
+   - **TDD test:** inserting a fact/message with a non-existent `user_id` must raise `IntegrityError` (today it silently succeeds — that test is the proof the pragma is now live).
+28c. ⬜ Memory CRUD completion (do before item 29): wire `deactivate_fact` into the distillation flow so Tabris can retire facts that became false/obsolete, closing the read-create-**retire** cycle. `update_memory` proposes additions **and** retirements (`id`s, with reason) in one human-confirmed step; a changed fact = retire stale + insert corrected. No in-place edit, no hard delete. Implements the §4.3 fact-lifecycle rule. Currently `deactivate_fact` exists and is unit-tested but is not wired into any flow. Additional scenarios folded in from the code review 2026-06-24 (this item rewrites `update_memory`, so do them in the same pass — don't touch the function twice):
+   - **Dedupe facts.** "Only new facts" is a request to a non-deterministic model, not a guarantee — nothing in the schema stops the same fact being saved twice across sessions, and the "What I know about the user" block degrades over time. Fix: partial UNIQUE index on `(user_id, content)` WHERE `is_active=1`, and/or normalize+compare before `save_fact`.
+   - **Analyze the delta, not the whole history (cost).** `conversation_history` grows unbounded in-session (only what is *sent* to the model via `build_messages` is bounded, not the list itself). Re-serializing the FULL history into the distillation prompt every 5 exchanges = growing cost + re-analysis of already-processed messages. Fix: keep a watermark/index of the last analyzed message and distill only the delta since the last trigger. Aligns with the < $10/mo constraint (§2).
+   - **e2e test:** retire a fact end-to-end and assert it drops out of the assembled system prompt (covers the `deactivate_fact` e2e gap noted in the review).
+29. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases). Code review 2026-06-24 re-confirmed the substring bug (`"code"` matches inside `"encode"/"decode"`, `"error"` is common in normal chat → over-routes to `code`); the interim word-boundary regex patch is intentionally skipped because this item lands next and replaces the keyword router outright.
 30. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
 31. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
 32. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
@@ -183,11 +201,13 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 ### Phase 4 — Deploy (always-on)
 34. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
 35. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables.
-36. ⬜ Basic ops: logs, restart-on-failure, weekly SQLite backup (cron + copy).
+36. ⬜ Basic ops: structured logging, restart-on-failure, weekly SQLite backup (cron + copy). Scenarios folded in from the code review 2026-06-24:
+   - **`logging` instead of `print` for diagnostics.** Today fallback/diagnostic lines (e.g. `[providers] ... failed; trying next fallback`) print to stdout in the middle of the user's chat. Introduce the `logging` module (one logger per module, configurable level); diagnostics go to the logger, user-facing messages stay on `print`/`msg`. Needed for an always-on cloud service where chat output and logs must be separable.
+   - **Narrow `except Exception`.** The broad catches in the main loop, `providers.chat` and `update_memory` hide bugs (a `KeyError` in our code looks identical to a network timeout). Log the type/traceback and, where possible, catch provider-specific errors (`openai`/`httpx`). The main loop may stay tolerant, but it must log what it swallowed.
 > Exit criterion: Rumpel talks to Tabris from his phone with his PC off.
 
 ### Phase 5 — Portfolio (transversal: starts during Phase 2)
-37. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot.
+37. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead.
 38. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
 39. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
 40. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
@@ -245,11 +265,12 @@ A repo/demo goes public only when ALL are true:
 - [ ] No secrets in code **or git history**; `.env.example` provided
 - [ ] Tests exist and pass (`python -m unittest` clean)
 - [ ] Code in English, reasonably clean (a beginner-honest standard, not perfection)
+- [ ] Public functions carry type hints + short docstrings (e.g. `def save_fact(db_path: str, user_id: int, content: str) -> int:`), enough to run `mypy` — beginner-honest, not exhaustive (code review 2026-06-24)
 - [ ] If it has a UI/bot: a reviewer can try it in < 2 minutes (demo, GIF, or test bot)
 
 ---
 
-## 8. Working Agreements (unchanged — binding for any agent on this project)
+## 8. Working Agreements (binding for any agent on this project)
 
 - One step at a time; wait for user confirmation before the next step.
 - Always explain what each command/concept does (the user is learning — that's the point).
@@ -259,6 +280,9 @@ A repo/demo goes public only when ALL are true:
 - Document everything for future replication.
 - Human-in-the-loop for anything destructive (memory writes, file changes, deletions).
 - **Vibe-coding boundary:** scaffolding (UI, framework, deploy, boilerplate) may be generated fast without deep understanding. Domain logic (tax/payroll calculations) must be fully understood, owned, and tested — it IS the product and the defensible edge. Rule of thumb: vibe-code how it looks; understand how it calculates.
+- **End-to-end at every step:** an item is "done" only when the real app (`main.py`) exercises the new code path and the path it replaces is retired — not when a module merely exists with green unit tests. No deferred integration. Definition of Done per item: (1) wiring over accumulation; (2) an e2e smoke check (`python main.py` + a small smoke test running the real flow, no mocks). Unit tests inside, e2e smoke outside.
+
+---
 
 ## 9. Known Risks
 
@@ -267,5 +291,6 @@ A repo/demo goes public only when ALL are true:
 | DeepSeek outages (~97% uptime) | Provider fallback (D2) is mandatory in `core/providers.py` |
 | API price changes | Role→provider map makes switching a one-line change; re-check prices quarterly |
 | Scope creep (7 projects, multi-agent dreams) | §6 sequence + "do not build before the second user exists" rule (M2) |
-| Leaked secrets | `.env` pattern + history check before going public + key rotation if in doubt |
+| Leaked secrets | `.env` pattern + history check before going public + key rotation if in doubt. (Verified 2026-06-24: `.env` never in git history — clean.) |
+| Prompt injection in memory distillation | Raw conversation text is embedded in the distillation prompt; a user could type `HAS_NEW_FACTS: yes` / `FACTS:` lines to spoof the parser format. Mitigated today by the human `si/no` confirmation before any `save_fact` (single-user → low real risk). Becomes real with multi-user or auto-confirmation — revisit then: fence/escape user turns or separate them from the instruction block. (Code review 2026-06-24.) |
 | Burnout / runway pressure | Portfolio milestones every phase = visible progress even if revenue lags |

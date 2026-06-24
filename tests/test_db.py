@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import init_db, create_user, get_user, find_user_by_name, save_fact, get_facts, deactivate_fact, save_message, get_messages
+from core.db import init_db, create_user, get_user, find_user_by_name, save_fact, get_facts, deactivate_fact, save_message, get_messages, get_or_create_user
 
 
 class TestInitDb(unittest.TestCase):
@@ -51,7 +51,6 @@ class TestInitDb(unittest.TestCase):
             with self.assertRaises(Exception):
                 create_user(db_path, name="Rumpel")
 
-
 class TestCreateUser(unittest.TestCase):
     
     def test_creates_user_and_returns_id(self):
@@ -76,7 +75,6 @@ class TestCreateUser(unittest.TestCase):
             conn.close()
             self.assertEqual(row[0], "en")
 
-
 class TestGetUser(unittest.TestCase):
     
     def test_returns_user_dict(self):
@@ -98,7 +96,6 @@ class TestGetUser(unittest.TestCase):
             user = get_user(db_path, 999)
             
             self.assertIsNone(user)
-
 
 class TestFacts(unittest.TestCase):
     
@@ -137,7 +134,6 @@ class TestFacts(unittest.TestCase):
         
         self.assertEqual(len(facts), 1)
         self.assertEqual(facts[0]["content"], "Hecho de Rumpel")
-
 
 class TestMessages(unittest.TestCase):
     
@@ -205,7 +201,6 @@ class TestFindUserByName(unittest.TestCase):
         user = find_user_by_name(self.db_path, "Ana")
         self.assertIsNone(user)
 
-
 class TestDeactivateFact(unittest.TestCase):
     
     def setUp(self):
@@ -237,3 +232,27 @@ class TestDeactivateFact(unittest.TestCase):
         conn.close()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], 0)
+
+class TestGetOrCreateUser(unittest.TestCase):
+    
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp.name, "test.db")
+        init_db(self.db_path)
+    
+    def tearDown(self):
+        self.tmp.cleanup()
+    
+    def test_creates_user_when_absent(self):
+        user_id = get_or_create_user(self.db_path, "Rumpel", "es")
+        self.assertIsNotNone(user_id)
+        self.assertIsNotNone(find_user_by_name(self.db_path, "Rumpel"))
+    
+    def test_returns_existing_id_without_duplicating(self):
+        first_id = get_or_create_user(self.db_path, "Rumpel", "es")
+        second_id = get_or_create_user(self.db_path, "Rumpel", "es")
+        self.assertEqual(first_id, second_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

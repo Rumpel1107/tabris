@@ -103,6 +103,12 @@ def find_user_by_name(db_path, name):
     conn.close()
     return dict(row) if row else None
 
+def get_or_create_user(db_path, name, language="en"):
+    user = find_user_by_name(db_path, name)
+    if user:
+        return user["id"]
+    return create_user(db_path, name, language)
+
 def deactivate_fact(db_path, fact_id):
     conn = sqlite3.connect(db_path)
     conn.execute(
