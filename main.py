@@ -55,6 +55,8 @@ def chat():
     
     exchange_count = 0
     last_trigger_time = time.time()
+    last_analyzed_index = len(conversation_history)
+
     
     print(msg("startup", agent=config.AGENT_NAME, exit_cmd=msg("exit_command")))
     
@@ -65,7 +67,7 @@ def chat():
             continue
         
         if user_input.lower() == msg("exit_command"):
-            memory_manager.update_memory(conversation_history, db_path, user_id)
+            memory_manager.update_memory(conversation_history, db_path, user_id, watermark=last_analyzed_index)
             break
         
         role = route_message(user_input)
@@ -86,7 +88,8 @@ def chat():
         
         exchange_count += 1
         if should_trigger_memory(exchange_count, last_trigger_time):
-            memory_manager.update_memory(conversation_history, db_path, user_id)
+            memory_manager.update_memory(conversation_history, db_path, user_id, watermark=last_analyzed_index)
+            last_analyzed_index = len(conversation_history)
             exchange_count = 0
             last_trigger_time = time.time()
 

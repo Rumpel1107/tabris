@@ -31,10 +31,10 @@ def parse_facts_response(raw_response):
     
     return True, new_facts, retire_ids, None
 
-def update_memory(conversation_history, db_path, user_id):
+def update_memory(conversation_history, db_path, user_id, watermark=1):
     conversation_text = "\n".join(
         f"{turn['role'].upper()}: {turn['content']}"
-        for turn in conversation_history
+        for turn in conversation_history[watermark:]
         if turn["role"] != "system"
     )
     

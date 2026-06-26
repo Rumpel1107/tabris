@@ -110,6 +110,23 @@ class TestUpdateMemory(unittest.TestCase):
         
         facts_after = get_facts(self.db_path, self.user_id)
         self.assertEqual(facts_after, [])
+    
+    @patch("builtins.input")
+    @patch("core.providers.chat")
+    def test_watermark_limits_conversation_sent(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_CHANGES: no"
+        history = [
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "mensaje viejo"},
+            {"role": "assistant", "content": "respuesta vieja"},
+            {"role": "user", "content": "mensaje nuevo"},
+            {"role": "assistant", "content": "respuesta nueva"},
+        ]
+        update_memory(history, self.db_path, self.user_id, watermark=3)
+        
+        prompt_sent = mock_chat.call_args[0][1][0]["content"]
+        self.assertNotIn("mensaje viejo", prompt_sent)
+        self.assertIn("mensaje nuevo", prompt_sent)
 
 
 if __name__ == "__main__":
