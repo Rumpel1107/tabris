@@ -32,6 +32,8 @@ def init_db(db_path):
             is_active  INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
+        
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_facts_active_content ON facts(user_id, content) WHERE is_active=1;
     """)
     conn.commit()
     conn.close()

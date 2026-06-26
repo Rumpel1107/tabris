@@ -134,6 +134,11 @@ class TestFacts(unittest.TestCase):
         
         self.assertEqual(len(facts), 1)
         self.assertEqual(facts[0]["content"], "Hecho de Rumpel")
+    
+    def test_duplicate_active_fact_raises(self):
+        save_fact(self.db_path, self.user_id, "Trabaja en TaxL")
+        with self.assertRaises(sqlite3.IntegrityError):
+            save_fact(self.db_path, self.user_id, "Trabaja en TaxL")
 
 class TestMessages(unittest.TestCase):
     
