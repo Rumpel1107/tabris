@@ -14,10 +14,29 @@ def load_persona(path=config.PERSONA_PATH):
 
 # --- Router ---
 def route_message(user_input):
-    code_keywords = ["código", "code", "error", "bug", "función", "script", "python"]
-    if any(word in user_input.lower() for word in code_keywords):
-        return "code"
-    return "general"
+    roles_list = "\n".join(
+        f"- {role}: {cfg['description']}"
+        for role, cfg in config.AGENT_ROLES.items()
+        if role != "router"
+    )
+    prompt = [{
+        "role": "user",
+        "content": f"""Classify this message into exactly one of the available roles or 'exit'.
+
+Available roles:
+{roles_list}
+- exit: the user wants to end the conversation
+
+Message: {user_input}
+
+Reply with only one word."""
+    }]
+    try:
+        response = providers.chat("router", prompt).strip().lower()
+    except Exception:
+        return "general"
+    valid = [r for r in config.AGENT_ROLES if r != "router"] + ["exit"]
+    return response if response in valid else "general"
 
 # --- Context window ---
 def build_messages(conversation_history):
@@ -66,11 +85,12 @@ def chat():
         if not user_input.strip():
             continue
         
-        if user_input.lower() == msg("exit_command"):
+        role = route_message(user_input)
+
+        if role == "exit":
             memory_manager.update_memory(conversation_history, db_path, user_id, watermark=last_analyzed_index)
             break
         
-        role = route_message(user_input)
         conversation_history.append({"role": "user", "content": user_input})
         
         try:

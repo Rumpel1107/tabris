@@ -82,15 +82,25 @@ class TestLoadPersona(unittest.TestCase):
 
 class TestRouteMessage(unittest.TestCase):
 
-    def test_routes_code_keyword_english(self):
-        self.assertEqual(route_message("I have a bug in my code"), "code")
+    @patch("main.providers.chat")
+    def test_routes_to_code(self, mock_chat):
+        mock_chat.return_value = "code"
+        self.assertEqual(route_message("Fix this bug"), "code")
 
-    def test_routes_code_keyword_spanish(self):
-        self.assertEqual(route_message("Tengo un error en mi función"), "code")
+    @patch("main.providers.chat")
+    def test_routes_to_general(self, mock_chat):
+        mock_chat.return_value = "general"
+        self.assertEqual(route_message("What is machine learning?"), "general")
 
-    def test_routes_general_message(self):
-        self.assertEqual(route_message("what is machine learning?"), "general")
+    @patch("main.providers.chat")
+    def test_routes_to_exit(self, mock_chat):
+        mock_chat.return_value = "exit"
+        self.assertEqual(route_message("quiero salir"), "exit")
 
+    @patch("main.providers.chat")
+    def test_unknown_response_falls_back_to_general(self, mock_chat):
+        mock_chat.return_value = "algo inesperado"
+        self.assertEqual(route_message("hola"), "general")
 
 class TestShouldTriggerMemory(unittest.TestCase):
     

@@ -36,7 +36,7 @@ def _call_provider(provider, model, messages):
     return response.choices[0].message.content
 
 def chat(role, messages):
-    attempts = config.AGENT_ROLES[role]
+    attempts = config.AGENT_ROLES[role]["providers"]
     last_error = None
     for attempt in attempts:
         provider = attempt["provider"]

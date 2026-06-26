@@ -10,22 +10,31 @@ LANGUAGE = "es"
 
 # --- Role → Provider mapping ---
 AGENT_ROLES = {
-    "general": [
-        {"provider": "gemini", "model": "gemini-2.5-flash"},
-        {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
-        {"provider": "ollama", "model": "llama3.1:8b"},
-    ],
-    "code": [
-        {"provider": "deepseek",   "model": "deepseek-chat"},
-        {"provider": "openrouter", "model": "z-ai/glm-5.2"},
-        {"provider": "groq",       "model": "moonshotai/kimi-k2-instruct"},
-        {"provider": "ollama",     "model": "llama3.1:8b"},
-    ],
-    "router": [
-        {"provider": "groq",   "model": "llama-3.1-8b-instant"},
-        {"provider": "gemini", "model": "gemini-2.5-flash"},
-        {"provider": "ollama", "model": "llama3.1:8b"},
-    ],
+    "general": {
+        "description": "general questions, conversation, explanations, anything not code",
+        "providers": [
+            {"provider": "gemini", "model": "gemini-2.5-flash"},
+            {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
+            {"provider": "ollama", "model": "llama3.1:8b"},
+        ],
+    },
+    "code": {
+        "description": "programming, debugging, scripts, technical code, functions",
+        "providers": [
+            {"provider": "deepseek",   "model": "deepseek-chat"},
+            {"provider": "openrouter", "model": "z-ai/glm-5.2"},
+            {"provider": "groq",       "model": "moonshotai/kimi-k2-instruct"},
+            {"provider": "ollama",     "model": "llama3.1:8b"},
+        ],
+    },
+    "router": {
+        "description": "classifies user intent into one of the available roles",
+        "providers": [
+            {"provider": "groq",   "model": "llama-3.1-8b-instant"},
+            {"provider": "gemini", "model": "gemini-2.5-flash"},
+            {"provider": "ollama", "model": "llama3.1:8b"},
+        ],
+    },
 }
 
 # --- Memory Configuration ---

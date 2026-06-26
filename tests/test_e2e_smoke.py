@@ -25,7 +25,7 @@ class TestChatE2ESmoke(unittest.TestCase):
     @patch("builtins.input")
     def test_conversation_persists_to_db(self, mock_input, mock_chat):
         mock_input.side_effect = ["Hola", msg("exit_command")]
-        mock_chat.side_effect = ["Reply from Tabris", "HAS_CHANGES: no"]
+        mock_chat.side_effect = ["general", "Reply from Tabris", "exit", "HAS_CHANGES: no"]
         
         with patch.object(config, "DB_PATH", self.db_path), \
             patch.object(config, "USER_NAME", "TestUser"):
