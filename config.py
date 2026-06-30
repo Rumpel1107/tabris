@@ -6,7 +6,8 @@ load_dotenv()
 # --- Agent Configuration ---
 AGENT_NAME = "Tabris"
 USER_NAME = "Rumpel"
-LANGUAGE = "es"
+LANGUAGE = "en"
+LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}
 
 # --- Role → Provider mapping ---
 AGENT_ROLES = {
@@ -41,6 +42,7 @@ AGENT_ROLES = {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONA_PATH = os.path.join(BASE_DIR, "persona.md")
 DB_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}.db")
+CLIENT_ID_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}_client_id")
 MEMORY_TRIGGER_EXCHANGES = 5
 MEMORY_TRIGGER_SECONDS = 300
 

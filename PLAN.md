@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-06-24 (Phase 3: item 28b DB hardening ✅)
+Last updated: 2026-06-26 (Phase 3: items 28c ✅, 29 ✅; roadmap restructured: item 46 → Phase 3, Phase 5 = tools, Phase 6 = Liquidador de renta, Phase 7 = Portfolio)
 
 ---
 
@@ -166,7 +166,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 | 19 (F4) | **Use `config.MEMORY_PATH` everywhere** | `load_memory()` hardcodes `"memory.md"` default instead of `config.MEMORY_PATH`. | ✅ |
 | 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ✅ |
 
-> F6 (router false positives) and F7 (graceful exit + streaming) were relocated to Phase 3, where they are naturally resolved (see items 29 and 33). All Phase 1 fixes above are ✅.
+> F6 (router false positives) and F7 (graceful exit + streaming) were relocated to Phase 3, where they are naturally resolved (see items 29 and 34). All Phase 1 fixes above are ✅.
 
 ### Phase 2 — API migration (the pivot)  ✅
 21. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
@@ -188,47 +188,47 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - **No connection leaks.** Functions use `conn = sqlite3.connect(...)` … `conn.close()` with no `with`/`try-finally`, so an exception mid-function leaks the connection — accumulates in an always-on service. Fix: `with sqlite3.connect(...)` (auto commit/rollback) or the `_connect` helper inside `try/finally`.
    - **Centralize trigger constants.** Move `MEMORY_TRIGGER_EXCHANGES` and `MEMORY_TRIGGER_SECONDS` from `main.py` to `config.py` (one tuning location, consistent with the rest of config).
    - **TDD test:** inserting a fact/message with a non-existent `user_id` must raise `IntegrityError` (today it silently succeeds — that test is the proof the pragma is now live).
-28c. ⬜ Memory CRUD completion (do before item 29): wire `deactivate_fact` into the distillation flow so Tabris can retire facts that became false/obsolete, closing the read-create-**retire** cycle. `update_memory` proposes additions **and** retirements (`id`s, with reason) in one human-confirmed step; a changed fact = retire stale + insert corrected. No in-place edit, no hard delete. Implements the §4.3 fact-lifecycle rule. Currently `deactivate_fact` exists and is unit-tested but is not wired into any flow. Additional scenarios folded in from the code review 2026-06-24 (this item rewrites `update_memory`, so do them in the same pass — don't touch the function twice):
+28c. ✅ Memory CRUD completion (do before item 29): wire `deactivate_fact` into the distillation flow so Tabris can retire facts that became false/obsolete, closing the read-create-**retire** cycle. `update_memory` proposes additions **and** retirements (`id`s, with reason) in one human-confirmed step; a changed fact = retire stale + insert corrected. No in-place edit, no hard delete. Implements the §4.3 fact-lifecycle rule. Currently `deactivate_fact` exists and is unit-tested but is not wired into any flow. Additional scenarios folded in from the code review 2026-06-24 (this item rewrites `update_memory`, so do them in the same pass — don't touch the function twice):
    - **Dedupe facts.** "Only new facts" is a request to a non-deterministic model, not a guarantee — nothing in the schema stops the same fact being saved twice across sessions, and the "What I know about the user" block degrades over time. Fix: partial UNIQUE index on `(user_id, content)` WHERE `is_active=1`. ✅ Done. Known limitation: the index only catches exact string duplicates — semantically equivalent facts with different wording (e.g. "Trabaja en TaxL" vs "Trabaja en el proyecto TaxL") are not caught; that requires embeddings (M3, deferred).
    - **Analyze the delta, not the whole history (cost).** `conversation_history` grows unbounded in-session (only what is *sent* to the model via `build_messages` is bounded, not the list itself). Re-serializing the FULL history into the distillation prompt every 5 exchanges = growing cost + re-analysis of already-processed messages. Fix: keep a watermark/index of the last analyzed message and distill only the delta since the last trigger. Aligns with the < $10/mo constraint (§2).
    - **e2e test:** retire a fact end-to-end and assert it drops out of the assembled system prompt (covers the `deactivate_fact` e2e gap noted in the review).
-29. ⬜ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases). Code review 2026-06-24 re-confirmed the substring bug (`"code"` matches inside `"encode"/"decode"`, `"error"` is common in normal chat → over-routes to `code`); the interim word-boundary regex patch is intentionally skipped because this item lands next and replaces the keyword router outright.
-30. ⬜ Session TODO list + onboarding flow for new users (reads/writes `facts`). Detect language from first user message and store as a `fact` — replaces the hardcoded `LANGUAGE` config from Phase 2; Tabris remembers language preference between sessions.
-31. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed).
-32. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
-33. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
+29. ✅ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases). Code review 2026-06-24 re-confirmed the substring bug (`"code"` matches inside `"encode"/"decode"`, `"error"` is common in normal chat → over-routes to `code`); the interim word-boundary regex patch is intentionally skipped because this item lands next and replaces the keyword router outright.
+30. ✅ Onboarding flow + channel-key identity. Replaces hardcoded `config.USER_NAME`/`config.LANGUAGE`. Identity is a `(channel, key)` pair, not the name: a new `user_channels` table maps each key to a `user_id`; the CLI key is an auto-generated UUID stored in a gitignored `tabris_client_id` file. On startup, look up the key → known key loads the user; unknown key triggers onboarding (ask name, detect language from first message, confirm once, persist). Language lives in `users.language` (a profile column, updatable any time via `update_user_language`), NOT in `facts`. Name is a display label only (drop the `UNIQUE` constraint) — access is by possession of the key, never by name, which structurally prevents impersonation and name collisions. `find_user_by_name`/`get_or_create_user` retired (name-based lookup is insecure in the multi-user model). Extra beyond original scope: `extract_name` uses the router LLM to pull a clean name out of a full sentence reply (e.g. "Mi nombre es Mauricio" → "Mauricio").
+31. ⬜ Time awareness: inject current datetime into system prompt context.
+32. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed). Telegram's `user_id` is the channel key (free, stable) — register it in `user_channels` exactly like the CLI key. **Account linking (same human, multiple channels → one profile/context):** via a short-lived **link-code**, never by name. Flow: on an already-registered channel the user requests a code; entering it on the new channel inserts a `user_channels` row pointing the new `(channel, key)` to the existing `user_id`. The `user_channels` schema (item 30) already supports this with zero migration — multiple rows per `user_id`. Name-based linking is explicitly rejected (impersonation risk).
+33. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
+34. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 33.
 
 ### Phase 4 — Deploy (always-on)
-34. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
-35. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables.
-36. ⬜ Basic ops: structured logging, restart-on-failure, weekly SQLite backup (cron + copy). Scenarios folded in from the code review 2026-06-24:
+35. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
+36. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables.
+37. ⬜ Basic ops: structured logging, restart-on-failure, weekly SQLite backup (cron + copy). Scenarios folded in from the code review 2026-06-24:
    - **`logging` instead of `print` for diagnostics.** Today fallback/diagnostic lines (e.g. `[providers] ... failed; trying next fallback`) print to stdout in the middle of the user's chat. Introduce the `logging` module (one logger per module, configurable level); diagnostics go to the logger, user-facing messages stay on `print`/`msg`. Needed for an always-on cloud service where chat output and logs must be separable.
    - **Narrow `except Exception`.** The broad catches in the main loop, `providers.chat` and `update_memory` hide bugs (a `KeyError` in our code looks identical to a network timeout). Log the type/traceback and, where possible, catch provider-specific errors (`openai`/`httpx`). The main loop may stay tolerant, but it must log what it swallowed.
 > Exit criterion: Rumpel talks to Tabris from his phone with his PC off.
 
-### Phase 5 — Portfolio (transversal: starts during Phase 2)
-37. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead.
-38. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
-39. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
-40. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
-41. ⬜ GitHub profile README + pin Tabris.
-
-### Phase 6 — First pipeline project
-42. ⬜ Habit & Task Tracker (see §6): CLI + SQLite first, then minimal API (FastAPI), then it becomes Tabris's first **tool** (Phase 7 preview: Tabris reads/writes the tracker on your behalf).
-
-### Phase 7 — Multi-agent & tools (deferred)
+### Phase 5 — Multi-agent & tools
 > Precondition: tool use needs a function-calling-capable provider. Add a "tools" role to `AGENT_ROLES` pointing to a strong model (DeepSeek/Gemini); the cheap router models are insufficient.
 
-43. ⬜ Tool use with human-in-the-loop (CRUD on project files, tracker access).
-44. ⬜ PM / Dev / Tutor role structure on top of the role→provider map.
-45. ⬜ Specialized agents by strength (research, documents, images) as budget allows.
+38. ⬜ Tool use with human-in-the-loop (CRUD on project files, tracker access).
+39. ⬜ PM / Dev / Tutor role structure on top of the role→provider map.
+40. ⬜ Specialized agents by strength (research, documents, images) as budget allows.
+
+### Phase 6 — Liquidador de renta (first pipeline product)
+41. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 5 tool layer is in place.
+
+### Phase 7 — Portfolio (starts after first product ships)
+42. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead.
+43. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
+44. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
+45. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
+46. ⬜ GitHub profile README + pin Tabris.
 
 ### Phase 8 — Integrations & scheduling (candidate, post-freeze)
-46. ⬜ Time awareness: inject current datetime into system prompt context.
 47. ⬜ Task scheduler: APScheduler (or similar) so Tabris can fire reminders and timed actions from a persistent server.
 48. ⬜ Google Workspace integration: Calendar, Gmail, Drive — via OAuth + function calling.
 49. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
-> Entry criteria: Tabris stable in production (Phase 4 done) + tool use layer in place (Phase 7 done).
+> Entry criteria: Tabris stable in production (Phase 4 done) + tool use layer in place (Phase 5 done).
 
 ---
 
@@ -239,8 +239,8 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 
 | # | Project | V | M | B | C | Total | Role in the plan |
 |---|---|---|---|---|---|---|---|
-| 1 | Habit & Task Tracker | 5 | 2 | 5 | 5 | 17 | **Active #1.** Learning vehicle: CRUD, SQLite, API. Becomes Tabris's first tool. Weak as standalone product (saturated market) — its value is skills + integration. |
-| 2 | Employment contract liquidator (Colombia) | 4 | 4 | 5 | 4 | 17 | **Active #2 / flagship.** Local niche, real demand (employees & small employers), little quality competition, shows domain expertise — strongest portfolio piece and best SaaS bet. |
+| 1 | Employment contract liquidator (Colombia) | 4 | 4 | 5 | 4 | 17 | **Active #1 / flagship.** Local niche, real demand (employees & small employers), little quality competition, shows domain expertise — strongest portfolio piece and best SaaS bet. |
+| 2 | Habit & Task Tracker | 5 | 2 | 5 | 5 | 17 | Backlog — learning vehicle: CRUD, SQLite, API. Can become Tabris's first tool once Phase 5 tool layer is in place. Weak as standalone product (saturated market). |
 | 3 | Income tax calculator (Colombia) | 4 | 4 | 5 | 3 | 16 | Backlog — natural sibling of #2 (shared domain & audience). Strong candidate to bundle with #2 into one "Colombian payroll/tax tools" product. Seasonal demand spike (tax season). |
 | 4 | Expense & budget tracker | 4 | 2 | 5 | 4 | 15 | Backlog — good second data source for Tabris-as-assistant; weak standalone monetization. |
 | 5 | Account reconciliation tool | 3 | 4 | 4 | 2 | 13 | Backlog — monetizable (freelance accountants/SMBs) but needs domain depth and real user input. Revisit after #2 ships and brings contact with that audience. |
@@ -252,8 +252,10 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 - Tabris: finish FUNCTIONAL phase only, then FREEZE. Definition of done:
   Responds from Telegram with persistent memory.
   Everything beyond = backlog.
-- Then → Renta liquidator as flagship wedge. Start with an Excel version (validates logic + willingness to pay before any code).
-- Tax season makes this time-sensitive: prioritize accordingly.
+- Then → Phase 5 (multi-agent & tools): tool use layer enables Tabris to actively assist in building the liquidador.
+- Then → Phase 6: Liquidador de renta as flagship wedge. Start with an Excel prototype (validates logic + willingness to pay before any code).
+- Then → Phase 7: Portfolio — publish and document with a shipped product to show.
+- Tax season makes the liquidador time-sensitive: prioritize accordingly.
 
 ---
 

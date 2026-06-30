@@ -9,7 +9,7 @@ from unittest.mock import patch
 import config
 import main
 from core.strings import msg
-from core.db import find_user_by_name, get_messages
+from core.db import register_user_channel, get_messages
 
 
 class TestChatE2ESmoke(unittest.TestCase):
@@ -23,17 +23,20 @@ class TestChatE2ESmoke(unittest.TestCase):
     
     @patch("main.providers.chat")
     @patch("builtins.input")
-    def test_conversation_persists_to_db(self, mock_input, mock_chat):
+    @patch("main.get_client_key", return_value="test-key-123")
+    def test_conversation_persists_to_db(self, mock_key, mock_input, mock_chat):
         mock_input.side_effect = ["Hola", msg("exit_command")]
         mock_chat.side_effect = ["general", "Reply from Tabris", "exit", "HAS_CHANGES: no"]
         
-        with patch.object(config, "DB_PATH", self.db_path), \
-            patch.object(config, "USER_NAME", "TestUser"):
-            main.chat()
-        user = find_user_by_name(self.db_path, "TestUser")
-        self.assertIsNotNone(user)
+        from core.db import init_db, create_user, register_user_channel
+        init_db(self.db_path)
+        user_id = create_user(self.db_path, "TestUser", "es")
+        register_user_channel(self.db_path, user_id, "cli", "test-key-123")
         
-        contents = [m["content"] for m in get_messages(self.db_path, user["id"])]
+        with patch.object(config, "DB_PATH", self.db_path):
+            main.chat()
+        
+        contents = [m["content"] for m in get_messages(self.db_path, user_id)]
         self.assertIn("Hola", contents)
         self.assertIn("Reply from Tabris", contents)
     
@@ -58,3 +61,40 @@ class TestChatE2ESmoke(unittest.TestCase):
         
         prompt_sent = mock_chat.call_args[0][1][0]["content"]
         self.assertIn(f"[{fact_id}]", prompt_sent)
+
+class TestNewUserLanguageE2E(unittest.TestCase):
+    
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp.name, "newuser_smoke.db")
+    
+    def tearDown(self):
+        self.tmp.cleanup()
+    
+    @patch("main.providers.chat")
+    @patch("builtins.input")
+    @patch("main.get_client_key", return_value="new-user-key")
+    def test_new_spanish_user_full_flow(self, mock_key, mock_input, mock_chat):
+        mock_input.side_effect = [
+            "Mauricio",          # onboard_user: name
+            "Hola, como estas",  # first message (triggers language detection)
+            "si",                # confirms detected language
+            "salir",             # ends the session
+        ]
+        mock_chat.side_effect = [
+            "Mauricio",             # extract_name during onboarding
+            "es",                   # detect_language detects Spanish
+            "general",              # route_message for the first message
+            "Respuesta de Tabris",  # model reply
+            "exit",                 # route_message for "salir"
+            "HAS_CHANGES: no",      # memory_manager on exit
+        ]
+        
+        from core.db import init_db, find_user_by_key
+        init_db(self.db_path)
+        
+        with patch.object(config, "DB_PATH", self.db_path):
+            main.chat()
+        
+        user = find_user_by_key(self.db_path, "cli", "new-user-key")
+        self.assertEqual(user["language"], "es")

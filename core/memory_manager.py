@@ -86,9 +86,9 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
     retire_text = "\n".join(f"- ID {fid}" for fid in retire_ids)
     display = "\n".join(f"- {fact}" for fact in new_facts)
     if retire_ids:
-        display += f"\n\n{msg('retire_facts_header')}\n{retire_text}"
+        display += f"\n\n{msg('retire_facts_header', agent=config.AGENT_NAME)}\n{retire_text}"
     print(msg("proposed_facts", agent=config.AGENT_NAME, facts=display))
-    confirmation = input(msg("confirm_changes")).strip().lower()
+    confirmation = input(msg("confirm_changes", agent=config.AGENT_NAME)).strip().lower()
 
     if confirmation == msg("confirm_yes"):
         for fact in new_facts:

@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import init_db, create_user, get_user, find_user_by_name, save_fact, get_facts, deactivate_fact, save_message, get_messages, get_or_create_user
+from core.db import deactivate_fact, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, save_fact, save_message, update_user_language
 
 
 class TestInitDb(unittest.TestCase):
@@ -42,14 +42,6 @@ class TestInitDb(unittest.TestCase):
             cols = [row[1] for row in conn.execute("PRAGMA table_info(messages)").fetchall()]
             conn.close()
             self.assertIn("is_active", cols)
-    
-    def test_duplicate_user_raises_error(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = os.path.join(tmp, "test.db")
-            init_db(db_path)
-            create_user(db_path, name="Rumpel")
-            with self.assertRaises(Exception):
-                create_user(db_path, name="Rumpel")
 
 class TestCreateUser(unittest.TestCase):
     
@@ -186,26 +178,6 @@ class TestMessages(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]["content"], "Mensaje de Rumpel")
 
-class TestFindUserByName(unittest.TestCase):
-    
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tmp.name, "test.db")
-        init_db(self.db_path)
-    
-    def tearDown(self):
-        self.tmp.cleanup()
-    
-    def test_finds_existing_user(self):
-        user_id = create_user(self.db_path, name="Rumpel", language="es")
-        user = find_user_by_name(self.db_path, "Rumpel")
-        self.assertIsNotNone(user)
-        self.assertEqual(user["id"], user_id)
-    
-    def test_returns_none_if_not_found(self):
-        user = find_user_by_name(self.db_path, "Ana")
-        self.assertIsNone(user)
-
 class TestDeactivateFact(unittest.TestCase):
     
     def setUp(self):
@@ -238,26 +210,6 @@ class TestDeactivateFact(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row[0], 0)
 
-class TestGetOrCreateUser(unittest.TestCase):
-    
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tmp.name, "test.db")
-        init_db(self.db_path)
-    
-    def tearDown(self):
-        self.tmp.cleanup()
-    
-    def test_creates_user_when_absent(self):
-        user_id = get_or_create_user(self.db_path, "Rumpel", "es")
-        self.assertIsNotNone(user_id)
-        self.assertIsNotNone(find_user_by_name(self.db_path, "Rumpel"))
-    
-    def test_returns_existing_id_without_duplicating(self):
-        first_id = get_or_create_user(self.db_path, "Rumpel", "es")
-        second_id = get_or_create_user(self.db_path, "Rumpel", "es")
-        self.assertEqual(first_id, second_id)
-
 class TestForeignKeyEnforcement(unittest.TestCase):
     
     def setUp(self):
@@ -271,6 +223,71 @@ class TestForeignKeyEnforcement(unittest.TestCase):
     def test_save_fact_with_nonexistent_user_raises(self):
         with self.assertRaises(sqlite3.IntegrityError):
             save_fact(self.db_path, 999, "Hecho huérfano")
+
+class TestUpdateUserLanguage(unittest.TestCase):
+    def test_updates_language(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user(db, "Rumpel", "en")
+            update_user_language(db, user_id, "es")
+            user = get_user(db, user_id)
+            self.assertEqual(user["language"], "es")
+    
+    def test_does_not_affect_other_users(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            id1 = create_user(db, "Rumpel", "en")
+            id2 = create_user(db, "Ana", "en")
+            update_user_language(db, id1, "es")
+            self.assertEqual(get_user(db, id2)["language"], "en")
+
+class TestUserChannels(unittest.TestCase):
+
+    def test_find_returns_none_when_key_not_registered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            self.assertIsNone(find_user_by_key(db, "cli", "abc-123"))
+
+    def test_register_then_find_returns_user(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user(db, "Rumpel", "es")
+            register_user_channel(db, user_id, "cli", "abc-123")
+            user = find_user_by_key(db, "cli", "abc-123")
+            self.assertEqual(user["id"], user_id)
+            self.assertEqual(user["language"], "es")
+
+    def test_same_key_different_channel_is_independent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user(db, "Rumpel", "es")
+            register_user_channel(db, user_id, "cli", "shared-key")
+            self.assertIsNone(find_user_by_key(db, "telegram", "shared-key"))
+    
+    def test_duplicate_channel_key_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            id1 = create_user(db, "Rumpel", "es")
+            id2 = create_user(db, "Ana", "en")
+            register_user_channel(db, id1, "cli", "dup-key")
+            with self.assertRaises(sqlite3.IntegrityError):
+                register_user_channel(db, id2, "cli", "dup-key")
+
+class TestNonUniqueNames(unittest.TestCase):
+    
+    def test_two_users_can_share_a_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            id1 = create_user(db, "Oscar", "es")
+            id2 = create_user(db, "Oscar", "en")
+            self.assertNotEqual(id1, id2)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ def init_db(db_path):
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                name       TEXT NOT NULL UNIQUE,
+                name       TEXT NOT NULL,
                 language   TEXT NOT NULL DEFAULT 'en',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -32,6 +32,15 @@ def init_db(db_path):
                 content    TEXT NOT NULL,
                 is_active  INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            
+            CREATE TABLE IF NOT EXISTS user_channels (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                channel    TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(channel, key)
             );
             
             CREATE UNIQUE INDEX IF NOT EXISTS idx_facts_active_content ON facts(user_id, content) WHERE is_active=1;
@@ -90,19 +99,13 @@ def get_messages(db_path, user_id, limit=20):
         ).fetchall()
         return list(reversed([dict(row) for row in rows]))
 
-def find_user_by_name(db_path, name):
+def update_user_language(db_path, user_id, language):
     with contextlib.closing(_connect(db_path)) as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE name=?",
-            (name,)
-        ).fetchone()
-        return dict(row) if row else None
-
-def get_or_create_user(db_path, name, language="en"):
-    user = find_user_by_name(db_path, name)
-    if user:
-        return user["id"]
-    return create_user(db_path, name, language)
+        conn.execute(
+            "UPDATE users SET language = ? WHERE id = ?",
+            (language, user_id)
+        )
+        conn.commit()
 
 def deactivate_fact(db_path, fact_id):
     with contextlib.closing(_connect(db_path)) as conn:
@@ -111,3 +114,21 @@ def deactivate_fact(db_path, fact_id):
             (fact_id,)
         )
         conn.commit()
+
+def register_user_channel(db_path, user_id, channel, key):
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO user_channels (user_id, channel, key) VALUES (?, ?, ?)",
+            (user_id, channel, key)
+        )
+        conn.commit()
+
+def find_user_by_key(db_path, channel, key):
+    with contextlib.closing(_connect(db_path)) as conn:
+        row = conn.execute(
+            """SELECT users.* FROM users
+            JOIN user_channels ON user_channels.user_id = users.id
+            WHERE user_channels.channel = ? AND user_channels.key = ?""",
+            (channel, key)
+        ).fetchone()
+        return dict(row) if row else None
