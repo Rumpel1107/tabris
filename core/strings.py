@@ -4,7 +4,7 @@ MESSAGES = {
     "es": {
         "user_prompt":             "Tú: ",
         "agent_reply":             "\n{agent} ({role}): {reply}\n",
-        "startup":                 "{agent} se encuentra activo. Escribe '{exit_cmd}' para terminar la sesion.",
+        "startup":                 "{agent} se encuentra activo. Escribe '{exit_cmd}' para terminar la sesion. Como puedo ayudarte hoy?",
         "exit_command":            "salir",
         "confirm_yes":             "si",
         "model_error":             "{agent}: Error al obtener respuesta del modelo: {error}",
@@ -23,7 +23,7 @@ MESSAGES = {
     "en": {
         "user_prompt":             "You: ",
         "agent_reply":             "\n{agent} ({role}): {reply}\n",
-        "startup":                 "{agent} is active. Type '{exit_cmd}' to end the session.",
+        "startup":                 "{agent} is active. Type '{exit_cmd}' to end the session. How can I help you today?",
         "exit_command":            "exit",
         "confirm_yes":             "yes",
         "model_error":             "{agent}: Error getting response from model: {error}",

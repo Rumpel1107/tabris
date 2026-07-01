@@ -127,6 +127,44 @@ class TestUpdateMemory(unittest.TestCase):
         prompt_sent = mock_chat.call_args[0][1][0]["content"]
         self.assertNotIn("mensaje viejo", prompt_sent)
         self.assertIn("mensaje nuevo", prompt_sent)
+    
+    @patch("builtins.input")
+    @patch("core.providers.chat")
+    def test_assistant_turns_excluded_from_prompt(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_CHANGES: no"
+        history = [
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "Hola, soy Rumpel"},
+            {"role": "assistant", "content": "Soy Tabris y mis capacidades son responder preguntas"},
+        ]
+        update_memory(history, self.db_path, self.user_id)
+        
+        prompt_sent = mock_chat.call_args[0][1][0]["content"]
+        self.assertIn("Hola, soy Rumpel", prompt_sent)
+        self.assertNotIn("mis capacidades son", prompt_sent)
+    
+    @patch("builtins.input")
+    @patch("core.providers.chat")
+    def test_prompt_instructs_user_facts_only(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_CHANGES: no"
+        history = [{"role": "user", "content": "Hola"}]
+        update_memory(history, self.db_path, self.user_id)
+        
+        prompt_sent = mock_chat.call_args[0][1][0]["content"]
+        self.assertIn("about the user", prompt_sent)
+        self.assertIn("NOT", prompt_sent)
+    
+    @patch("builtins.input")
+    @patch("core.providers.chat")
+    def test_prompt_specifies_user_language(self, mock_chat, mock_input):
+        mock_chat.return_value = "HAS_CHANGES: no"
+        import config
+        config.LANGUAGE = "es"
+        history = [{"role": "user", "content": "Hola"}]
+        update_memory(history, self.db_path, self.user_id)
+        
+        prompt_sent = mock_chat.call_args[0][1][0]["content"]
+        self.assertIn("Spanish", prompt_sent)
 
 
 if __name__ == "__main__":

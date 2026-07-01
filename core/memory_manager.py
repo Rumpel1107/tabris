@@ -35,7 +35,7 @@ def update_memory(conversation_history, db_path, user_id, watermark=1):
     conversation_text = "\n".join(
         f"{turn['role'].upper()}: {turn['content']}"
         for turn in conversation_history[watermark:]
-        if turn["role"] != "system"
+        if turn["role"] == "user"
     )
     
     known_facts = get_facts(db_path, user_id)
@@ -46,8 +46,12 @@ def update_memory(conversation_history, db_path, user_id, watermark=1):
 Known facts (with IDs):
 {known_text}
 
-Conversation from this session:
+Conversation from this session (user turns only):
 {conversation_text}
+
+Extract only durable facts ABOUT THE USER as a person: their preferences, personal data, projects, and goals.
+Do NOT extract anything about the assistant, its capabilities, its limitations, or the rules of the conversation.
+Produce all NEW_FACTS in {config.LANGUAGE_NAMES.get(config.LANGUAGE, "English")}.
 
 Identify NEW durable facts to remember AND existing facts to retire (because they became false or were corrected).
 
