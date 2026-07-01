@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-01 (Phase 3: item 31 ✅ time awareness; next: item 31b diagnostic logging)
+Last updated: 2026-07-01 (Item 31b: In progress)
 
 ---
 
@@ -21,8 +21,13 @@ Last updated: 2026-07-01 (Phase 3: item 31 ✅ time awareness; next: item 31b di
 3. **Employability — Plan B financing only.** A technical job is a fallback IF the support fund is exhausted, NOT a parallel objective. Do not optimize for it..
 
 ### What Tabris is
-A personal, always-on, multi-agent AI assistant (JARVIS-style) that acts as **PM, Dev and Tutor**:
-helps Rumpel manage and build his software project pipeline while teaching him along the way.
+A personal, always-on AI assistant (JARVIS-style) for Rumpel's **day-to-day** (plus a small number
+of beta-testers). **Not** primarily a tool to build the liquidador — Claude/Gemini are more robust
+for heavy development and remain the tools for that. Tabris's differential is **not raw reasoning**
+but: persistent personal memory, being **his** (owned, multi-user, replicable), always available on
+his phone, and the input modalities he actually uses (text, voice, images, links). The
+liquidador-building phase is Tabris's **dogfooding ground**: it runs in daily use there and gathers
+feedback (Rumpel's own + beta-testers') to be refined from in the next round.
 Long-term: serve Rumpel plus a small number of additional users, leveraging data captured by
 the pipeline apps (habits, expenses, etc.). Designed to be **replicable**: anyone should be able
 to clone the repo, add their own API keys, and run their own Tabris.
@@ -54,6 +59,7 @@ to clone the repo, add their own API keys, and run their own Tabris.
 | D7 | **SQLite for structured storage** | Free, serverless, file-based, ships with Python. Used for per-user memory/profiles and for the pipeline apps. Skills transfer directly to any SQL job requirement. |
 | D8 | **Pipeline focus: 2 active projects max; nothing deleted, everything backlogged** | Two finished projects beat seven half-built ones. See prioritized matrix in §6. |
 | D9 | **Portfolio is a roadmap phase, not a side effect** | Public repo + serious README + deployed demo + posts documenting the journey. The "document everything" rule converts into LinkedIn/blog content. |
+| D10 | **Search APIs use the same abstraction + fallback as the model providers** | Internet access is a tool, not a new brain. `core/search.py` mirrors `core/providers.py`: an ordered `SEARCH_PROVIDERS` list in `config.py` (Tavily → Brave → DuckDuckGo), keys in `.env`, one `search(query)` that tries each in order, falls through on error or quota (`429`/`402`), and normalizes every provider's response to a common `{title, url, content}` shape. DDG (no key, no quota, lower quality) is the last-resort backup. Swapping/reordering providers = a one-line config change; zero lock-in. |
 
 ---
 
@@ -137,6 +143,9 @@ by the user before any write.
 Single consecutive sequence for the whole project. Completed items are marked ✅;
 pending ones ⬜. `> Exit criterion` lines define when a phase is done.
 
+> **MVP definition (functional for daily use):** persistent memory (done) + internet
+> (`web_search`/`web_fetch`) + Telegram + audio input + image input + always-on deploy.
+
 ### Phase 0 — Environment & first prototype  ✅
 1. ✅ Ubuntu + Ollama + GPU working
 2. ✅ Local models installed (llama3.1:8b, qwen2.5-coder:7b)
@@ -166,8 +175,6 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 | 19 (F4) | **Use `config.MEMORY_PATH` everywhere** | `load_memory()` hardcodes `"memory.md"` default instead of `config.MEMORY_PATH`. | ✅ |
 | 20 (F5) | **Harden `parse_memory_update()`** | Only supports one section per session; breaks if the model proposes 2+ sections or adds text outside the format. Minimum: detect and reject malformed responses with a clear message instead of corrupting parsing. Add tests for malformed inputs. | ✅ |
 
-> F6 (router false positives) and F7 (graceful exit + streaming) were relocated to Phase 3, where they are naturally resolved (see items 29 and 34). All Phase 1 fixes above are ✅.
-
 ### Phase 2 — API migration (the pivot)  ✅
 21. ✅ Create `.env` + `.env.example` + add `python-dotenv`; load keys in `config.py`.
 22. ✅ Add `core/providers.py` with the role→provider map and `chat()` abstraction (D2/D3).
@@ -178,11 +185,8 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 > Exit criterion: Tabris runs end-to-end with zero local model dependency.
 
 ### Phase 3 — Memory v1 + Telegram
-> Reorder rationale: build the brain before connecting the interface. Telegram connects last so it lands on a fully functional system.
-
 27. ✅ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
 28. ✅ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
-> ✅ Integration debt (items 27-28) RESOLVED: the SQLite layer is wired into `main.py` end-to-end. System prompt = `persona.md` (static identity) + `facts` from the DB; conversation history seeded from and persisted to `messages`; the memory trigger distills new facts to the `facts` table (human-in-the-loop). `load_memory`/`memory.md`/`parse_memory_update`/`replace_section` retired; file paths anchored to project root (cwd-independent). Verified by `tests/test_e2e_smoke.py`.
 28b. ✅ DB layer hardening (do before 28c — it is the foundation under every DB write that 28c adds). Source: deep code review 2026-06-24. Scenarios to satisfy:
    - **FK enforcement.** `PRAGMA foreign_keys = ON` is per-connection and defaults to OFF; today only `init_db` sets it, so every other `core/db.py` function opens a bare connection and the `REFERENCES users(id)` constraints are silently NOT validated (a `fact`/`message` with a non-existent `user_id` inserts cleanly). Fix: a single `_connect(db_path)` helper that always sets the pragma + `row_factory = sqlite3.Row`, used by every db function.
    - **No connection leaks.** Functions use `conn = sqlite3.connect(...)` … `conn.close()` with no `with`/`try-finally`, so an exception mid-function leaks the connection — accumulates in an always-on service. Fix: `with sqlite3.connect(...)` (auto commit/rollback) or the `_connect` helper inside `try/finally`.
@@ -197,11 +201,12 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 30a. ✅ Memory distillation quality — extract only USER facts. `update_memory` feeds the whole conversation (including assistant turns) into the distillation prompt, so it "learns" facts from Tabris's own self-description (observed 2026-06-30: extracted "Tabris has capabilities…", "Tabris has limitations…" — noise about the assistant, not about the user). Fix (both): (1) distill only `role == "user"` turns from the delta; (2) strengthen the prompt to extract only durable facts ABOUT THE USER (preferences, data, projects) and explicitly ignore anything about the assistant or its capabilities. TDD: a conversation containing an assistant self-description yields zero facts about Tabris.
 30b. ✅ Facts in the user's language. The `analysis_prompt` never specifies an output language, so facts come back in English even when `config.LANGUAGE == "es"` (observed 2026-06-30). Decision: facts are user-facing content (injected into the system prompt, shown in the si/no confirmation) → store them in the user's language. Fix: add a directive to produce `NEW_FACTS` in `config.LANGUAGE`. TDD: with language "es", a distilled fact comes back in Spanish.
 30c. ✅ Persona gives reasoned opinions. The base model injects a generic "I can't make decisions or have personal opinions" disclaimer that is NOT in `persona.md` (observed 2026-06-30). Users do ask for opinions. Fix: rewrote persona.md — removed all coding-session rules (TDD, one-step-at-a-time, etc.), added concise-by-default, natural first-person tone, explicit instruction to give opinions and to not recite capability/limitation lists unless asked. Verified 2026-07-01: small talk is short and natural, opinions given without disclaimer, facts extracted are concrete and in Spanish.
-> Deferred (captured 2026-06-30, not scheduled now): (a) internet / real-time search is NOT a new role — it needs the tool-use layer (item 38, Phase 5); Tabris's "I can't access real-time info" is correct until then. (b) Personality that evolves from interactions (interaction-derived preference facts shaping tone) reuses the M1 `facts` mechanism (no new system); revisit after 30a lands, since it depends on clean fact extraction.
 31. ✅ Time awareness: inject current datetime into system prompt context. `build_system_prompt` takes an injectable `now=None` (defaults to `datetime.now()`, kept pure/testable); adds a `## Current context` block with the date/time. `format_datetime(dt, language)` formats it in the user's language via `WEEKDAYS`/`MONTHS` dicts in `strings.py` (locale-independent — `strftime` follows the OS locale, so day/month names are hardcoded es/en; migrate to `babel` if languages > 3). Verified 2026-07-01 in a real session.
 31b. ⬜ Diagnostic logging (promoted from item 37, do before Telegram). Replace `print()` diagnostics with the `logging` module (one logger per module, configurable level) so fallback/error lines (e.g. `[providers] ... failed; trying next fallback`) go to the logger, not stdout. User-facing messages stay on `print`/`msg`. Reason: in a Telegram bot the channel adapter will only forward the `reply` string to the user — stdout is never visible — but mixing diagnostics with stdout is fragile and makes debugging impossible on the server. Doing this before connecting the second channel means we build on a clean logging baseline from the start.
 32. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core. Do this before building the Telegram channel so the second adapter is added to a clean interface, not retrofitted.
 33. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed). Telegram's `user_id` is the channel key (free, stable) — register it in `user_channels` exactly like the CLI key. **Account linking (same human, multiple channels → one profile/context):** via a short-lived **link-code**, never by name. Flow: on an already-registered channel the user requests a code; entering it on the new channel inserts a `user_channels` row pointing the new `(channel, key)` to the existing `user_id`. The `user_channels` schema (item 30) already supports this with zero migration — multiple rows per `user_id`. Name-based linking is explicitly rejected (impersonation risk).
+33a. ⬜ Audio input (voice messages): transcribe incoming Telegram voice notes to text via speech-to-text (Groq Whisper — cheap/fast), then feed the transcript into the normal text flow. Depends on item 33 (Telegram is the media channel; the CLI can't send audio). Read-only preprocessing step → no HITL confirmation.
+33b. ⬜ Image input (vision): accept photos sent via Telegram and route them to a vision-capable model (Gemini, natively multimodal) so Tabris can "see" and reason about the image. Depends on item 33; add a vision-capable model to the `tools`/multimodal role. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
 34. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
 
 ### Phase 4 — Deploy (always-on)
@@ -211,28 +216,29 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - **Narrow `except Exception`.** The broad catches in the main loop, `providers.chat` and `update_memory` hide bugs (a `KeyError` in our code looks identical to a network timeout). Log the type/traceback and, where possible, catch provider-specific errors (`openai`/`httpx`). The main loop may stay tolerant, but it must log what it swallowed.
 > Exit criterion: Rumpel talks to Tabris from his phone with his PC off.
 
-### Phase 5 — Multi-agent & tools
-> Precondition: tool use needs a function-calling-capable provider. Add a "tools" role to `AGENT_ROLES` pointing to a strong model (DeepSeek/Gemini); the cheap router models are insufficient.
-
-38. ⬜ Tool use with human-in-the-loop (CRUD on project files, tracker access).
-39. ⬜ PM / Dev / Tutor role structure on top of the role→provider map.
-40. ⬜ Specialized agents by strength (research, documents, images) as budget allows.
+### Phase 5 — Tools (internet first)
+38. ⬜ **Internet access via tool use** (first tool of the tool-use layer; pulled early in the round). Build order — one new concept per step:
+    - **38a.** Function-calling loop: the model requests `web_search(query)`, our code executes it and returns results, the model answers with them. Prove it in the CLI with DuckDuckGo (no signup) behind the call. This is the genuinely new concept, isolated.
+    - **38b.** Generalize behind `core/search.py` + `SEARCH_PROVIDERS` config list + fallback chain + result normalization (D10). Add `web_fetch` (read a linked page/document → text) and, optionally, a YouTube-transcript tool (captions → text, not "watching" the video).
+    - **38c.** Register Tavily/Brave keys; DuckDuckGo stays as the last-resort backup.
+    - Search is read-only → **no HITL confirmation** (unlike file writes). File/tracker CRUD tools (the original, broader item-38 scope) are deferred to Phase 8 (items 48/49).
 
 ### Phase 6 — Liquidador de renta (first pipeline product)
-41. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 5 tool layer is in place.
+39. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 5 tool layer is in place.
 
 ### Phase 7 — Portfolio (starts after first product ships)
-42. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead.
-43. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
-44. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
-45. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
-46. ⬜ GitHub profile README + pin Tabris.
+40. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead.
+41. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
+42. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.
+43. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
+44. ⬜ GitHub profile README + pin Tabris.
 
-### Phase 8 — Integrations & scheduling (candidate, post-freeze)
-47. ⬜ Task scheduler: APScheduler (or similar) so Tabris can fire reminders and timed actions from a persistent server.
-48. ⬜ Google Workspace integration: Calendar, Gmail, Drive — via OAuth + function calling.
-49. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
-> Entry criteria: Tabris stable in production (Phase 4 done) + tool use layer in place (Phase 5 done).
+### Phase 8 — Integrations, scheduling & multi-agent (candidate, post-freeze / resume point)
+45. ⬜ Task scheduler: APScheduler (or similar) so Tabris can fire reminders and timed actions from a persistent server.
+46. ⬜ Google Workspace integration: Calendar, Gmail, Drive — via OAuth + function calling.
+47. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
+48. ⬜ PM / Dev / Tutor role structure on top of the role→provider map. Multi-agent orchestration — the biggest architectural jump, deferred from Phase 5 (not part of the daily-assistant MVP).
+49. ⬜ Specialized agents by strength (research/deep-search, documents, images, image generation) as budget allows. Includes video "seeing" / visual analysis. Deferred from Phase 5.
 
 ---
 
@@ -253,11 +259,16 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 | 8 | Documentation generator (video→manual) | 2 | ? | 4 | 2 | — | Backlog / UNVALIDATED. Crowded market (Scribe, Tango, Guidde, Docsie). Validate willingness-to-pay with the people who requested it BEFORE any build. Outside the financial-domain edge. |
 
 **Sequence:**
-- Tabris: finish FUNCTIONAL phase only, then FREEZE. Definition of done:
-  Responds from Telegram with persistent memory.
-  Everything beyond = backlog.
-- Then → Phase 5 (multi-agent & tools): tool use layer enables Tabris to actively assist in building the liquidador.
-- Then → Phase 6: Liquidador de renta as flagship wedge. Start with an Excel prototype (validates logic + willingness to pay before any code).
+- Tabris: finish Phases 3–5 this round (personal-assistant MVP), then FREEZE. Definition of done
+  (functional for daily use): persistent memory + internet (`web_search`/`web_fetch`) + Telegram +
+  audio input + image input + always-on deploy. Everything beyond = backlog.
+- **At the freeze:** beta-testers are onboarded (the multi-user foundation already exists from item
+  30, so this costs no rework). The freeze is not "Tabris switched off" — it is feature-frozen for
+  development while running in **daily production use** by Rumpel + beta-testers, gathering feedback.
+- **During the freeze → Phase 6: Liquidador de renta** as flagship wedge (built mainly with
+  Claude/Gemini, with Tabris dogfooded alongside). Start with an Excel prototype (validates logic +
+  willingness to pay before any code). Feedback collected on Tabris during this period is reviewed
+  and its valuable parts implemented when Tabris is picked back up (next round).
 - Then → Phase 7: Portfolio — publish and document with a shipped product to show.
 - Tax season makes the liquidador time-sensitive: prioritize accordingly.
 
