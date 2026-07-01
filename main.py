@@ -3,7 +3,7 @@ import os
 import uuid
 import time
 
-from core.strings import msg
+from core.strings import MONTHS, msg, WEEKDAYS
 
 from core import memory_manager, providers
 from core.db import init_db, get_facts, get_messages, save_message, create_user, find_user_by_key, register_user_channel, update_user_language
@@ -99,13 +99,25 @@ def resolve_language(detected, confirm_fn, ask_fn):
 def build_messages(conversation_history):
     return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
 
-def build_system_prompt(persona, facts, language):
+def format_datetime(dt, language):
+    lang = language if language in WEEKDAYS else "en"
+    day = WEEKDAYS[lang][dt.weekday()]
+    month = MONTHS[lang][dt.month - 1]
+    if lang == "es":
+        return f"{day}, {dt.day} de {month} de {dt.year} — {dt.strftime('%H:%M')}"
+    return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
+
+def build_system_prompt(persona, facts, language, now=None):
+    from datetime import datetime as _datetime
+    if now is None:
+        now = _datetime.now()
     lang_name = config.LANGUAGE_NAMES.get(language, language)
     directive = f"\nAlways respond in {lang_name}."
+    context_block = f"\n\n## Current context\nDate and time: {format_datetime(now, language)}"
     if not facts:
-        return persona + directive
+        return persona + context_block + directive
     facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
-    return f"{persona}\n\n## What I know about the user\n{facts_block}{directive}"
+    return f"{persona}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
 
 def should_trigger_memory(exchange_count, last_trigger_time):
     if exchange_count >= config.MEMORY_TRIGGER_EXCHANGES:

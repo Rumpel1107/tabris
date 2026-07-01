@@ -41,5 +41,15 @@ MESSAGES = {
     },
 }
 
+# Localized day/month names for datetime formatting. Maintained manually while supported languages <= 3. If languages grow beyond 3, replace with the `babel` library (pip install babel) which uses the Unicode CLDR database and eliminates manual maintenance.
+WEEKDAYS = {
+    "es": ["lunes","martes","miércoles","jueves","viernes","sábado","domingo"],
+    "en": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+}
+MONTHS = {
+    "es": ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"],
+    "en": ["January","February","March","April","May","June","July","August","September","October","November","December"],
+}
+
 def msg(key, **kwargs):
     return MESSAGES[config.LANGUAGE][key].format(**kwargs)

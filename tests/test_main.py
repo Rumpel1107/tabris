@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import tempfile
 import time
 import unittest
-from main import detect_language, build_messages, build_system_prompt, extract_name, get_client_key, load_persona, onboard_user, resolve_language, route_message, should_trigger_memory
+from main import detect_language, build_messages, build_system_prompt, extract_name, format_datetime, get_client_key, load_persona, onboard_user, resolve_language, route_message, should_trigger_memory
 from config import MAX_HISTORY
 from unittest.mock import patch, MagicMock, mock_open
 
@@ -222,6 +222,36 @@ class TestExtractName(unittest.TestCase):
         with patch("main.providers.chat", side_effect=Exception("boom")):
             result = extract_name("Mauricio")
         self.assertEqual(result, "Mauricio")
+
+class TestFormatDatetime(unittest.TestCase):
+    from datetime import datetime
+    FIXED_DT = datetime(2026, 7, 1, 10, 35)  # miércoles
+
+    def test_spanish_format(self):
+        from datetime import datetime
+        result = format_datetime(datetime(2026, 7, 1, 10, 35), "es")
+        self.assertIn("miércoles", result)
+        self.assertIn("julio", result)
+        self.assertIn("2026", result)
+        self.assertIn("10:35", result)
+
+    def test_english_format(self):
+        from datetime import datetime
+        result = format_datetime(datetime(2026, 7, 1, 10, 35), "en")
+        self.assertIn("Wednesday", result)
+        self.assertIn("July", result)
+        self.assertIn("2026", result)
+        self.assertIn("10:35", result)
+
+class TestBuildSystemPromptDatetime(unittest.TestCase):
+
+    def test_includes_current_context_section(self):
+        from datetime import datetime
+        fixed = datetime(2026, 7, 1, 10, 35)
+        result = build_system_prompt("persona", [], language="es", now=fixed)
+        self.assertIn("Current context", result)
+        self.assertIn("julio", result)
+        self.assertIn("10:35", result)
 
 
 if __name__ == "__main__":
