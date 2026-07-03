@@ -31,6 +31,10 @@ def parse_facts_response(raw_response):
     
     return True, new_facts, retire_ids, None
 
+def filter_valid_retire_ids(retire_ids, known_facts):
+    known_ids = {fact["id"] for fact in known_facts}
+    return [fid for fid in retire_ids if fid in known_ids]
+
 def update_memory(conversation_history, db_path, user_id, watermark=1):
     conversation_text = "\n".join(
         f"{turn['role'].upper()}: {turn['content']}"
@@ -77,12 +81,13 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
     except Exception as e:
         print(msg("model_error", agent=config.AGENT_NAME, error=e))
         return
-
+    
     has_changes, new_facts, retire_ids, error = parse_facts_response(raw_response)
+    retire_ids = filter_valid_retire_ids(retire_ids, known_facts)
     if error:
         print(msg("invalid_model_response", agent=config.AGENT_NAME, error=error))
         return
-
+    
     if not has_changes:
         print(msg("no_changes", agent=config.AGENT_NAME))
         return
@@ -93,12 +98,12 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
         display += f"\n\n{msg('retire_facts_header', agent=config.AGENT_NAME)}\n{retire_text}"
     print(msg("proposed_facts", agent=config.AGENT_NAME, facts=display))
     confirmation = input(msg("confirm_changes", agent=config.AGENT_NAME)).strip().lower()
-
+    
     if confirmation == msg("confirm_yes"):
         for fact in new_facts:
             save_fact(db_path, user_id, fact)
         for fact_id in retire_ids:
-            deactivate_fact(db_path, fact_id)
+            deactivate_fact(db_path, user_id, fact_id)
         print(msg("memory_updated", agent=config.AGENT_NAME))
     else:
         print(msg("no_changes", agent=config.AGENT_NAME))

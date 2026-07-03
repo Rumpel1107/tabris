@@ -193,7 +193,7 @@ class TestDeactivateFact(unittest.TestCase):
         save_fact(self.db_path, self.user_id, "Hecho activo")
         fact_id = save_fact(self.db_path, self.user_id, "Hecho a desactivar")
         
-        deactivate_fact(self.db_path, fact_id)
+        deactivate_fact(self.db_path, self.user_id, fact_id)
         
         facts = get_facts(self.db_path, self.user_id)
         contents = [f["content"] for f in facts]
@@ -202,13 +202,23 @@ class TestDeactivateFact(unittest.TestCase):
     
     def test_deactivate_does_not_delete_from_db(self):
         fact_id = save_fact(self.db_path, self.user_id, "Hecho importante")
-        deactivate_fact(self.db_path, fact_id)
+        deactivate_fact(self.db_path, self.user_id, fact_id)
         
         conn = sqlite3.connect(self.db_path)
         row = conn.execute("SELECT is_active FROM facts WHERE id=?", (fact_id,)).fetchone()
         conn.close()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], 0)
+    
+    def test_deactivate_does_not_affect_other_users_fact(self):
+        other_user_id = create_user(self.db_path, name="Otro", language="es")
+        fact_id = save_fact(self.db_path, other_user_id, "Hecho de otro usuario")
+        
+        deactivate_fact(self.db_path, self.user_id, fact_id)
+        
+        facts = get_facts(self.db_path, other_user_id)
+        contents = [f["content"] for f in facts]
+        self.assertIn("Hecho de otro usuario", contents)
 
 class TestForeignKeyEnforcement(unittest.TestCase):
     

@@ -107,11 +107,11 @@ def update_user_language(db_path, user_id, language):
         )
         conn.commit()
 
-def deactivate_fact(db_path, fact_id):
+def deactivate_fact(db_path, user_id, fact_id):
     with contextlib.closing(_connect(db_path)) as conn:
         conn.execute(
-            "UPDATE facts SET is_active=0 WHERE id=?",
-            (fact_id,)
+            "UPDATE facts SET is_active=0 WHERE id=? AND user_id=?",
+            (fact_id, user_id)
         )
         conn.commit()
 

@@ -1,6 +1,10 @@
 import config
+import logging
 import ollama
 from openai import OpenAI
+
+
+logger = logging.getLogger(__name__)
 
 PROVIDER_CONFIG = {
     "deepseek": {
@@ -21,6 +25,18 @@ PROVIDER_CONFIG = {
     },
 }
 
+_clients = {}
+
+def _get_client(provider):
+    if provider not in _clients:
+        settings = PROVIDER_CONFIG[provider]
+        _clients[provider] = OpenAI(
+            base_url=settings["base_url"],
+            api_key=settings["api_key"],
+            timeout=config.PROVIDER_TIMEOUT,
+        )
+    return _clients[provider]
+
 def _call_provider(provider, model, messages):
     if provider == "ollama":
         response = ollama.chat(
@@ -29,9 +45,8 @@ def _call_provider(provider, model, messages):
             options={"num_ctx": config.NUM_CTX},
         )
         return response.message.content
-
-    settings = PROVIDER_CONFIG[provider]
-    client = OpenAI(base_url=settings["base_url"], api_key=settings["api_key"])
+    
+    client = _get_client(provider)
     response = client.chat.completions.create(model=model, messages=messages)
     return response.choices[0].message.content
 
@@ -45,5 +60,5 @@ def chat(role, messages):
             return _call_provider(provider, model, messages)
         except Exception as e:
             last_error = e
-            print(f"[providers] {provider} failed ({e}); trying next fallback...")
+            logger.warning(f"{provider} failed ({e}); trying next fallback...")
     raise RuntimeError(f"All providers failed for role '{role}'. Last error: {last_error}")

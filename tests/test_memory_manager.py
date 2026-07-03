@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import tempfile
 import unittest
 from core.db import init_db, create_user, get_facts
-from core.memory_manager import update_memory, parse_facts_response
+from core.memory_manager import filter_valid_retire_ids, update_memory, parse_facts_response
 from unittest.mock import patch
 
 class TestParseFactsResponse(unittest.TestCase):
@@ -165,6 +165,30 @@ class TestUpdateMemory(unittest.TestCase):
         
         prompt_sent = mock_chat.call_args[0][1][0]["content"]
         self.assertIn("Spanish", prompt_sent)
+    
+    @patch("builtins.input", return_value="si")
+    @patch("core.memory_manager.deactivate_fact")
+    @patch("core.providers.chat")
+    def test_retire_ids_not_in_known_facts_are_ignored(self, mock_chat, mock_deactivate, mock_input):
+        from core.db import save_fact, get_facts
+        save_fact(self.db_path, self.user_id, "Hecho real")
+        real_id = get_facts(self.db_path, self.user_id)[0]["id"]
+        bogus_id = real_id + 999
+        
+        mock_chat.return_value = f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {bogus_id}"
+        update_memory([], self.db_path, self.user_id)
+        
+        called_ids = [call.args[2] for call in mock_deactivate.call_args_list]
+        self.assertIn(real_id, called_ids)
+        self.assertNotIn(bogus_id, called_ids)
+
+
+class TestFilterValidRetireIds(unittest.TestCase):
+
+    def test_keeps_only_ids_present_in_known_facts(self):
+        known_facts = [{"id": 1, "content": "a"}, {"id": 2, "content": "b"}]
+        result = filter_valid_retire_ids([1, 2, 99], known_facts)
+        self.assertEqual(result, [1, 2])
 
 
 if __name__ == "__main__":

@@ -49,6 +49,7 @@ MEMORY_TRIGGER_SECONDS = 300
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
 NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)
+PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 
 # --- API Keys ---
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
@@ -56,3 +57,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# --- Logging Configuration ---
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

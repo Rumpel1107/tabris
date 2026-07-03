@@ -1,7 +1,8 @@
 import config
+import logging
 import os
-import uuid
 import time
+import uuid
 
 from core.strings import MONTHS, msg, WEEKDAYS
 
@@ -209,4 +210,8 @@ def chat():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=config.LOG_LEVEL,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    )
     chat()
