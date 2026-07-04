@@ -25,7 +25,7 @@ class TestChatE2ESmoke(unittest.TestCase):
     @patch("builtins.input")
     @patch("main.get_client_key", return_value="test-key-123")
     def test_conversation_persists_to_db(self, mock_key, mock_input, mock_chat):
-        mock_input.side_effect = ["Hola", msg("exit_command")]
+        mock_input.side_effect = ["Hola", msg("exit_command", "es")]
         mock_chat.side_effect = ["general", "Reply from Tabris", "exit", "HAS_CHANGES: no"]
         
         from core.db import init_db, create_user, register_user_channel
@@ -55,7 +55,7 @@ class TestChatE2ESmoke(unittest.TestCase):
         fact_id = facts[0]["id"]
         
         mock_chat.return_value = f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}"
-        update_memory([], db_path, user_id)
+        update_memory([], db_path, user_id, language="es")
         
         self.assertEqual(get_facts(db_path, user_id), [])
         

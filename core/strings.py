@@ -1,5 +1,3 @@
-import config
-
 MESSAGES = {
     "es": {
         "user_prompt":             "Tú: ",
@@ -51,5 +49,5 @@ MONTHS = {
     "en": ["January","February","March","April","May","June","July","August","September","October","November","December"],
 }
 
-def msg(key, **kwargs):
-    return MESSAGES[config.LANGUAGE][key].format(**kwargs)
+def msg(key, language, **kwargs):
+    return MESSAGES[language][key].format(**kwargs)

@@ -6,7 +6,6 @@ load_dotenv()
 # --- Agent Configuration ---
 AGENT_NAME = "Tabris"
 USER_NAME = "Rumpel"
-LANGUAGE = "en"
 LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}
 
 # --- Role → Provider mapping ---

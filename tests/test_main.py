@@ -199,12 +199,6 @@ class TestResolveLanguage(unittest.TestCase):
     def test_rejected_confirmation_garbage_defaults_to_en(self):
         result = resolve_language("es", confirm_fn=lambda: "no", ask_fn=lambda: "xyz")
         self.assertEqual(result, "en")
-    
-    def test_sets_config_language_to_detected_before_prompt(self):
-        import config
-        config.LANGUAGE = "en"
-        resolve_language("es", confirm_fn=lambda: "si", ask_fn=lambda: "")
-        self.assertEqual(config.LANGUAGE, "es")
 
 class TestExtractName(unittest.TestCase):
     
