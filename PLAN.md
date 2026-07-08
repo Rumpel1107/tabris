@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 
 ---
 
@@ -212,6 +212,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
     - Part 2: channel-agnostic core extracted into `core/conversation.py` (`handle_turn`, `route_message`, `build_messages`, `should_trigger_memory`). `handle_turn(session, user_input, role, db_path)` returns only the reply string — no `print`/`input`; on a model error it rolls back the session's pending user message and re-raises (the adapter decides what to show). `main.py`'s CLI loop now only handles routing, the `exit` branch, and displaying the reply/error. `main.py` no longer defines any of the moved functions — only CLI-specific concerns (onboarding, language detection I/O, persona loading) remain there.
 33. ⬜ **Internet access via tool use** (first tool of the tool-use layer). Build order — one new concept per step:
     - **33a.** Function-calling loop: the model requests `web_search(query)`, our code executes it and returns results, the model answers with them. Prove it in the CLI with DuckDuckGo (no signup) behind the call. This is the genuinely new concept, isolated.
+      - Prep done (2026-07-08): `providers.chat()`/`_call_provider()` return `ChatResponse(content, tool_calls)` instead of a plain string — needed so a response can express a tool-call request, not just final text. All 5 existing callers (`route_message`, `handle_turn`, `update_memory`, `detect_language`, `extract_name`) migrated to read `.content`. No `tools` schema or loop wired yet. 98 tests green.
     - **33b.** Generalize behind `core/search.py` + `SEARCH_PROVIDERS` config list + fallback chain + result normalization (D10). Add `web_fetch` (read a linked page/document → text) and, optionally, a YouTube-transcript tool (captions → text, not "watching" the video).
     - **33c.** Register Tavily/Brave keys; DuckDuckGo stays as the last-resort backup.
     - Search is read-only → **no HITL confirmation** (unlike file writes). File/tracker CRUD tools (the original, broader item-33 scope) are deferred to Phase 7 (items 48/49).

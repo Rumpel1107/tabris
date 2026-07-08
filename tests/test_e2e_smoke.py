@@ -1,15 +1,16 @@
-import sys
+import config
+import main
 import os
+import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import tempfile
 import unittest
 from unittest.mock import patch
 
-import config
-import main
-from core.strings import msg
+from core import providers
 from core.db import register_user_channel, get_messages
+from core.strings import msg
 
 
 class TestChatE2ESmoke(unittest.TestCase):
@@ -26,7 +27,12 @@ class TestChatE2ESmoke(unittest.TestCase):
     @patch("main.get_client_key", return_value="test-key-123")
     def test_conversation_persists_to_db(self, mock_key, mock_input, mock_chat):
         mock_input.side_effect = ["Hola", msg("exit_command", "es")]
-        mock_chat.side_effect = ["general", "Reply from Tabris", "exit", "HAS_CHANGES: no"]
+        mock_chat.side_effect = [
+            providers.ChatResponse(content="general", tool_calls=None),
+            providers.ChatResponse(content="Reply from Tabris", tool_calls=None),
+            providers.ChatResponse(content="exit", tool_calls=None),
+            providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
+        ]
         
         from core.db import init_db, create_user, register_user_channel
         init_db(self.db_path)
@@ -54,7 +60,7 @@ class TestChatE2ESmoke(unittest.TestCase):
         facts = get_facts(db_path, user_id)
         fact_id = facts[0]["id"]
         
-        mock_chat.return_value = f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}"
+        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}", tool_calls=None)
         update_memory([], db_path, user_id, language="es")
         
         self.assertEqual(get_facts(db_path, user_id), [])
@@ -82,12 +88,12 @@ class TestNewUserLanguageE2E(unittest.TestCase):
             "salir",             # ends the session
         ]
         mock_chat.side_effect = [
-            "Mauricio",             # extract_name during onboarding
-            "es",                   # detect_language detects Spanish
-            "general",              # route_message for the first message
-            "Respuesta de Tabris",  # model reply
-            "exit",                 # route_message for "salir"
-            "HAS_CHANGES: no",      # memory_manager on exit
+            providers.ChatResponse(content="Mauricio", tool_calls=None),             # extract_name during onboarding
+            providers.ChatResponse(content="es", tool_calls=None),                   # detect_language detects Spanish
+            providers.ChatResponse(content="general", tool_calls=None),              # route_message for the first message
+            providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None),  # model reply
+            providers.ChatResponse(content="exit", tool_calls=None),                 # route_message for "salir"
+            providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None),      # memory_manager on exit
         ]
         
         from core.db import init_db, find_user_by_key

@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from config import MAX_HISTORY
+from core import providers
 from core.conversation import build_messages, handle_turn, route_message, should_trigger_memory
 from core.db import create_user, get_messages, init_db
 from core.session import Session
@@ -39,23 +40,29 @@ class TestBuildMessages(unittest.TestCase):
 class TestRouteMessage(unittest.TestCase):
     @patch("core.conversation.providers.chat")
     def test_routes_to_code(self, mock_chat):
-        mock_chat.return_value = "code"
+        mock_chat.return_value = providers.ChatResponse(content="code", tool_calls=None)
         self.assertEqual(route_message("Fix this bug"), "code")
     
     @patch("core.conversation.providers.chat")
     def test_routes_to_general(self, mock_chat):
-        mock_chat.return_value = "general"
+        mock_chat.return_value = providers.ChatResponse(content="general", tool_calls=None)
         self.assertEqual(route_message("What is machine learning?"), "general")
     
     @patch("core.conversation.providers.chat")
     def test_routes_to_exit(self, mock_chat):
-        mock_chat.return_value = "exit"
+        mock_chat.return_value = providers.ChatResponse(content="exit", tool_calls=None)
         self.assertEqual(route_message("quiero salir"), "exit")
     
     @patch("core.conversation.providers.chat")
     def test_unknown_response_falls_back_to_general(self, mock_chat):
-        mock_chat.return_value = "algo inesperado"
+        mock_chat.return_value = providers.ChatResponse(content="algo inesperado", tool_calls=None)
         self.assertEqual(route_message("hola"), "general")
+    
+    @patch("core.conversation.providers.chat", side_effect=Exception("router down"))
+    def test_logs_warning_on_failure(self, mock_chat):
+        with self.assertLogs("core.conversation", level="WARNING") as log:
+            route_message("hola")
+        self.assertIn("router down", log.output[0])
 
 class TestShouldTriggerMemory(unittest.TestCase):
     
@@ -93,7 +100,7 @@ class TestHandleTurn(unittest.TestCase):
     
     @patch("core.conversation.providers.chat")
     def test_happy_path_returns_reply_and_persists(self, mock_chat):
-        mock_chat.return_value = "Respuesta de Tabris"
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         
         reply = handle_turn(self.session, "Hola", "general", self.db_path)
         
@@ -130,7 +137,7 @@ class TestHandleTurn(unittest.TestCase):
     @patch("core.conversation.providers.chat")
     @patch("core.conversation.should_trigger_memory", return_value=True)
     def test_fires_memory_trigger_and_resets_counters(self, mock_trigger, mock_chat, mock_update):
-        mock_chat.return_value = "Respuesta de Tabris"
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         
         handle_turn(self.session, "Hola", "general", self.db_path)
         

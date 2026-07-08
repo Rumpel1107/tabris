@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
+from core import providers
 from core.db import init_db, create_user, get_facts
 from core.memory_manager import filter_valid_retire_ids, update_memory, parse_facts_response
 from unittest.mock import patch
@@ -60,7 +61,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input", return_value="si")
     @patch("core.providers.chat")
     def test_saves_confirmed_facts(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes\nNEW_FACTS:\n- Likes short answers\n- Works on TaxL"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes\nNEW_FACTS:\n- Likes short answers\n- Works on TaxL", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
         self.assertIn("Likes short answers", contents)
@@ -69,7 +70,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input", return_value="no")
     @patch("core.providers.chat")
     def test_rejected_facts_not_saved(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes\nNEW_FACTS:\n- Should not be saved"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes\nNEW_FACTS:\n- Should not be saved", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
         self.assertNotIn("Should not be saved", contents)
@@ -77,7 +78,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_no_changes_saves_nothing(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: no"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         self.assertEqual(get_facts(self.db_path, self.user_id), [])
         mock_input.assert_not_called()
@@ -92,7 +93,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_malformed_response_not_saved(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: yes"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         self.assertEqual(get_facts(self.db_path, self.user_id), [])
         mock_input.assert_not_called()
@@ -105,7 +106,7 @@ class TestUpdateMemory(unittest.TestCase):
         facts_before = get_facts(self.db_path, self.user_id)
         fact_id = facts_before[0]["id"]
         
-        mock_chat.return_value = f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}"
+        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         
         facts_after = get_facts(self.db_path, self.user_id)
@@ -114,7 +115,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_watermark_limits_conversation_sent(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: no"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
         history = [
             {"role": "system", "content": "system prompt"},
             {"role": "user", "content": "mensaje viejo"},
@@ -131,7 +132,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_assistant_turns_excluded_from_prompt(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: no"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
         history = [
             {"role": "system", "content": "system prompt"},
             {"role": "user", "content": "Hola, soy Rumpel"},
@@ -146,7 +147,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_prompt_instructs_user_facts_only(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: no"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
         history = [{"role": "user", "content": "Hola"}]
         update_memory(history, self.db_path, self.user_id, language="es")
         
@@ -157,7 +158,7 @@ class TestUpdateMemory(unittest.TestCase):
     @patch("builtins.input")
     @patch("core.providers.chat")
     def test_prompt_specifies_user_language(self, mock_chat, mock_input):
-        mock_chat.return_value = "HAS_CHANGES: no"
+        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
         history = [{"role": "user", "content": "Hola"}]
         update_memory(history, self.db_path, self.user_id, language="es")
         
@@ -173,7 +174,7 @@ class TestUpdateMemory(unittest.TestCase):
         real_id = get_facts(self.db_path, self.user_id)[0]["id"]
         bogus_id = real_id + 999
         
-        mock_chat.return_value = f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {bogus_id}"
+        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {bogus_id}", tool_calls=None)
         update_memory([], self.db_path, self.user_id, language="es")
         
         called_ids = [call.args[2] for call in mock_deactivate.call_args_list]

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import unittest
 from core import providers
 from core.providers import chat
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TestProvidersChat(unittest.TestCase):
@@ -56,6 +56,23 @@ class TestGetClient(unittest.TestCase):
         second = providers._get_client("groq")
         self.assertIs(first, second)
         mock_openai_class.assert_called_once()
+
+class TestCallProvider(unittest.TestCase):
+    
+    @patch("core.providers._get_client")
+    def test_returns_content_when_no_tool_calls(self, mock_get_client):
+        mock_message = MagicMock(content="hola", tool_calls=None)
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=mock_message)]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+        
+        result = providers._call_provider(
+            "groq", "llama-3.3-70b-versatile", [{"role": "user", "content": "hola"}]
+        )
+        
+        self.assertEqual(result, providers.ChatResponse(content="hola", tool_calls=None))
 
 
 if __name__ == "__main__":

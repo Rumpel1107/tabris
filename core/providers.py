@@ -1,10 +1,16 @@
 import config
 import logging
 import ollama
+from dataclasses import dataclass
 from openai import OpenAI
 
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class ChatResponse:
+    content: str | None
+    tool_calls: list | None = None
 
 PROVIDER_CONFIG = {
     "deepseek": {
@@ -48,7 +54,8 @@ def _call_provider(provider, model, messages):
     
     client = _get_client(provider)
     response = client.chat.completions.create(model=model, messages=messages)
-    return response.choices[0].message.content
+    message = response.choices[0].message
+    return ChatResponse(content=message.content, tool_calls=message.tool_calls)
 
 def chat(role, messages):
     attempts = config.AGENT_ROLES[role]["providers"]

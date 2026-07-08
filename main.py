@@ -44,7 +44,7 @@ Message: {text}
 Reply with only one word: 'es' or 'en'."""
     }]
     try:
-        response = providers.chat("router", prompt).strip().lower()
+        response = providers.chat("router", prompt).content.strip().lower()
     except Exception:
         return "en"
     return response if response in ("es", "en") else "en"
@@ -59,7 +59,7 @@ Message: {text}
 Reply with only the name."""
     }]
     try:
-        response = providers.chat("router", prompt).strip()
+        response = providers.chat("router", prompt).content.strip()
     except Exception:
         return text.strip()
     return response if response else text.strip()

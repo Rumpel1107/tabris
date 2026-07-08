@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, load_persona, onboard_user, resolve_language
 from config import MAX_HISTORY
+from core import providers
 from unittest.mock import patch
 
 
@@ -70,17 +71,17 @@ class TestLoadPersona(unittest.TestCase):
 class TestDetectLanguage(unittest.TestCase):
     
     def test_detect_language_returns_es(self):
-        with patch("core.providers.chat", return_value="es"):
+        with patch("core.providers.chat", return_value=providers.ChatResponse(content="es", tool_calls=None)):
             result = detect_language("Hola, ¿cómo estás?")
         assert result == "es"
     
     def test_detect_language_returns_en(self):
-        with patch("core.providers.chat", return_value="en"):
+        with patch("core.providers.chat", return_value=providers.ChatResponse(content="en", tool_calls=None)):
             result = detect_language("Hello, how are you?")
         assert result == "en"
     
     def test_detect_language_defaults_to_en_on_unknown(self):
-        with patch("core.providers.chat", return_value="fr"):
+        with patch("core.providers.chat", return_value=providers.ChatResponse(content="fr", tool_calls=None)):
             result = detect_language("Bonjour")
         assert result == "en"
 
@@ -110,7 +111,7 @@ class TestOnboardUser(unittest.TestCase):
             from core.db import init_db, find_user_by_key, get_user
             init_db(db)
             with patch("builtins.input", return_value="Oscar"), \
-                 patch("main.providers.chat", return_value="Oscar"):
+                 patch("main.providers.chat", return_value=providers.ChatResponse(content="Oscar", tool_calls=None)):
                 user_id = onboard_user(db, "cli", "key-123")
             user = get_user(db, user_id)
             self.assertEqual(user["name"], "Oscar")
@@ -139,12 +140,12 @@ class TestResolveLanguage(unittest.TestCase):
 class TestExtractName(unittest.TestCase):
     
     def test_extracts_name_from_sentence(self):
-        with patch("main.providers.chat", return_value="Mauricio"):
+        with patch("main.providers.chat", return_value=providers.ChatResponse(content="Mauricio", tool_calls=None)):
             result = extract_name("Mi nombre es Mauricio")
         self.assertEqual(result, "Mauricio")
     
     def test_returns_plain_name_unchanged(self):
-        with patch("main.providers.chat", return_value="Ana"):
+        with patch("main.providers.chat", return_value=providers.ChatResponse(content="Ana", tool_calls=None)):
             result = extract_name("Ana")
         self.assertEqual(result, "Ana")
     

@@ -77,7 +77,7 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
         raw_response = providers.chat(
             "general",
             [{"role": "user", "content": analysis_prompt}]
-        ).strip()
+        ).content.strip()
     except Exception as e:
         print(msg("model_error", language, agent=config.AGENT_NAME, error=e))
         return
