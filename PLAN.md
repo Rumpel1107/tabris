@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-02
+Last updated: 2026-07-07
 
 ---
 
@@ -184,7 +184,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 26. ✅ Multilingual UI strings: `core/strings.py` with `es`/`en` dictionary + `LANGUAGE = "es"` in `config.py`; all user-facing strings in `main.py` and `memory_manager.py` use `msg(key, **kwargs)`. Auto-detection deferred to item 30.
 > Exit criterion: Tabris runs end-to-end with zero local model dependency.
 
-### Phase 3 — Memory v1 + Telegram
+### Phase 3 — Memory v1 + Internet + Telegram
 27. ✅ Memory M1: SQLite schema (`users`, `facts`, `messages`); migrate content of `memory.md`. Schema includes `user_id` on every table from day one — Tabris targets up to ~10 users; multi-user readiness is a design constraint, not a future migration.
 28. ✅ Memory trigger (hybrid): run `update_memory()` after every 5 exchanges OR after 5 minutes of inactivity — whichever comes first. Both counters reset after each trigger. Replaces the CLI exit-based trigger, which does not exist in Telegram.
 28b. ✅ DB layer hardening (do before 28c — it is the foundation under every DB write that 28c adds). Source: deep code review 2026-06-24. Scenarios to satisfy:
@@ -206,24 +206,31 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 31c. ✅ Security/resilience fixes (code review 2026-07-02), done before Telegram (2026-07-02):
    - **IDOR in `deactivate_fact`** (`core/db.py`): `deactivate_fact(db_path, user_id, fact_id)` now filters `WHERE id=? AND user_id=?`. Second layer of defense: `update_memory` (`core/memory_manager.py`) has a new pure `filter_valid_retire_ids(retire_ids, known_facts)` that drops any `retire_id` not actually present in the `known_facts` shown to the LLM, before it's ever displayed for confirmation or passed to `deactivate_fact`. TDD tests on both layers (cross-user isolation in `test_db.py`, filtering in `test_memory_manager.py`).
    - **Provider clients recreated per call, no timeout** (`core/providers.py`): new `_get_client(provider)` builds each `OpenAI(...)` lazily (first use, not at import — avoids crashing on a provider with no key configured) and caches it in a module-level `_clients` dict; `_call_provider` reuses it. `config.PROVIDER_TIMEOUT = 15` (not 30 — with up to 4 providers in a fallback chain, e.g. role `code`, 30s each risked ~90-120s worst case; 15s keeps that under ~60s while still well above the plan's own 2-10s normal-latency estimate). Without this, a hung provider never raised, so the D2 fallback silently never triggered.
-   - `chmod 600` on `.env`, `tabris.db`, `tabris_client_id` locally. Note: file permissions are OS-level, not git-tracked — this does NOT carry over to the VPS deploy; folded as an explicit step into item 36.
-32. ⬜ Refactor into channel adapters (D5): CLI and Telegram both call the same core. Do this before building the Telegram channel so the second adapter is added to a clean interface, not retrofitted. **Must eliminate `config.LANGUAGE` as global mutable state** (today `msg()` and `update_memory` read it as a global — with two concurrent users, one changing language mid-conversation would change it for the other). Replace with explicit per-session state keyed by `(channel, key)`: language, `conversation_history`, `exchange_count`, `last_trigger_time`, `last_analyzed_index` — today these are local vars in `chat()`'s CLI loop; they become fields on a session object/dict, not globals. This is the real architectural core of the channel-adapter refactor, not a separate step.
-33. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed). Telegram's `user_id` is the channel key (free, stable) — register it in `user_channels` exactly like the CLI key. **Account linking (same human, multiple channels → one profile/context):** via a short-lived **link-code**, never by name. Flow: on an already-registered channel the user requests a code; entering it on the new channel inserts a `user_channels` row pointing the new `(channel, key)` to the existing `user_id`. The `user_channels` schema (item 30) already supports this with zero migration — multiple rows per `user_id`. Name-based linking is explicitly rejected (impersonation risk). Additional scope from code review 2026-07-02 (Telegram removes the CLI's `input()` confirmation, so these land here):
+   - `chmod 600` on `.env`, `tabris.db`, `tabris_client_id` locally. Note: file permissions are OS-level, not git-tracked — this does NOT carry over to the VPS deploy; folded as an explicit step into item 37.
+32. ✅ Refactor into channel adapters (D5): CLI and Telegram both call the same core.
+    - Part 1: `config.LANGUAGE` global mutable state eliminated. Per-session state via `core/session.py`'s `Session` dataclass (`user_id`, `language`, `conversation_history`, `exchange_count`, `last_trigger_time`, `last_analyzed_index`), keyed by `(channel, key)`.
+    - Part 2: channel-agnostic core extracted into `core/conversation.py` (`handle_turn`, `route_message`, `build_messages`, `should_trigger_memory`). `handle_turn(session, user_input, role, db_path)` returns only the reply string — no `print`/`input`; on a model error it rolls back the session's pending user message and re-raises (the adapter decides what to show). `main.py`'s CLI loop now only handles routing, the `exit` branch, and displaying the reply/error. `main.py` no longer defines any of the moved functions — only CLI-specific concerns (onboarding, language detection I/O, persona loading) remain there.
+33. ⬜ **Internet access via tool use** (first tool of the tool-use layer). Build order — one new concept per step:
+    - **33a.** Function-calling loop: the model requests `web_search(query)`, our code executes it and returns results, the model answers with them. Prove it in the CLI with DuckDuckGo (no signup) behind the call. This is the genuinely new concept, isolated.
+    - **33b.** Generalize behind `core/search.py` + `SEARCH_PROVIDERS` config list + fallback chain + result normalization (D10). Add `web_fetch` (read a linked page/document → text) and, optionally, a YouTube-transcript tool (captions → text, not "watching" the video).
+    - **33c.** Register Tavily/Brave keys; DuckDuckGo stays as the last-resort backup.
+    - Search is read-only → **no HITL confirmation** (unlike file writes). File/tracker CRUD tools (the original, broader item-33 scope) are deferred to Phase 7 (items 48/49).
+34. ⬜ Telegram bot via @BotFather + `python-telegram-bot` (polling mode — no webhook needed). Telegram's `user_id` is the channel key (free, stable) — register it in `user_channels` exactly like the CLI key. **Account linking (same human, multiple channels → one profile/context):** via a short-lived **link-code**, never by name. Flow: on an already-registered channel the user requests a code; entering it on the new channel inserts a `user_channels` row pointing the new `(channel, key)` to the existing `user_id`. The `user_channels` schema (item 30) already supports this with zero migration — multiple rows per `user_id`. Name-based linking is explicitly rejected (impersonation risk). Additional scope from code review 2026-07-02 (Telegram removes the CLI's `input()` confirmation, so these land here):
    - Message length cap (~4000 chars) + basic per-user rate limit (in-memory counter is enough at this scale).
    - Delimit user input in the 4 LLM-facing prompts (`route_message`, `detect_language`, `extract_name`, memory analysis) — e.g. wrap in `<user_message>...</user_message>` and instruct the model to treat it as data only. Mitigates prompt injection now that a malicious message could reach real other users.
    - Redesign memory HITL for Telegram: no more blocking `input()` — use inline buttons for confirm/reject, or auto-apply with an audit log + a command to review/delete facts.
    - Generic error message to the user on failure; full exception detail goes to the log only (not stdout/chat) — today `model_error` echoes the raw exception, which is fine in a personal CLI but leaks internals to strangers on Telegram.
    - Fire `update_memory`'s distillation as a background task (`asyncio.create_task`) instead of blocking the reply — natural once the bot is async.
    - Rebuild the system prompt's `## Current context` datetime block per turn (not just once at session start) — cheap, and sessions on Telegram live much longer than a CLI run.
-33a. ⬜ Audio input (voice messages): transcribe incoming Telegram voice notes to text via speech-to-text (Groq Whisper — cheap/fast), then feed the transcript into the normal text flow. Depends on item 33 (Telegram is the media channel; the CLI can't send audio). Read-only preprocessing step → no HITL confirmation.
-33b. ⬜ Image input (vision): accept photos sent via Telegram and route them to a vision-capable model (Gemini, natively multimodal) so Tabris can "see" and reason about the image. Depends on item 33; add a vision-capable model to the `tools`/multimodal role. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
-33c. ⬜ Data privacy minimums (code review 2026-07-02) — gate before onboarding beta-testers (§6): a retention policy (e.g. delete messages older than N months), a user-facing command to view/delete their own data (`/olvidame`), and confirm nothing ever logs raw message content (only metadata/errors). Not urgent solo; required before inviting anyone who isn't Rumpel.
-34. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
+34a. ⬜ Audio input (voice messages): transcribe incoming Telegram voice notes to text via speech-to-text (Groq Whisper — cheap/fast), then feed the transcript into the normal text flow. Depends on item 34 (Telegram is the media channel; the CLI can't send audio). Read-only preprocessing step → no HITL confirmation.
+34b. ⬜ Image input (vision): accept photos sent via Telegram and route them to a vision-capable model (Gemini, natively multimodal) so Tabris can "see" and reason about the image. Depends on item 34; add a vision-capable model to the `tools`/multimodal role. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
+34c. ⬜ Data privacy minimums (code review 2026-07-02) — gate before onboarding beta-testers (§6): a retention policy (e.g. delete messages older than N months), a user-facing command to view/delete their own data (`/olvidame`), and confirm nothing ever logs raw message content (only metadata/errors). Not urgent solo; required before inviting anyone who isn't Rumpel.
+35. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
 
 ### Phase 4 — Deploy (always-on)
-35. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
-36. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables. File permissions are OS-level, not git-tracked — `.env`, the SQLite DB, and `tabris_client_id`-equivalent files get created fresh on the VPS and must be locked down there explicitly, not assumed from local dev: `chmod 600` on all of them as part of the deploy step (code review 2026-07-02, §2.4). Additional VPS hardening from the same review: dedicated system user with no sudo, encrypted disk if the provider offers it, backups of the `.db` also kept at 600.
-37. ⬜ Basic ops: restart-on-failure, weekly SQLite backup (cron + copy). Scenarios folded in from the code review 2026-06-24:
+36. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.
+37. ⬜ Deploy as a systemd service or Docker container; secrets via environment variables. File permissions are OS-level, not git-tracked — `.env`, the SQLite DB, and `tabris_client_id`-equivalent files get created fresh on the VPS and must be locked down there explicitly, not assumed from local dev: `chmod 600` on all of them as part of the deploy step (code review 2026-07-02, §2.4). Additional VPS hardening from the same review: dedicated system user with no sudo, encrypted disk if the provider offers it, backups of the `.db` also kept at 600.
+38. ⬜ Basic ops: restart-on-failure, weekly SQLite backup (cron + copy). Scenarios folded in from the code review 2026-06-24:
    - **Narrow `except Exception`.** The broad catches in the main loop, `providers.chat` and `update_memory` hide bugs (a `KeyError` in our code looks identical to a network timeout). Log the type/traceback and, where possible, catch provider-specific errors (`openai`/`httpx`). The main loop may stay tolerant, but it must log what it swallowed.
    Additional scenarios from the code review 2026-07-02 (relevant once there are hundreds of concurrent users, not before):
    - **SQLite concurrency + indexes.** `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` in `_connect` (reads no longer block writes). Missing indexes `messages(user_id, id)` and `facts(user_id) WHERE is_active=1` — today `get_messages`/`get_facts` full-scan on every session load; invisible with one user, real cost at scale. Also decide whether `messages.is_active` (unused in any query today) becomes real soft-delete history or gets dropped.
@@ -231,17 +238,10 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - **Async I/O at real scale.** Sync `OpenAI` client + polling loop serialize all users behind each other's LLM latency (2-10s). At hundreds of concurrent users: `AsyncOpenAI` + a webhook (FastAPI) instead of polling. Not worth it at beta-tester scale — only revisit if usage actually gets there. Postgres migration follows the same rule: only when a second process needs to write (e.g. multiple FastAPI workers) — `core/db.py`'s pure functions keep that migration cheap whenever it's actually needed.
 > Exit criterion: Rumpel talks to Tabris from his phone with his PC off.
 
-### Phase 5 — Tools (internet first)
-38. ⬜ **Internet access via tool use** (first tool of the tool-use layer; pulled early in the round). Build order — one new concept per step:
-    - **38a.** Function-calling loop: the model requests `web_search(query)`, our code executes it and returns results, the model answers with them. Prove it in the CLI with DuckDuckGo (no signup) behind the call. This is the genuinely new concept, isolated.
-    - **38b.** Generalize behind `core/search.py` + `SEARCH_PROVIDERS` config list + fallback chain + result normalization (D10). Add `web_fetch` (read a linked page/document → text) and, optionally, a YouTube-transcript tool (captions → text, not "watching" the video).
-    - **38c.** Register Tavily/Brave keys; DuckDuckGo stays as the last-resort backup.
-    - Search is read-only → **no HITL confirmation** (unlike file writes). File/tracker CRUD tools (the original, broader item-38 scope) are deferred to Phase 8 (items 48/49).
+### Phase 5 — Liquidador de renta (first pipeline product)
+39. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 3 tool layer is in place.
 
-### Phase 6 — Liquidador de renta (first pipeline product)
-39. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 5 tool layer is in place.
-
-### Phase 7 — Portfolio (starts after first product ships)
+### Phase 6 — Portfolio (starts after first product ships)
 40. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Telegram bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead. Code-quality nits folded in from the code review 2026-07-02 (small, pre-publish polish, bundle in the same pass):
    - Split `requirements.txt` into runtime (`openai`, `ollama`, `python-dotenv`, `pydantic`, ...) and `requirements-dev.txt` (`-r requirements.txt` + `pytest`); add `pip-audit` as a periodic habit for dependency CVEs.
    - Add `.pytest_cache/` to `.gitignore`; always run pytest from the project root.
@@ -253,12 +253,12 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 43. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
 44. ⬜ GitHub profile README + pin Tabris.
 
-### Phase 8 — Integrations, scheduling & multi-agent (candidate, post-freeze / resume point)
+### Phase 7 — Integrations, scheduling & multi-agent (candidate, post-freeze / resume point)
 45. ⬜ Task scheduler: APScheduler (or similar) so Tabris can fire reminders and timed actions from a persistent server.
 46. ⬜ Google Workspace integration: Calendar, Gmail, Drive — via OAuth + function calling.
 47. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
-48. ⬜ PM / Dev / Tutor role structure on top of the role→provider map. Multi-agent orchestration — the biggest architectural jump, deferred from Phase 5 (not part of the daily-assistant MVP).
-49. ⬜ Specialized agents by strength (research/deep-search, documents, images, image generation) as budget allows. Includes video "seeing" / visual analysis. Deferred from Phase 5.
+48. ⬜ PM / Dev / Tutor role structure on top of the role→provider map. Multi-agent orchestration — the biggest architectural jump, deferred from the Phase 3 tool layer (not part of the daily-assistant MVP).
+49. ⬜ Specialized agents by strength (research/deep-search, documents, images, image generation) as budget allows. Includes video "seeing" / visual analysis. Deferred from the Phase 3 tool layer.
 
 ---
 
@@ -270,7 +270,7 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 | # | Project | V | M | B | C | Total | Role in the plan |
 |---|---|---|---|---|---|---|---|
 | 1 | Employment contract liquidator (Colombia) | 4 | 4 | 5 | 4 | 17 | **Active #1 / flagship.** Local niche, real demand (employees & small employers), little quality competition, shows domain expertise — strongest portfolio piece and best SaaS bet. |
-| 2 | Habit & Task Tracker | 5 | 2 | 5 | 5 | 17 | Backlog — learning vehicle: CRUD, SQLite, API. Can become Tabris's first tool once Phase 5 tool layer is in place. Weak as standalone product (saturated market). |
+| 2 | Habit & Task Tracker | 5 | 2 | 5 | 5 | 17 | Backlog — learning vehicle: CRUD, SQLite, API. Can become Tabris's first tool once the Phase 3 tool layer is in place. Weak as standalone product (saturated market). |
 | 3 | Income tax calculator (Colombia) | 4 | 4 | 5 | 3 | 16 | Backlog — natural sibling of #2 (shared domain & audience). Strong candidate to bundle with #2 into one "Colombian payroll/tax tools" product. Seasonal demand spike (tax season). |
 | 4 | Expense & budget tracker | 4 | 2 | 5 | 4 | 15 | Backlog — good second data source for Tabris-as-assistant; weak standalone monetization. |
 | 5 | Account reconciliation tool | 3 | 4 | 4 | 2 | 13 | Backlog — monetizable (freelance accountants/SMBs) but needs domain depth and real user input. Revisit after #2 ships and brings contact with that audience. |
@@ -279,17 +279,17 @@ potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). No
 | 8 | Documentation generator (video→manual) | 2 | ? | 4 | 2 | — | Backlog / UNVALIDATED. Crowded market (Scribe, Tango, Guidde, Docsie). Validate willingness-to-pay with the people who requested it BEFORE any build. Outside the financial-domain edge. |
 
 **Sequence:**
-- Tabris: finish Phases 3–5 this round (personal-assistant MVP), then FREEZE. Definition of done
+- Tabris: finish Phases 3–4 this round (personal-assistant MVP), then FREEZE. Definition of done
   (functional for daily use): persistent memory + internet (`web_search`/`web_fetch`) + Telegram +
   audio input + image input + always-on deploy. Everything beyond = backlog.
 - **At the freeze:** beta-testers are onboarded (the multi-user foundation already exists from item
   30, so this costs no rework). The freeze is not "Tabris switched off" — it is feature-frozen for
   development while running in **daily production use** by Rumpel + beta-testers, gathering feedback.
-- **During the freeze → Phase 6: Liquidador de renta** as flagship wedge (built mainly with
+- **During the freeze → Phase 5: Liquidador de renta** as flagship wedge (built mainly with
   Claude/Gemini, with Tabris dogfooded alongside). Start with an Excel prototype (validates logic +
   willingness to pay before any code). Feedback collected on Tabris during this period is reviewed
   and its valuable parts implemented when Tabris is picked back up (next round).
-- Then → Phase 7: Portfolio — publish and document with a shipped product to show.
+- Then → Phase 6: Portfolio — publish and document with a shipped product to show.
 - Tax season makes the liquidador time-sensitive: prioritize accordingly.
 
 ---

@@ -1,13 +1,13 @@
 import config
 import logging
 import os
-import time
 import uuid
 
 from core.strings import MONTHS, msg, WEEKDAYS
 
 from core import memory_manager, providers
-from core.db import init_db, get_facts, get_messages, save_message, create_user, find_user_by_key, register_user_channel, update_user_language
+from core.conversation import handle_turn, route_message
+from core.db import create_user, find_user_by_key, get_facts, get_messages, init_db, register_user_channel, update_user_language
 from core.session import get_or_create_session
 
 # --- Channel identity ---
@@ -34,31 +34,6 @@ def load_persona(path=config.PERSONA_PATH):
     return content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
 
 # --- Router ---
-def route_message(user_input):
-    roles_list = "\n".join(
-        f"- {role}: {cfg['description']}"
-        for role, cfg in config.AGENT_ROLES.items()
-        if role != "router"
-    )
-    prompt = [{
-        "role": "user",
-        "content": f"""Classify this message into exactly one of the available roles or 'exit'.
-
-Available roles:
-{roles_list}
-- exit: the user wants to end the conversation
-
-Message: {user_input}
-
-Reply with only one word."""
-    }]
-    try:
-        response = providers.chat("router", prompt).strip().lower()
-    except Exception:
-        return "general"
-    valid = [r for r in config.AGENT_ROLES if r != "router"] + ["exit"]
-    return response if response in valid else "general"
-
 def detect_language(text):
     prompt = [{
         "role": "user",
@@ -97,9 +72,6 @@ def resolve_language(detected, confirm_fn, ask_fn):
     return chosen if chosen in ("es", "en") else "en"
 
 # --- Context window ---
-def build_messages(conversation_history):
-    return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
-
 def format_datetime(dt, language):
     lang = language if language in WEEKDAYS else "en"
     day = WEEKDAYS[lang][dt.weekday()]
@@ -119,13 +91,6 @@ def build_system_prompt(persona, facts, language, now=None):
         return persona + context_block + directive
     facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
     return f"{persona}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
-
-def should_trigger_memory(exchange_count, last_trigger_time):
-    if exchange_count >= config.MEMORY_TRIGGER_EXCHANGES:
-        return True
-    if time.time() - last_trigger_time >= config.MEMORY_TRIGGER_SECONDS:
-        return True
-    return False
 
 # --- Main conversation loop ---
 def chat():
@@ -150,7 +115,7 @@ def chat():
     persona = load_persona()
     facts = get_facts(db_path, user_id)
     system_prompt = build_system_prompt(persona, facts, language=session.language)
-
+    
     session.conversation_history = [{"role": "system", "content": system_prompt}]
     past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)
     session.conversation_history += [
@@ -185,30 +150,16 @@ def chat():
         role = route_message(user_input)
         
         if role == "exit":
-            memory_manager.update_memory(session.conversation_history, db_path, user_id, language=session.language, watermark=session.last_analyzed_index)
+            memory_manager.update_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
             break
         
-        session.conversation_history.append({"role": "user", "content": user_input})
-        
         try:
-            bounded_messages = build_messages(session.conversation_history)
-            reply = providers.chat(role, bounded_messages)
+            reply = handle_turn(session, user_input, role, db_path)
         except Exception as e:
             print(msg("model_error", session.language, agent=config.AGENT_NAME, error=e))
-            session.conversation_history.pop()
             continue
         
-        session.conversation_history.append({"role": "assistant", "content": reply})
-        save_message(db_path, user_id, "user", user_input)
-        save_message(db_path, user_id, "assistant", reply)
         print(msg("agent_reply", session.language, agent=config.AGENT_NAME, role=role, reply=reply))
-        
-        session.exchange_count += 1
-        if should_trigger_memory(session.exchange_count, session.last_trigger_time):
-            memory_manager.update_memory(session.conversation_history, db_path, user_id, language=session.language, watermark=session.last_analyzed_index)
-            session.last_analyzed_index = len(session.conversation_history)
-            session.exchange_count = 0
-            session.last_trigger_time = time.time()
 
 
 if __name__ == "__main__":
