@@ -73,6 +73,26 @@ class TestCallProvider(unittest.TestCase):
         )
         
         self.assertEqual(result, providers.ChatResponse(content="hola", tool_calls=None))
+    
+    @patch("core.providers._get_client")
+    def test_passes_tools_to_api(self, mock_get_client):
+        mock_message = MagicMock(content="ok", tool_calls=None)
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=mock_message)]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+        
+        tools = [{"type": "function", "function": {"name": "web_search", "parameters": {}}}]
+        providers._call_provider(
+            "groq", "llama-3.3-70b-versatile", [{"role": "user", "content": "hola"}], tools=tools
+        )
+        
+        mock_client.chat.completions.create.assert_called_once_with(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": "hola"}],
+            tools=tools,
+        )
 
 
 if __name__ == "__main__":

@@ -9,9 +9,10 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY
 from core import providers
-from core.conversation import build_messages, handle_turn, route_message, should_trigger_memory
+from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_SEARCH_TOOL
 from core.db import create_user, get_messages, init_db
 from core.session import Session
+from types import SimpleNamespace
 
 
 class TestBuildMessages(unittest.TestCase):
@@ -147,6 +148,42 @@ class TestHandleTurn(unittest.TestCase):
             self.session.last_analyzed_index,
             len(self.session.conversation_history),
         )
+    
+    @patch("core.conversation.providers.chat")
+    def test_offers_web_search_tool(self, mock_chat):
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+        
+        handle_turn(self.session, "Hola", "general", self.db_path)
+        
+        called_tools = mock_chat.call_args[1]["tools"]
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL])
+
+class TestRunWithTools(unittest.TestCase):
+    
+    @patch("core.conversation.web_search")
+    @patch("core.conversation.providers.chat")
+    def test_executes_tool_call_and_returns_final_answer(self, mock_chat, mock_search):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(name="web_search", arguments='{"query": "clima en Bogota"}'),
+        )
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Hace sol en Bogota", tool_calls=None),
+        ]
+        mock_search.return_value = "resultado de busqueda"
+        
+        messages = [{"role": "user", "content": "como esta el clima en Bogota?"}]
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL])
+        
+        self.assertEqual(result, "Hace sol en Bogota")
+        mock_search.assert_called_once_with("clima en Bogota")
+        self.assertEqual(mock_chat.call_count, 2)
+        
+        second_call_messages = mock_chat.call_args_list[1][0][1]
+        self.assertEqual(second_call_messages[-1]["role"], "tool")
+        self.assertEqual(second_call_messages[-1]["content"], "resultado de busqueda")
+        self.assertEqual(second_call_messages[-1]["tool_call_id"], "call_1")
 
 
 if __name__ == "__main__":

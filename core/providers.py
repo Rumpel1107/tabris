@@ -43,28 +43,28 @@ def _get_client(provider):
         )
     return _clients[provider]
 
-def _call_provider(provider, model, messages):
+def _call_provider(provider, model, messages, tools=None):
     if provider == "ollama":
         response = ollama.chat(
             model=model,
             messages=messages,
             options={"num_ctx": config.NUM_CTX},
         )
-        return response.message.content
+        return ChatResponse(content=response.message.content, tool_calls=None)
     
     client = _get_client(provider)
-    response = client.chat.completions.create(model=model, messages=messages)
+    response = client.chat.completions.create(model=model, messages=messages, tools=tools)
     message = response.choices[0].message
     return ChatResponse(content=message.content, tool_calls=message.tool_calls)
 
-def chat(role, messages):
+def chat(role, messages, tools=None):
     attempts = config.AGENT_ROLES[role]["providers"]
     last_error = None
     for attempt in attempts:
         provider = attempt["provider"]
         model = attempt["model"]
         try:
-            return _call_provider(provider, model, messages)
+            return _call_provider(provider, model, messages, tools=tools)
         except Exception as e:
             last_error = e
             logger.warning(f"{provider} failed ({e}); trying next fallback...")
