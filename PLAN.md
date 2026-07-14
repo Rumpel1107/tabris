@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-10
+Last updated: 2026-07-14
 
 ---
 
@@ -260,6 +260,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 47. ⬜ Notion integration: read/write pages and databases via Notion API + function calling.
 48. ⬜ PM / Dev / Tutor role structure on top of the role→provider map. Multi-agent orchestration — the biggest architectural jump, deferred from the Phase 3 tool layer (not part of the daily-assistant MVP).
 49. ⬜ Specialized agents by strength (research/deep-search, documents, images, image generation) as budget allows. Includes video "seeing" / visual analysis. Deferred from the Phase 3 tool layer.
+50. ⬜ Multi-provider parallel search aggregation (deferred from Phase 3 item 33b/33c, 2026-07-14). Query 2+ search providers concurrently for the same request and merge/dedupe normalized results, instead of the sequential fallback (one provider at a time, switches only on failure/quota). Value beyond speed: different engines' indexes/rankings surface different pages for the same query, reducing single-source bias — complements the multi-query refinement the model already does within `run_with_tools`. Cost: ~2-3x latency/spend per search + a merge/dedupe step. Revisit only if single-provider search quality proves insufficient in real beta-tester use.
 
 ---
 
@@ -308,20 +309,13 @@ A repo/demo goes public only when ALL are true:
 
 ---
 
-## 8. Working Agreements (binding for any agent on this project)
+## 8. Working Agreements
 
-- One step at a time; wait for user confirmation before the next step.
-- Always explain what each command/concept does (the user is learning — that's the point).
-- Code and documentation in English.
-- Focus on understanding, not just executing.
-- Minimal budget; prefer free/local tools; flag any cost before incurring it.
-- Never assume — confirm context first. Cite sources or mark inferences as such.
-- Document everything for future replication.
-- TDD: write the test first (it must fail), then the code, then refactor.
-- Human-in-the-loop for anything destructive (memory writes, file changes, deletions).
-- When learning time and shipping compete, shipping the revenue product wins.
-- **Vibe-coding boundary:** scaffolding (UI, framework, deploy, boilerplate) may be generated fast without deep understanding. Domain logic (tax/payroll calculations) must be fully understood, owned, and tested — it IS the product and the defensible edge. Rule of thumb: vibe-code how it looks; understand how it calculates.
-- **End-to-end at every step:** an item is "done" only when the real app (`main.py`) exercises the new code path and the path it replaces is retired — not when a module merely exists with green unit tests. No deferred integration. Definition of Done per item: (1) wiring over accumulation; (2) an e2e smoke check (`python main.py` + a small smoke test running the real flow, no mocks). Unit tests inside, e2e smoke outside.
+Binding collaboration and code agreements live in two agent-agnostic files at the repo root:
+- **`AGENTS.md`** — collaboration style + dev commands (one step at a time, explain before coding, propose-don't-apply, language convention, test/venv commands).
+- **`CONTRIBUTING.md`** — code standards + architecture patterns (TDD, end-to-end at every step, vibe-coding boundary, HITL for destructive actions, code conventions, provider/channel/DB patterns).
+
+Project-level drivers stay here as source of truth: budget constraint (§2); shipping-over-learning priority (§1); replicability / "document everything" (§6, D9).
 
 ---
 
