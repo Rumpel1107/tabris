@@ -50,6 +50,9 @@ MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the mo
 NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 
+# --- Search Configuration ---
+SEARCH_PROVIDERS = ["duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
+
 # --- API Keys ---
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
