@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY
 from core import providers
-from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_SEARCH_TOOL
+from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, get_messages, init_db
 from core.session import Session
 from types import SimpleNamespace
@@ -150,13 +150,13 @@ class TestHandleTurn(unittest.TestCase):
         )
     
     @patch("core.conversation.providers.chat")
-    def test_offers_web_search_tool(self, mock_chat):
+    def test_offers_web_search_and_web_fetch_tools(self, mock_chat):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
 
 class TestRunWithTools(unittest.TestCase):
     
@@ -177,13 +177,38 @@ class TestRunWithTools(unittest.TestCase):
         result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL])
         
         self.assertEqual(result, "Hace sol en Bogota")
-        mock_search.assert_called_once_with("clima en Bogota")
+        mock_search.assert_called_once_with(query="clima en Bogota")
         self.assertEqual(mock_chat.call_count, 2)
         
         second_call_messages = mock_chat.call_args_list[1][0][1]
         self.assertEqual(second_call_messages[-1]["role"], "tool")
         self.assertEqual(second_call_messages[-1]["content"], "resultado de busqueda")
         self.assertEqual(second_call_messages[-1]["tool_call_id"], "call_1")
+
+
+@patch("core.conversation.web_fetch")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
+    tool_call = SimpleNamespace(
+        id="call_2",
+        function=SimpleNamespace(name="web_fetch", arguments='{"url": "https://example.com/a"}'),
+    )
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content="La pagina habla de X", tool_calls=None),
+    ]
+    mock_fetch.return_value = "contenido de la pagina"
+
+    messages = [{"role": "user", "content": "que dice example.com/a?"}]
+    result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
+
+    assert result == "La pagina habla de X"
+    mock_fetch.assert_called_once_with(url="https://example.com/a")
+
+    tool_message = mock_chat.call_args_list[1][0][1][-1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["content"] == "contenido de la pagina"
+    assert tool_message["tool_call_id"] == "call_2"
 
 
 if __name__ == "__main__":

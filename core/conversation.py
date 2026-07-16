@@ -5,7 +5,7 @@ import time
 
 from core import memory_manager, providers
 from core.db import save_message
-from core.search import web_search
+from core.search import web_fetch, web_search
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +61,25 @@ WEB_SEARCH_TOOL = {
     },
 }
 
+WEB_FETCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_fetch",
+        "description": "Fetch and read the full text of a specific web page. Use it when a search result looks relevant but its snippet is not enough to answer, or when the user gives you a URL to read.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The full URL of the page to read"}
+            },
+            "required": ["url"],
+        },
+    },
+}
+
 def _execute_tool_call(tool_call):
+    tools = {"web_search": web_search, "web_fetch": web_fetch}
     args = json.loads(tool_call.function.arguments)
-    result = web_search(args["query"])
+    result = tools[tool_call.function.name](**args)
     return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
 def run_with_tools(role, messages, tools):
@@ -82,7 +98,7 @@ def run_with_tools(role, messages, tools):
 def handle_turn(session, user_input, role, db_path):
     session.conversation_history.append({"role": "user", "content": user_input})
     try:
-        reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL])
+        reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
     except Exception:
         session.conversation_history.pop()
         raise

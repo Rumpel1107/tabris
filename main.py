@@ -7,7 +7,7 @@ from core.strings import MONTHS, msg, WEEKDAYS
 
 from core import memory_manager, providers
 from core.conversation import handle_turn, route_message
-from core.db import create_user, find_user_by_key, get_facts, get_messages, init_db, register_user_channel, update_user_language
+from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, update_user_language
 from core.session import get_or_create_session
 
 # --- Channel identity ---
@@ -80,17 +80,18 @@ def format_datetime(dt, language):
         return f"{day}, {dt.day} de {month} de {dt.year} — {dt.strftime('%H:%M')}"
     return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
 
-def build_system_prompt(persona, facts, language, now=None):
+def build_system_prompt(persona, facts, language, name, now=None):
     from datetime import datetime as _datetime
     if now is None:
         now = _datetime.now()
     lang_name = config.LANGUAGE_NAMES.get(language, language)
     directive = f"\nAlways respond in {lang_name}."
     context_block = f"\n\n## Current context\nDate and time: {format_datetime(now, language)}"
+    name_block = f"\n\nYou are talking to {name}."
     if not facts:
-        return persona + context_block + directive
+        return persona + name_block + context_block + directive
     facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
-    return f"{persona}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
+    return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
 
 # --- Main conversation loop ---
 def chat():
@@ -109,12 +110,14 @@ def chat():
         language = "en"
         language_detected = False
     
+    name = get_user(db_path, user_id)["name"]
+    
     sessions = {}
     session = get_or_create_session(sessions, "cli", key, user_id, language)
     
     persona = load_persona()
     facts = get_facts(db_path, user_id)
-    system_prompt = build_system_prompt(persona, facts, language=session.language)
+    system_prompt = build_system_prompt(persona, facts, language=session.language, name=name)
     
     session.conversation_history = [{"role": "system", "content": system_prompt}]
     past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)
@@ -143,7 +146,7 @@ def chat():
             update_user_language(db_path, user_id, chosen)
             session.language = chosen
             print(msg("language_confirmed", session.language, agent=config.AGENT_NAME))
-            system_prompt = build_system_prompt(persona, facts, language=session.language)
+            system_prompt = build_system_prompt(persona, facts, language=session.language, name=name)
             session.conversation_history[0] = {"role": "system", "content": system_prompt}
             language_detected = True
         

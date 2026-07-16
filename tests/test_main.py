@@ -14,7 +14,7 @@ class TestBuildSystemPrompt(unittest.TestCase):
     
     def test_includes_persona(self):
         persona = "You are Tabris. Be concise."
-        result = build_system_prompt(persona, [], language="en")
+        result = build_system_prompt(persona, [], name="Rumpel", language="en")
         self.assertIn("You are Tabris. Be concise.", result)
     
     def test_includes_each_fact(self):
@@ -23,30 +23,30 @@ class TestBuildSystemPrompt(unittest.TestCase):
             {"content": "Name: Rumpel"},
             {"content": "Based in Colombia"},
         ]
-        result = build_system_prompt(persona, facts, language="en")
+        result = build_system_prompt(persona, facts, name="Rumpel", language="en")
         self.assertIn("Name: Rumpel", result)
         self.assertIn("Based in Colombia", result)
     
     def test_empty_facts_returns_persona_without_facts_block(self):
         persona = "You are Tabris."
-        result = build_system_prompt(persona, [], language="en")
+        result = build_system_prompt(persona, [], name="Rumpel", language="en")
         self.assertIn(persona, result)
         self.assertNotIn("What I know about the user", result)
     
     def test_facts_header_present_only_when_facts_exist(self):
         persona = "You are Tabris."
-        self.assertNotIn("What I know about the user", build_system_prompt(persona, [], language="en"))
-        with_facts = build_system_prompt(persona, [{"content": "Name: Rumpel"}], language="en")
+        self.assertNotIn("What I know about the user", build_system_prompt(persona, [], name="Rumpel", language="en"))
+        with_facts = build_system_prompt(persona, [{"content": "Name: Rumpel"}], name="Rumpel", language="en")
         self.assertIn("What I know about the user", with_facts)
     
     def test_includes_language_directive(self):
         persona = "You are Tabris."
-        result = build_system_prompt(persona, [], language="es")
+        result = build_system_prompt(persona, [], name="Rumpel", language="es")
         self.assertIn("Always respond in Spanish.", result)
     
     def test_language_directive_uses_code_as_fallback(self):
         persona = "You are Tabris."
-        result = build_system_prompt(persona, [], language="fr")
+        result = build_system_prompt(persona, [], name="Rumpel", language="fr")
         self.assertIn("Always respond in fr.", result)
 
 class TestLoadPersona(unittest.TestCase):
@@ -179,10 +179,16 @@ class TestBuildSystemPromptDatetime(unittest.TestCase):
     def test_includes_current_context_section(self):
         from datetime import datetime
         fixed = datetime(2026, 7, 1, 10, 35)
-        result = build_system_prompt("persona", [], language="es", now=fixed)
+        result = build_system_prompt("persona", [], name="Rumpel", language="es", now=fixed)
         self.assertIn("Current context", result)
         self.assertIn("julio", result)
         self.assertIn("10:35", result)
+
+
+def test_includes_user_name():
+    persona = "You are Tabris."
+    result = build_system_prompt(persona, [], name="Rumpel", language="en")
+    assert "You are talking to Rumpel." in result
 
 
 if __name__ == "__main__":
