@@ -7,7 +7,7 @@ from core.strings import MONTHS, msg, WEEKDAYS
 
 from core import memory_manager, providers
 from core.conversation import handle_turn, route_message
-from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, update_user_language
+from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
 from core.session import get_or_create_session
 
 # --- Channel identity ---
@@ -20,10 +20,10 @@ def get_client_key(path=config.CLIENT_ID_PATH):
         key_file.write(key)
     return key
 
-def onboard_user(db_path, channel, key):
-    raw_name = input(msg("ask_name", "en", agent=config.AGENT_NAME))
+def onboard_user(db_path, channel, key, language):
+    raw_name = input(msg("ask_name", language, agent=config.AGENT_NAME))
     name = extract_name(raw_name)
-    user_id = create_user(db_path, name)
+    user_id = create_user(db_path, name, language)
     register_user_channel(db_path, user_id, channel, key)
     return user_id
 
@@ -64,12 +64,25 @@ Reply with only the name."""
         return text.strip()
     return response if response else text.strip()
 
-def resolve_language(detected, confirm_fn, ask_fn):
-    confirmation = confirm_fn()
-    if confirmation.strip().lower() == msg("confirm_yes", detected):
+def interpret_yes_no(text):
+    prompt = [{
+        "role": "user",
+        "content": f"""Does the following reply mean yes? Answer with only 'yes' or 'no'.
+
+Reply: {text}
+
+Answer with only one word: 'yes' or 'no'."""
+    }]
+    try:
+        response = providers.chat("router", prompt).content.strip().lower()
+    except Exception:
+        return False
+    return response.startswith("yes")
+
+def resolve_language(detected, confirm_fn, ask_fn, interpret_fn=interpret_yes_no, detect_fn=detect_language):
+    if interpret_fn(confirm_fn()):
         return detected
-    chosen = ask_fn().strip().lower()
-    return chosen if chosen in ("es", "en") else "en"
+    return detect_fn(ask_fn())
 
 # --- Context window ---
 def format_datetime(dt, language):
@@ -97,71 +110,67 @@ def build_system_prompt(persona, facts, language, name, now=None):
 def chat():
     db_path = config.DB_PATH
     init_db(db_path)
-    
+
     key = get_client_key()
     user = find_user_by_key(db_path, "cli", key)
-    
+
     if user:
         user_id = user["id"]
         language = user["language"]
-        language_detected = True
     else:
-        user_id = onboard_user(db_path, "cli", key)
         language = "en"
-        language_detected = False
-    
+        print(msg("startup", language, agent=config.AGENT_NAME, exit_cmd=msg("exit_command", language)))
+        first_input = input(msg("user_prompt", language))
+        detected = detect_language(first_input)
+        language = resolve_language(
+            detected,
+            confirm_fn=lambda: input(msg("language_detected", detected, agent=config.AGENT_NAME)),
+            ask_fn=lambda: input(msg("language_ask", detected, agent=config.AGENT_NAME)),
+        )
+        print(msg("language_confirmed", language, agent=config.AGENT_NAME))
+        user_id = onboard_user(db_path, "cli", key, language)
+
     name = get_user(db_path, user_id)["name"]
-    
+
     sessions = {}
     session = get_or_create_session(sessions, "cli", key, user_id, language)
-    
+
     persona = load_persona()
     facts = get_facts(db_path, user_id)
     system_prompt = build_system_prompt(persona, facts, language=session.language, name=name)
-    
+
     session.conversation_history = [{"role": "system", "content": system_prompt}]
     past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)
     session.conversation_history += [
         {"role": message["role"], "content": message["content"]}
         for message in past_messages
     ]
-    
+
     session.last_analyzed_index = len(session.conversation_history)
-    
-    print(msg("startup", session.language, agent=config.AGENT_NAME, exit_cmd=msg("exit_command", session.language)))
-    
+
+    if user:
+        print(msg("startup", session.language, agent=config.AGENT_NAME, exit_cmd=msg("exit_command", session.language)))
+    else:
+        print(msg("onboarding_done", session.language, agent=config.AGENT_NAME, name=name))
+
     while True:
         user_input = input(msg("user_prompt", session.language))
-        
+
         if not user_input.strip():
             continue
-        
-        if not language_detected:
-            detected = detect_language(user_input)
-            chosen = resolve_language(
-                detected,
-                confirm_fn=lambda: input(msg("language_detected", detected, agent=config.AGENT_NAME)),
-                ask_fn=lambda: input(msg("language_ask", detected, agent=config.AGENT_NAME)),
-            )
-            update_user_language(db_path, user_id, chosen)
-            session.language = chosen
-            print(msg("language_confirmed", session.language, agent=config.AGENT_NAME))
-            system_prompt = build_system_prompt(persona, facts, language=session.language, name=name)
-            session.conversation_history[0] = {"role": "system", "content": system_prompt}
-            language_detected = True
-        
+
         role = route_message(user_input)
-        
+
         if role == "exit":
             memory_manager.update_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
             break
-        
+
         try:
             reply = handle_turn(session, user_input, role, db_path)
         except Exception as e:
             print(msg("model_error", session.language, agent=config.AGENT_NAME, error=e))
             continue
-        
+
         print(msg("agent_reply", session.language, agent=config.AGENT_NAME, role=role, reply=reply))
 
 

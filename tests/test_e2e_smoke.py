@@ -82,25 +82,31 @@ class TestNewUserLanguageE2E(unittest.TestCase):
     @patch("main.get_client_key", return_value="new-user-key")
     def test_new_spanish_user_full_flow(self, mock_key, mock_input, mock_chat):
         mock_input.side_effect = [
-            "Mauricio",          # onboard_user: name
             "Hola, como estas",  # first message (triggers language detection)
             "si",                # confirms detected language
+            "Mauricio",          # onboard_user: name
+            "Cuentame algo",     # first real request, answered normally
             "salir",             # ends the session
         ]
         mock_chat.side_effect = [
-            providers.ChatResponse(content="Mauricio", tool_calls=None),             # extract_name during onboarding
-            providers.ChatResponse(content="es", tool_calls=None),                   # detect_language detects Spanish
-            providers.ChatResponse(content="general", tool_calls=None),              # route_message for the first message
+            providers.ChatResponse(content="es", tool_calls=None),                   # detect_language
+            providers.ChatResponse(content="yes", tool_calls=None),                  # interpret_yes_no confirms language
+            providers.ChatResponse(content="Mauricio", tool_calls=None),             # extract_name
+            providers.ChatResponse(content="general", tool_calls=None),              # route_message for the real request
             providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None),  # model reply
             providers.ChatResponse(content="exit", tool_calls=None),                 # route_message for "salir"
             providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None),      # memory_manager on exit
         ]
         
-        from core.db import init_db, find_user_by_key
+        from core.db import init_db, find_user_by_key, get_messages
         init_db(self.db_path)
         
         with patch.object(config, "DB_PATH", self.db_path):
             main.chat()
         
         user = find_user_by_key(self.db_path, "cli", "new-user-key")
+        self.assertEqual(user["name"], "Mauricio")
         self.assertEqual(user["language"], "es")
+        contents = [m["content"] for m in get_messages(self.db_path, user["id"])]
+        self.assertIn("Cuentame algo", contents)
+        self.assertIn("Respuesta de Tabris", contents)

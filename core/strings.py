@@ -17,6 +17,7 @@ MESSAGES = {
         "language_detected":       "{agent}: Detecté que prefieres comunicarte en español. ¿Correcto? (si/no): ",
         "language_confirmed":      "{agent}: Perfecto, me comunicaré contigo en español.",
         "language_ask":            "{agent}: ¿En qué idioma prefieres comunicarte? (es/en): ",
+        "onboarding_done":         "{agent}: Disculpa {name}, ahora sí, ¿cómo puedo ayudarte hoy?",
     },
     "en": {
         "user_prompt":             "You: ",
@@ -36,6 +37,7 @@ MESSAGES = {
         "language_detected":       "{agent}: I detected you prefer communicating in English. Correct? (yes/no): ",
         "language_confirmed":      "{agent}: Got it, I will communicate with you in English.",
         "language_ask":            "{agent}: What language do you prefer? (es/en): ",
+        "onboarding_done":         "{agent}: Sorry about that, {name}. Now, how can I help you today?",
     },
 }
 

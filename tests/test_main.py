@@ -1,10 +1,11 @@
+import pytest
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import tempfile
 import unittest
-from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, load_persona, onboard_user, resolve_language
+from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, load_persona, onboard_user, resolve_language
 from config import MAX_HISTORY
 from core import providers
 from unittest.mock import patch
@@ -103,39 +104,47 @@ class TestGetClientKey(unittest.TestCase):
             second = get_client_key(path)
             self.assertEqual(first, second)
 
-class TestOnboardUser(unittest.TestCase):
 
-    def test_creates_user_and_registers_channel(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            db = os.path.join(tmp, "test.db")
-            from core.db import init_db, find_user_by_key, get_user
-            init_db(db)
-            with patch("builtins.input", return_value="Oscar"), \
-                 patch("main.providers.chat", return_value=providers.ChatResponse(content="Oscar", tool_calls=None)):
-                user_id = onboard_user(db, "cli", "key-123")
-            user = get_user(db, user_id)
-            self.assertEqual(user["name"], "Oscar")
-            self.assertEqual(user["language"], "en")
-            linked = find_user_by_key(db, "cli", "key-123")
-            self.assertEqual(linked["id"], user_id)
+def test_onboard_user_creates_user_with_given_language():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = os.path.join(tmp, "test.db")
+        from core.db import init_db, find_user_by_key, get_user
+        init_db(db)
+        with patch("builtins.input", return_value="Oscar"), \
+             patch("main.providers.chat", return_value=providers.ChatResponse(content="Oscar", tool_calls=None)):
+            user_id = onboard_user(db, "cli", "key-123", "es")
+        user = get_user(db, user_id)
+        assert user["name"] == "Oscar"
+        assert user["language"] == "es"
+        linked = find_user_by_key(db, "cli", "key-123")
+        assert linked["id"] == user_id
 
-class TestResolveLanguage(unittest.TestCase):
-    
-    def test_confirmed_detected_language_returns_it(self):
-        result = resolve_language("es", confirm_fn=lambda: "si", ask_fn=lambda: "")
-        self.assertEqual(result, "es")
-    
-    def test_confirmed_english_returns_en(self):
-        result = resolve_language("en", confirm_fn=lambda: "yes", ask_fn=lambda: "")
-        self.assertEqual(result, "en")
-    
-    def test_rejected_confirmation_uses_ask_answer(self):
-        result = resolve_language("es", confirm_fn=lambda: "no", ask_fn=lambda: "en")
-        self.assertEqual(result, "en")
-    
-    def test_rejected_confirmation_garbage_defaults_to_en(self):
-        result = resolve_language("es", confirm_fn=lambda: "no", ask_fn=lambda: "xyz")
-        self.assertEqual(result, "en")
+
+@pytest.mark.parametrize("model_reply, expected", [("yes", True), ("no", False)])
+def test_interpret_yes_no_uses_model_verdict(model_reply, expected):
+    with patch("main.providers.chat", return_value=providers.ChatResponse(content=model_reply, tool_calls=None)):
+        assert interpret_yes_no("cualquier frase") is expected
+
+
+def test_interpret_yes_no_falls_back_to_false_on_error():
+    with patch("main.providers.chat", side_effect=Exception("boom")):
+        assert interpret_yes_no("lo que sea") is False
+
+
+def test_resolve_language_affirmative_returns_detected():
+    result = resolve_language("es", confirm_fn=lambda: "sí claro",
+                              ask_fn=lambda: "", interpret_fn=lambda _: True)
+    assert result == "es"
+
+
+@pytest.mark.parametrize("answer_language", ["es", "en"])
+def test_resolve_language_negative_uses_detected_language_of_answer(answer_language):
+    result = resolve_language("es", confirm_fn=lambda: "no",
+                              ask_fn=lambda: "texto libre",
+                              interpret_fn=lambda _: False,
+                              detect_fn=lambda _: answer_language)
+    assert result == answer_language
+
 
 class TestExtractName(unittest.TestCase):
     
