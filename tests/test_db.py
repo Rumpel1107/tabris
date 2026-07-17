@@ -67,6 +67,28 @@ class TestCreateUser(unittest.TestCase):
             conn.close()
             self.assertEqual(row[0], "en")
 
+
+def test_create_user_stores_location_and_timezone():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, name="Rumpel", language="es",
+                              location="Panama", timezone="America/Panama")
+        user = get_user(db_path, user_id)
+        assert user["location"] == "Panama"
+        assert user["timezone"] == "America/Panama"
+
+
+def test_create_user_defaults_location_and_timezone():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, name="Ana")
+        user = get_user(db_path, user_id)
+        assert user["location"] == ""
+        assert user["timezone"] == "UTC"
+
+
 class TestGetUser(unittest.TestCase):
     
     def test_returns_user_dict(self):

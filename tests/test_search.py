@@ -15,7 +15,7 @@ class TestWebSearch(unittest.TestCase):
             {"title": "Result 1", "body": "Snippet 1", "href": "https://example.com/1"},
             {"title": "Result 2", "body": "Snippet 2", "href": "https://example.com/2"},
         ]
-        result = web_search("clima en Bogota")
+        result = web_search("clima en Panama")
         self.assertIn("Result 1", result)
         self.assertIn("Snippet 1", result)
         self.assertIn("https://example.com/1", result)
@@ -28,7 +28,7 @@ def test_search_ddg_normalizes_results(mock_ddgs_class):
         {"title": "Result 1", "body": "Snippet 1", "href": "https://example.com/1"},
         {"title": "Result 2", "body": "Snippet 2", "href": "https://example.com/2"},
     ]
-    results = _search_ddg("clima en Bogota")
+    results = _search_ddg("clima en Panama")
     assert results == [
         {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
         {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2"},
@@ -40,7 +40,7 @@ def test_search_uses_configured_provider(mock_ddgs_class):
     mock_ddgs_class.return_value.text.return_value = [
         {"title": "Result 1", "body": "Snippet 1", "href": "https://example.com/1"},
     ]
-    results = search("clima en Bogota")
+    results = search("clima en Panama")
     assert results == [
         {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
     ]
@@ -49,7 +49,7 @@ def test_search_uses_configured_provider(mock_ddgs_class):
 @patch("core.search.DDGS")
 def test_search_returns_empty_when_all_providers_fail(mock_ddgs_class):
     mock_ddgs_class.return_value.text.side_effect = RuntimeError("provider down")
-    results = search("clima en Bogota")
+    results = search("clima en Panama")
     assert results == []
 
 

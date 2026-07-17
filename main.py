@@ -9,6 +9,8 @@ from core import memory_manager, providers
 from core.conversation import handle_turn, route_message
 from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
 from core.session import get_or_create_session
+from zoneinfo import ZoneInfo
+
 
 # --- Channel identity ---
 def get_client_key(path=config.CLIENT_ID_PATH):
@@ -23,7 +25,9 @@ def get_client_key(path=config.CLIENT_ID_PATH):
 def onboard_user(db_path, channel, key, language):
     raw_name = input(msg("ask_name", language, agent=config.AGENT_NAME))
     name = extract_name(raw_name)
-    user_id = create_user(db_path, name, language)
+    location = input(msg("ask_location", language, agent=config.AGENT_NAME)).strip()
+    timezone = resolve_timezone(location)
+    user_id = create_user(db_path, name, language, location, timezone)
     register_user_channel(db_path, user_id, channel, key)
     return user_id
 
@@ -64,6 +68,22 @@ Reply with only the name."""
         return text.strip()
     return response if response else text.strip()
 
+def resolve_timezone(location):
+    prompt = [{
+        "role": "user",
+        "content": f"""What is the IANA timezone identifier for this location? Reply with only the identifier (e.g. 'America/Panama'), nothing else.
+
+Location: {location}
+
+Reply with only the IANA timezone identifier."""
+    }]
+    try:
+        response = providers.chat("router", prompt).content.strip()
+        ZoneInfo(response)
+        return response
+    except Exception:
+        return "UTC"
+
 def interpret_yes_no(text):
     prompt = [{
         "role": "user",
@@ -93,14 +113,18 @@ def format_datetime(dt, language):
         return f"{day}, {dt.day} de {month} de {dt.year} — {dt.strftime('%H:%M')}"
     return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
 
-def build_system_prompt(persona, facts, language, name, now=None):
-    from datetime import datetime as _datetime
+def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", now=None):
+    from datetime import datetime, timezone as dt_timezone
     if now is None:
-        now = _datetime.now()
+        now = datetime.now(dt_timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=dt_timezone.utc)
+    local_now = now.astimezone(ZoneInfo(timezone))
     lang_name = config.LANGUAGE_NAMES.get(language, language)
     directive = f"\nAlways respond in {lang_name}."
-    context_block = f"\n\n## Current context\nDate and time: {format_datetime(now, language)}"
-    name_block = f"\n\nYou are talking to {name}."
+    context_block = f"\n\n## Current context\nDate and time: {format_datetime(local_now, language)}"
+    location_part = f", located in {location}" if location else ""
+    name_block = f"\n\nYou are talking to {name}{location_part}."
     if not facts:
         return persona + name_block + context_block + directive
     facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
@@ -130,14 +154,17 @@ def chat():
         print(msg("language_confirmed", language, agent=config.AGENT_NAME))
         user_id = onboard_user(db_path, "cli", key, language)
 
-    name = get_user(db_path, user_id)["name"]
+    user_row = get_user(db_path, user_id)
+    name = user_row["name"]
+    location = user_row["location"]
+    timezone = user_row["timezone"]
 
     sessions = {}
     session = get_or_create_session(sessions, "cli", key, user_id, language)
 
     persona = load_persona()
     facts = get_facts(db_path, user_id)
-    system_prompt = build_system_prompt(persona, facts, language=session.language, name=name)
+    system_prompt = build_system_prompt(persona, facts, language=session.language, name=name, location=location, timezone=timezone)
 
     session.conversation_history = [{"role": "system", "content": system_prompt}]
     past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)

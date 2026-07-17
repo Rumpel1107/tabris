@@ -18,6 +18,8 @@ MESSAGES = {
         "language_confirmed":      "{agent}: Perfecto, me comunicaré contigo en español.",
         "language_ask":            "{agent}: ¿En qué idioma prefieres comunicarte? (es/en): ",
         "onboarding_done":         "{agent}: Disculpa {name}, ahora sí, ¿cómo puedo ayudarte hoy?",
+        "ask_location":            "{agent}: Para poder darte un mejor apoyo, ¿podrías confirmarme en qué ciudad estás ubicado, por favor? ",
+
     },
     "en": {
         "user_prompt":             "You: ",
@@ -38,6 +40,7 @@ MESSAGES = {
         "language_confirmed":      "{agent}: Got it, I will communicate with you in English.",
         "language_ask":            "{agent}: What language do you prefer? (es/en): ",
         "onboarding_done":         "{agent}: Sorry about that, {name}. Now, how can I help you today?",
+        "ask_location":            "{agent}: To support you better, could you please confirm which city you're located in? ",
     },
 }
 

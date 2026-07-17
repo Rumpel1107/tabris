@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, load_persona, onboard_user, resolve_language
+from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, load_persona, onboard_user, resolve_language, resolve_timezone
 from config import MAX_HISTORY
 from core import providers
 from unittest.mock import patch
@@ -146,12 +146,27 @@ def test_resolve_language_negative_uses_detected_language_of_answer(answer_langu
     assert result == answer_language
 
 
+def test_resolve_timezone_returns_iana_for_city():
+    with patch("main.providers.chat", return_value=providers.ChatResponse(content="America/Panama", tool_calls=None)):
+        assert resolve_timezone("Panama") == "America/Panama"
+
+
+def test_resolve_timezone_falls_back_to_utc_on_error():
+    with patch("main.providers.chat", side_effect=Exception("boom")):
+        assert resolve_timezone("Panama") == "UTC"
+
+
+def test_resolve_timezone_falls_back_to_utc_on_invalid():
+    with patch("main.providers.chat", return_value=providers.ChatResponse(content="Not/AZone", tool_calls=None)):
+        assert resolve_timezone("Nowhere") == "UTC"
+
+
 class TestExtractName(unittest.TestCase):
     
     def test_extracts_name_from_sentence(self):
-        with patch("main.providers.chat", return_value=providers.ChatResponse(content="Mauricio", tool_calls=None)):
-            result = extract_name("Mi nombre es Mauricio")
-        self.assertEqual(result, "Mauricio")
+        with patch("main.providers.chat", return_value=providers.ChatResponse(content="Carlos", tool_calls=None)):
+            result = extract_name("Mi nombre es Carlos")
+        self.assertEqual(result, "Carlos")
     
     def test_returns_plain_name_unchanged(self):
         with patch("main.providers.chat", return_value=providers.ChatResponse(content="Ana", tool_calls=None)):
@@ -160,12 +175,12 @@ class TestExtractName(unittest.TestCase):
     
     def test_falls_back_to_raw_text_on_model_error(self):
         with patch("main.providers.chat", side_effect=Exception("boom")):
-            result = extract_name("Mauricio")
-        self.assertEqual(result, "Mauricio")
+            result = extract_name("Carlos")
+        self.assertEqual(result, "Carlos")
 
 class TestFormatDatetime(unittest.TestCase):
     from datetime import datetime
-    FIXED_DT = datetime(2026, 7, 1, 10, 35)  # miércoles
+    FIXED_DT = datetime(2026, 7, 1, 10, 35)
     
     def test_spanish_format(self):
         from datetime import datetime
@@ -198,6 +213,19 @@ def test_includes_user_name():
     persona = "You are Tabris."
     result = build_system_prompt(persona, [], name="Rumpel", language="en")
     assert "You are talking to Rumpel." in result
+
+
+def test_build_system_prompt_converts_now_to_user_timezone():
+    from datetime import datetime, timezone
+    utc_now = datetime(2026, 7, 16, 22, 12, tzinfo=timezone.utc)
+    result = build_system_prompt("p", [], "en", "Rumpel", location="Panama",
+                                 timezone="America/Panama", now=utc_now)
+    assert "17:12" in result
+
+
+def test_build_system_prompt_includes_location():
+    result = build_system_prompt("p", [], "en", "Rumpel", location="Panama", timezone="America/Panama")
+    assert "located in Panama" in result
 
 
 if __name__ == "__main__":

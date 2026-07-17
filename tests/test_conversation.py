@@ -165,19 +165,19 @@ class TestRunWithTools(unittest.TestCase):
     def test_executes_tool_call_and_returns_final_answer(self, mock_chat, mock_search):
         tool_call = SimpleNamespace(
             id="call_1",
-            function=SimpleNamespace(name="web_search", arguments='{"query": "clima en Bogota"}'),
+            function=SimpleNamespace(name="web_search", arguments='{"query": "clima en Panama"}'),
         )
         mock_chat.side_effect = [
             providers.ChatResponse(content=None, tool_calls=[tool_call]),
-            providers.ChatResponse(content="Hace sol en Bogota", tool_calls=None),
+            providers.ChatResponse(content="Hace sol en Panama", tool_calls=None),
         ]
         mock_search.return_value = "resultado de busqueda"
         
-        messages = [{"role": "user", "content": "como esta el clima en Bogota?"}]
+        messages = [{"role": "user", "content": "como esta el clima en Panama?"}]
         result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL])
         
-        self.assertEqual(result, "Hace sol en Bogota")
-        mock_search.assert_called_once_with(query="clima en Bogota")
+        self.assertEqual(result, "Hace sol en Panama")
+        mock_search.assert_called_once_with(query="clima en Panama")
         self.assertEqual(mock_chat.call_count, 2)
         
         second_call_messages = mock_chat.call_args_list[1][0][1]
