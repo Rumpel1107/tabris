@@ -26,8 +26,12 @@ def onboard_user(db_path, channel, key, language):
     raw_name = input(msg("ask_name", language, agent=config.AGENT_NAME))
     name = extract_name(raw_name)
     location = input(msg("ask_location", language, agent=config.AGENT_NAME)).strip()
+    if is_timezone_ambiguous(location):
+        clarification = input(msg("ask_location_clarify", language, agent=config.AGENT_NAME)).strip()
+        location = f"{location}, {clarification}"
     timezone = resolve_timezone(location)
-    user_id = create_user(db_path, name, language, location, timezone)
+    city = extract_location(location)
+    user_id = create_user(db_path, name, language, city, timezone)
     register_user_channel(db_path, user_id, channel, key)
     return user_id
 
@@ -83,6 +87,40 @@ Reply with only the IANA timezone identifier."""
         return response
     except Exception:
         return "UTC"
+
+def is_timezone_ambiguous(location):
+    prompt = [{
+        "role": "user",
+        "content": f"""Could this location refer to places in different time zones (e.g. 'Madrid' could be in Spain or Colombia)? Answer with only 'yes' or 'no'.
+
+Location: {location}
+
+Answer with only one word: 'yes' or 'no'."""
+    }]
+    try:
+        response = providers.chat("router", prompt).content.strip().lower()
+    except Exception:
+        return False
+    return response.startswith("yes")
+
+def extract_location(text):
+    prompt = [{
+        "role": "user",
+        "content": f"""Extract the location from the message. Reply with ONLY the location and nothing else — no explanations. Use only what the user mentioned; do not invent a country or region.
+
+Message: Claro, vivo en Madrid Cundinamarca en Colombia
+Location: Madrid, Cundinamarca, Colombia
+Message: Vivo en Madrid
+Location: Madrid
+
+Message: {text}
+Location:"""
+    }]
+    try:
+        response = providers.chat("router", prompt).content.strip()
+    except Exception:
+        return text.strip()
+    return response if response else text.strip()
 
 def interpret_yes_no(text):
     prompt = [{

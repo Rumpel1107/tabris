@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from main import detect_language, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, load_persona, onboard_user, resolve_language, resolve_timezone
+from main import detect_language, extract_location, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, is_timezone_ambiguous, load_persona, onboard_user, resolve_language, resolve_timezone
 from config import MAX_HISTORY
 from core import providers
 from unittest.mock import patch
@@ -120,6 +120,40 @@ def test_onboard_user_creates_user_with_given_language():
         assert linked["id"] == user_id
 
 
+def test_onboard_user_clear_location_stores_cleaned_city():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = os.path.join(tmp, "test.db")
+        from core.db import init_db, get_user
+        init_db(db)
+        with patch("builtins.input", side_effect=["Oscar", "Vivo en Panama"]), \
+             patch("main.extract_name", return_value="Oscar"), \
+             patch("main.is_timezone_ambiguous", return_value=False), \
+             patch("main.resolve_timezone", return_value="America/Panama"), \
+             patch("main.extract_location", return_value="Panama City, Panama"):
+            user_id = onboard_user(db, "cli", "key-1", "es")
+        user = get_user(db, user_id)
+        assert user["location"] == "Panama City, Panama"
+        assert user["timezone"] == "America/Panama"
+
+
+def test_onboard_user_ambiguous_location_reasks_and_combines_answer():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = os.path.join(tmp, "test.db")
+        from core.db import init_db, get_user
+        init_db(db)
+        with patch("builtins.input", side_effect=["Oscar", "Madrid", "Colombia"]), \
+             patch("main.extract_name", return_value="Oscar"), \
+             patch("main.is_timezone_ambiguous", return_value=True), \
+             patch("main.resolve_timezone", return_value="America/Bogota") as rtz, \
+             patch("main.extract_location", return_value="Madrid, Colombia") as exloc:
+            user_id = onboard_user(db, "cli", "key-2", "es")
+        rtz.assert_called_once_with("Madrid, Colombia")
+        exloc.assert_called_once_with("Madrid, Colombia")
+        user = get_user(db, user_id)
+        assert user["timezone"] == "America/Bogota"
+        assert user["location"] == "Madrid, Colombia"
+
+
 @pytest.mark.parametrize("model_reply, expected", [("yes", True), ("no", False)])
 def test_interpret_yes_no_uses_model_verdict(model_reply, expected):
     with patch("main.providers.chat", return_value=providers.ChatResponse(content=model_reply, tool_calls=None)):
@@ -159,6 +193,27 @@ def test_resolve_timezone_falls_back_to_utc_on_error():
 def test_resolve_timezone_falls_back_to_utc_on_invalid():
     with patch("main.providers.chat", return_value=providers.ChatResponse(content="Not/AZone", tool_calls=None)):
         assert resolve_timezone("Nowhere") == "UTC"
+
+
+@pytest.mark.parametrize("model_reply, expected", [("yes", True), ("no", False)])
+def test_is_timezone_ambiguous_uses_model_verdict(model_reply, expected):
+    with patch("main.providers.chat", return_value=providers.ChatResponse(content=model_reply, tool_calls=None)):
+        assert is_timezone_ambiguous("Madrid") is expected
+
+
+def test_is_timezone_ambiguous_falls_back_to_false_on_error():
+    with patch("main.providers.chat", side_effect=Exception("boom")):
+        assert is_timezone_ambiguous("Madrid") is False
+
+
+def test_extract_location_cleans_sentence():
+    with patch("main.providers.chat", return_value=providers.ChatResponse(content="Madrid, Cundinamarca, Colombia", tool_calls=None)):
+        assert extract_location("Claro, vivo en Madrid Cundinamarca en Colombia") == "Madrid, Cundinamarca, Colombia"
+
+
+def test_extract_location_falls_back_to_raw_text_on_model_error():
+    with patch("main.providers.chat", side_effect=Exception("boom")):
+        assert extract_location("  Panama  ") == "Panama"
 
 
 class TestExtractName(unittest.TestCase):

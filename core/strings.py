@@ -19,6 +19,7 @@ MESSAGES = {
         "language_ask":            "{agent}: ¿En qué idioma prefieres comunicarte? (es/en): ",
         "onboarding_done":         "{agent}: Disculpa {name}, ahora sí, ¿cómo puedo ayudarte hoy?",
         "ask_location":            "{agent}: Para poder darte un mejor apoyo, ¿podrías confirmarme en qué ciudad estás ubicado, por favor? ",
+        "ask_location_clarify":    "{agent}: Esa ciudad existe en varios lugares. ¿En qué país o región está, por favor? ",
 
     },
     "en": {
@@ -41,6 +42,7 @@ MESSAGES = {
         "language_ask":            "{agent}: What language do you prefer? (es/en): ",
         "onboarding_done":         "{agent}: Sorry about that, {name}. Now, how can I help you today?",
         "ask_location":            "{agent}: To support you better, could you please confirm which city you're located in? ",
+        "ask_location_clarify":    "{agent}: That city exists in several places. Which country or region is it in, please? ",
     },
 }
 
