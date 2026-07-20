@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-18
+Last updated: 2026-07-20
 
 ---
 
@@ -213,7 +213,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 33. ⬜ **Internet access via tool use** (first tool of the tool-use layer). Build order — one new concept per step:
     - **33a. ✅ (2026-07-10)** Function-calling loop: `providers.chat()` accepts `tools`; `core/search.py` (`web_search` via `ddgs`); `run_with_tools()` loop in `core/conversation.py`, wired into `handle_turn`. Verified with real runs (needed a `persona.md` tool-awareness fix for reliable use). DDG result-quality gap deferred to 33b/33c.
     - **33b. ✅ (2026-07-16)** Generalized behind `core/search.py` + `SEARCH_PROVIDERS` config list + fallback chain + result normalization (D10). `web_fetch` added, wired as a tool, and mentioned in `persona.md`. YouTube-transcript tool deferred (not built). Verified with real runs.
-    - **33c.** Register Tavily/Brave keys; DuckDuckGo stays as the last-resort backup.
+    - **33c. ✅ (2026-07-20, validated with a real run)** Tavily registered as the primary search provider (`_search_tavily` via httpx, Bearer auth, normalized to `{title, url, content}`); `SEARCH_PROVIDERS = ["tavily", "duckduckgo"]` — DDG stays as the last-resort backup. Real run: TRM, Bitcoin, and the 2026 World Cup result came back concrete, sourced, and correct (independently verified) — the DDG quality gap from 33e is closed. Brave deferred: a second paid provider is speculative until Tavily's quality/quota proves insufficient (§9 / item 50).
     - Search is read-only → **no HITL confirmation** (unlike file writes). File/tracker CRUD tools (the original, broader item-33 scope) are deferred to Phase 7 (items 48/49).
 33d. ✅ (2026-07-16, validated with a real run) Onboarding friendliness. New `interpret_yes_no` (router LLM) infers affirmation instead of exact string match; `resolve_language` now injects `interpret_fn`/`detect_fn` and stays pure (fallback reuses `detect_language` on free text). Onboarding reordered in `chat()`: greet → detect+confirm language → ask name in that language → echo `onboarding_done`; language-detection block removed from the loop; first message only triggers onboarding (not answered). Real run confirmed a natural affirmative ("Esta perfecto, gracias.") resolves to `es`.
 33e. ✅ (2026-07-17, validated with a real run) Timezone. New `users.location` + `users.timezone` columns (idempotent migration); onboarding asks the city, `resolve_timezone` (router LLM) maps it to an IANA id (validated via `ZoneInfo`, falls back to `UTC`); `build_system_prompt` treats `now` as UTC and converts with `astimezone(ZoneInfo(tz))`, and names the city in the prompt. Real run: server UTC (Fri 02:36) rendered as correct local time (Thu 21:36, jueves, UTC-5) with no mental offset or web lookup. Grounding (#2) reframed: the model searches (no fabrication) — the remaining weak/vague answers are DDG result quality → folds into 33c, not a `persona.md` fix. Per-turn `now` refresh stays scoped under item 34 (§ line ~226).

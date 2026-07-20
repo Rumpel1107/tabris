@@ -51,13 +51,14 @@ NUM_CTX = 8192      # token context window Ollama should use (overrides its smal
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 
 # --- Search Configuration ---
-SEARCH_PROVIDERS = ["duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
+SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
 
 # --- API Keys ---
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # --- Logging Configuration ---

@@ -16,7 +16,23 @@ def _search_ddg(query, max_results=5):
     ]
 
 
+def _search_tavily(query, max_results=5):
+    response = httpx.post(
+        "https://api.tavily.com/search",
+        headers={"Authorization": f"Bearer {config.TAVILY_API_KEY}"},
+        json={"query": query, "max_results": max_results},
+        timeout=config.PROVIDER_TIMEOUT,
+    )
+    response.raise_for_status()
+    results = response.json()["results"]
+    return [
+        {"title": r["title"], "url": r["url"], "content": r["content"]}
+        for r in results
+    ]
+
+
 _ADAPTERS = {
+    "tavily": _search_tavily,
     "duckduckgo": _search_ddg,
 }
 
