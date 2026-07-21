@@ -13,7 +13,8 @@ AGENT_ROLES = {
     "general": {
         "description": "general questions, conversation, explanations, anything not code",
         "providers": [
-            {"provider": "gemini", "model": "gemini-2.5-flash"},
+            {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
+            {"provider": "deepseek", "model": "deepseek-chat"},
             {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
             {"provider": "ollama", "model": "llama3.1:8b"},
         ],
@@ -27,11 +28,19 @@ AGENT_ROLES = {
             {"provider": "ollama",     "model": "llama3.1:8b"},
         ],
     },
+    "memory": {
+        "description": "background memory distillation, not user-facing",
+        "providers": [
+            {"provider": "deepseek", "model": "deepseek-chat"},
+            {"provider": "gemini",   "model": "gemini-3.1-flash-lite"},
+            {"provider": "ollama",   "model": "llama3.1:8b"},
+        ],
+    },
     "router": {
         "description": "classifies user intent into one of the available roles",
         "providers": [
             {"provider": "groq",   "model": "llama-3.1-8b-instant"},
-            {"provider": "gemini", "model": "gemini-2.5-flash"},
+            {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
             {"provider": "ollama", "model": "llama3.1:8b"},
         ],
     },
@@ -42,8 +51,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONA_PATH = os.path.join(BASE_DIR, "persona.md")
 DB_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}.db")
 CLIENT_ID_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}_client_id")
-MEMORY_TRIGGER_EXCHANGES = 5
-MEMORY_TRIGGER_SECONDS = 300
+MEMORY_TRIGGER_EXCHANGES = 15
+MEMORY_TRIGGER_SECONDS = 1200
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model

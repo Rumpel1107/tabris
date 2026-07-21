@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21 (item 35a #1, #3 done; #4 partial)
 
 ---
 
@@ -231,6 +231,12 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 34d. ⬜ Telegram as a second channel — a thin adapter (`python-telegram-bot`, polling; @BotFather token) reusing item 34's core untouched: same `handle_turn`, same `(channel, key)` identity, same link-code so a user maps Discord+Telegram to one profile, same hardening. Only new work: the adapter shell + wiring Telegram's voice/photo APIs into the shared media pipeline (34a/b). Low cost by design (D5); Rumpel wants both channels available. Mirrors Hermes's single-gateway/many-platforms model.
 34c. ⬜ Data privacy minimums (code review 2026-07-02) — gate before onboarding beta-testers (§6): a retention policy (e.g. delete messages older than N months), a user-facing command to view/delete their own data (`/olvidame`), and confirm nothing ever logs raw message content (only metadata/errors). Not urgent solo; required before inviting anyone who isn't Rumpel.
 35. ⬜ CLI UX (F7 remainder): handle `Ctrl+C` (KeyboardInterrupt) so memory still saves on exit; enable streaming responses for perceived speed. Belongs with the channel-adapter work in item 32.
+
+35a. 🔄 **Response-quality pass** (external analysis 2026-07-21, all claims verified vs real code + web). Root cause of the flip-flopping answers: Gemini's free daily quota gets exhausted by the several-model-calls-per-turn load, then `general` falls back to the weaker Groq llama-3.3-70b. Reality check from Rumpel's real AI Studio account (2026-07-21): the high-end Flash models (2.5 / 3 / 3.5 Flash) are all capped at **20 RPD** on his free tier — the web's "~1,500 RPD" figure does NOT apply here; only `gemini-3.1-flash-lite` gives **500 RPD** (15 RPM, 250K TPM). Fixes, by ROI:
+   1. ✅ (2026-07-21) Stop burning Gemini on non-user-facing calls: memory distillation used the `general` role (→ Gemini). Gave it a **dedicated `memory` role** — decoupled from `general` so future chat-model swaps don't silently change how memory is built. Decision (Rumpel): do NOT downgrade the model — memory quality matters, and once distillation is automatic (Hermes-style, no HITL gate) the model is the only safeguard against garbage facts. Primary = **DeepSeek** (`deepseek-chat`: strong at structured extraction, doesn't touch Gemini's free quota, cents/mo) → `gemini-3.1-flash-lite` → ollama. Spaced out: `MEMORY_TRIGGER_EXCHANGES` 5 → 15, `MEMORY_TRIGGER_SECONDS` 300 → 1200 (fewer, larger passes = better distillation). `should_trigger_memory` tests rewritten to derive from config (no more hardcoded thresholds).
+   2. ⬜ [the real fix — prompt, not model] `persona.md` grounding: when `web_search` ran, anchor the answer in those results (cite source + date); on contradiction with earlier turns, newer results win. This is what actually fixes the 3-different-dates symptom. Current-date injection is ALREADY done (item 33e + per-turn refresh) — only the grounding wording is new.
+   3. ✅ (2026-07-21) Moved `general`'s primary from `gemini-2.5-flash` to **`gemini-3.1-flash-lite`** (500 RPD, 25× the 20-RPD cap that was the actual bottleneck). Verified with a live run: quality up, 9/500 RPD used. NOTE: the note originally said `gemini-3-flash` @ ~1,500 RPD — wrong for this account (also 20 RPD); the AI Studio table settled it.
+   4. 🔄 [partial, 2026-07-21] Reordered `general` fallback: `gemini-3.1-flash-lite` → **deepseek** (`deepseek-chat`) → groq llama-3.3-70b → ollama. DeepSeek inserted ahead of Groq (better quality in the role that matters most, cents/mo). Kept llama-3.3 as a deeper safety net (only hit if both Gemini and DeepSeek fail) rather than dropping it. Skip Kimi for `general` (~15× DeepSeek for no noticeable gain in Spanish chat).
 
 ### Phase 4 — Deploy (always-on)
 36. ⬜ Choose host: compare Oracle Always Free vs Hetzner (~$4.5/mo) vs Fly.io free allowance.

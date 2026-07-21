@@ -75,7 +75,7 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
     
     try:
         raw_response = providers.chat(
-            "general",
+            "memory",
             [{"role": "user", "content": analysis_prompt}]
         ).content.strip()
     except Exception as e:

@@ -7,7 +7,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from config import MAX_HISTORY
+from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, get_messages, init_db, save_fact
@@ -67,20 +67,20 @@ class TestRouteMessage(unittest.TestCase):
 
 class TestShouldTriggerMemory(unittest.TestCase):
     
-    def test_triggers_after_5_exchanges(self):
+    def test_triggers_at_exchanges_threshold(self):
         last_trigger = time.time()
-        self.assertTrue(should_trigger_memory(5, last_trigger))
+        self.assertTrue(should_trigger_memory(MEMORY_TRIGGER_EXCHANGES, last_trigger))
     
-    def test_does_not_trigger_before_5_exchanges(self):
+    def test_does_not_trigger_below_exchanges_threshold(self):
         last_trigger = time.time()
-        self.assertFalse(should_trigger_memory(4, last_trigger))
+        self.assertFalse(should_trigger_memory(MEMORY_TRIGGER_EXCHANGES - 1, last_trigger))
     
-    def test_triggers_after_5_minutes_inactivity(self):
-        last_trigger = time.time() - 301
+    def test_triggers_after_inactivity_threshold(self):
+        last_trigger = time.time() - (MEMORY_TRIGGER_SECONDS + 1)
         self.assertTrue(should_trigger_memory(0, last_trigger))
     
-    def test_does_not_trigger_before_5_minutes(self):
-        last_trigger = time.time() - 299
+    def test_does_not_trigger_before_inactivity_threshold(self):
+        last_trigger = time.time() - (MEMORY_TRIGGER_SECONDS - 1)
         self.assertFalse(should_trigger_memory(0, last_trigger))
 
 class TestHandleTurn(unittest.TestCase):
