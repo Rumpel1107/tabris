@@ -10,7 +10,7 @@ from unittest.mock import patch
 from config import MAX_HISTORY
 from core import providers
 from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, get_messages, init_db
+from core.db import create_user, get_messages, init_db, save_fact
 from core.session import Session
 from types import SimpleNamespace
 
@@ -157,6 +157,28 @@ class TestHandleTurn(unittest.TestCase):
         
         called_tools = mock_chat.call_args[1]["tools"]
         self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="ok", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "refresh.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        save_fact(db_path, user_id, "Le gusta el café")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        handle_turn(session, "hola", "general", db_path, persona="PERSONA")
+        save_fact(db_path, user_id, "Vive en Panama")
+        handle_turn(session, "otra", "general", db_path, persona="PERSONA")
+
+        assert "Vive en Panama" in session.conversation_history[0]["content"]
+
 
 class TestRunWithTools(unittest.TestCase):
     

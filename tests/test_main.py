@@ -5,9 +5,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from main import detect_language, extract_location, build_system_prompt, extract_name, format_datetime, get_client_key, interpret_yes_no, is_timezone_ambiguous, load_persona, onboard_user, resolve_language, resolve_timezone
+from main import detect_language, extract_location, extract_name, get_client_key, interpret_yes_no, is_timezone_ambiguous, onboard_user, resolve_language, resolve_timezone
 from config import MAX_HISTORY
 from core import providers
+from core.prompt import build_system_prompt, format_datetime, load_persona
 from unittest.mock import patch
 
 

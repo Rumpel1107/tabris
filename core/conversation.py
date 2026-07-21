@@ -4,7 +4,8 @@ import logging
 import time
 
 from core import memory_manager, providers
-from core.db import save_message
+from core.db import get_facts, get_user, save_message
+from core.prompt import build_system_prompt
 from core.search import web_fetch, web_search
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,22 @@ def run_with_tools(role, messages, tools):
         for tool_call in response.tool_calls:
             messages.append(_execute_tool_call(tool_call))
 
-def handle_turn(session, user_input, role, db_path):
+def handle_turn(session, user_input, role, db_path, persona=None):
+    if persona is not None:
+        user_row = get_user(db_path, session.user_id)
+        facts = get_facts(db_path, session.user_id)
+        system_message = {
+            "role": "system",
+            "content": build_system_prompt(
+                persona, facts, language=session.language,
+                name=user_row["name"], location=user_row["location"], timezone=user_row["timezone"],
+            ),
+        }
+        if session.conversation_history and session.conversation_history[0]["role"] == "system":
+            session.conversation_history[0] = system_message
+        else:
+            session.conversation_history.insert(0, system_message)
+
     session.conversation_history.append({"role": "user", "content": user_input})
     try:
         reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL])

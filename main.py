@@ -3,11 +3,12 @@ import logging
 import os
 import uuid
 
-from core.strings import MONTHS, msg, WEEKDAYS
+from core.strings import msg
 
 from core import memory_manager, providers
 from core.conversation import handle_turn, route_message
 from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
+from core.prompt import build_system_prompt, load_persona
 from core.session import get_or_create_session
 from zoneinfo import ZoneInfo
 
@@ -34,12 +35,6 @@ def onboard_user(db_path, channel, key, language):
     user_id = create_user(db_path, name, language, city, timezone)
     register_user_channel(db_path, user_id, channel, key)
     return user_id
-
-# --- Memory ---
-def load_persona(path=config.PERSONA_PATH):
-    with open(path, "r") as persona_file:
-        content = persona_file.read()
-    return content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
 
 # --- Router ---
 def detect_language(text):
@@ -142,32 +137,6 @@ def resolve_language(detected, confirm_fn, ask_fn, interpret_fn=interpret_yes_no
         return detected
     return detect_fn(ask_fn())
 
-# --- Context window ---
-def format_datetime(dt, language):
-    lang = language if language in WEEKDAYS else "en"
-    day = WEEKDAYS[lang][dt.weekday()]
-    month = MONTHS[lang][dt.month - 1]
-    if lang == "es":
-        return f"{day}, {dt.day} de {month} de {dt.year} — {dt.strftime('%H:%M')}"
-    return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
-
-def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", now=None):
-    from datetime import datetime, timezone as dt_timezone
-    if now is None:
-        now = datetime.now(dt_timezone.utc)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=dt_timezone.utc)
-    local_now = now.astimezone(ZoneInfo(timezone))
-    lang_name = config.LANGUAGE_NAMES.get(language, language)
-    directive = f"\nAlways respond in {lang_name}."
-    context_block = f"\n\n## Current context\nDate and time: {format_datetime(local_now, language)}"
-    location_part = f", located in {location}" if location else ""
-    name_block = f"\n\nYou are talking to {name}{location_part}."
-    if not facts:
-        return persona + name_block + context_block + directive
-    facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
-    return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
-
 # --- Main conversation loop ---
 def chat():
     db_path = config.DB_PATH
@@ -231,7 +200,7 @@ def chat():
             break
 
         try:
-            reply = handle_turn(session, user_input, role, db_path)
+            reply = handle_turn(session, user_input, role, db_path, persona)
         except Exception as e:
             print(msg("model_error", session.language, agent=config.AGENT_NAME, error=e))
             continue
