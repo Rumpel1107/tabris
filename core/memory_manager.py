@@ -1,8 +1,24 @@
 import config
+import logging
 
 from core import providers
 from core.db import get_facts, save_fact, deactivate_fact
 from core.strings import msg
+from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MemoryChanges:
+    """Distilled memory changes proposed for a user, as data (no I/O)."""
+    new_facts: list[str] = field(default_factory=list)
+    retire_ids: list[int] = field(default_factory=list)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.new_facts and not self.retire_ids
+
 
 def parse_facts_response(raw_response):
     if "HAS_CHANGES: yes" not in raw_response:
@@ -17,7 +33,7 @@ def parse_facts_response(raw_response):
             line.strip().lstrip("-").strip()
             for line in facts_block.split("\n")
             if line.strip().startswith("-")
-    ]
+        ]
     
     if "RETIRE_IDS:" in raw_response:
         ids_line = raw_response.split("RETIRE_IDS:", 1)[1].split("\n")[0]
@@ -35,7 +51,8 @@ def filter_valid_retire_ids(retire_ids, known_facts):
     known_ids = {fact["id"] for fact in known_facts}
     return [fid for fid in retire_ids if fid in known_ids]
 
-def update_memory(conversation_history, db_path, user_id, language, watermark=1):
+def analyze_memory(conversation_history, db_path, user_id, language, watermark=1) -> MemoryChanges:
+    """Distill durable user facts from the conversation. Pure: reads facts, never writes."""
     conversation_text = "\n".join(
         f"{turn['role'].upper()}: {turn['content']}"
         for turn in conversation_history[watermark:]
@@ -70,8 +87,6 @@ Or if there is nothing to change:
 HAS_CHANGES: no
 
 Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this format."""
-
-    print(msg("analyzing_memory", language, agent=config.AGENT_NAME))
     
     try:
         raw_response = providers.chat(
@@ -79,31 +94,24 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
             [{"role": "user", "content": analysis_prompt}]
         ).content.strip()
     except Exception as e:
-        print(msg("model_error", language, agent=config.AGENT_NAME, error=e))
-        return
+        logger.warning(f"analyze_memory: model call failed ({e}); no changes")
+        return MemoryChanges()
     
     has_changes, new_facts, retire_ids, error = parse_facts_response(raw_response)
-    retire_ids = filter_valid_retire_ids(retire_ids, known_facts)
     if error:
-        print(msg("invalid_model_response", language, agent=config.AGENT_NAME, error=error))
-        return
-    
+        logger.warning(f"analyze_memory: malformed response ({error}); no changes")
+        return MemoryChanges()
     if not has_changes:
-        print(msg("no_changes", language, agent=config.AGENT_NAME))
-        return
-    
-    retire_text = "\n".join(f"- ID {fid}" for fid in retire_ids)
-    display = "\n".join(f"- {fact}" for fact in new_facts)
-    if retire_ids:
-        display += f"\n\n{msg('retire_facts_header', language, agent=config.AGENT_NAME)}\n{retire_text}"
-    print(msg("proposed_facts", language, agent=config.AGENT_NAME, facts=display))
-    confirmation = input(msg("confirm_changes", language, agent=config.AGENT_NAME)).strip().lower()
-    
-    if confirmation == msg("confirm_yes", language):
-        for fact in new_facts:
-            save_fact(db_path, user_id, fact)
-        for fact_id in retire_ids:
-            deactivate_fact(db_path, user_id, fact_id)
-        print(msg("memory_updated", language, agent=config.AGENT_NAME))
-    else:
-        print(msg("no_changes", language, agent=config.AGENT_NAME))
+        return MemoryChanges()
+
+    return MemoryChanges(
+        new_facts=new_facts,
+        retire_ids=filter_valid_retire_ids(retire_ids, known_facts),
+    )
+
+def apply_memory_changes(db_path, user_id, changes: MemoryChanges) -> None:
+    """Persist distilled changes: save new facts, soft-delete retired ones."""
+    for fact in changes.new_facts:
+        save_fact(db_path, user_id, fact)
+    for fact_id in changes.retire_ids:
+        deactivate_fact(db_path, user_id, fact_id)

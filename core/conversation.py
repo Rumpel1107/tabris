@@ -123,13 +123,19 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     save_message(db_path, session.user_id, "assistant", reply)
     session.exchange_count += 1
     if should_trigger_memory(session.exchange_count, session.last_trigger_time):
-        memory_manager.update_memory(
+        changes = memory_manager.analyze_memory(
             session.conversation_history,
             db_path,
             session.user_id,
             language=session.language,
             watermark=session.last_analyzed_index,
         )
+        if not changes.is_empty:
+            memory_manager.apply_memory_changes(db_path, session.user_id, changes)
+            logger.info(
+                f"memory: user {session.user_id} — {len(changes.new_facts)} new, "
+                f"{len(changes.retire_ids)} retired"
+            )
         session.last_analyzed_index = len(session.conversation_history)
         session.exchange_count = 0
         session.last_trigger_time = time.time()

@@ -196,7 +196,8 @@ def chat():
         role = route_message(user_input)
 
         if role == "exit":
-            memory_manager.update_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
+            changes = memory_manager.analyze_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
+            memory_manager.apply_memory_changes(db_path, session.user_id, changes)
             break
 
         try:

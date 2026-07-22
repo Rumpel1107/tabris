@@ -46,27 +46,27 @@ class TestChatE2ESmoke(unittest.TestCase):
         self.assertIn("Hola", contents)
         self.assertIn("Reply from Tabris", contents)
     
-    @patch("builtins.input", return_value="si")
     @patch("core.providers.chat")
-    def test_retire_fact_e2e(self, mock_chat, mock_input):
+    def test_retire_fact_e2e(self, mock_chat):
         from core.db import init_db, create_user, save_fact, get_facts
-        from core.memory_manager import update_memory
+        from core.memory_manager import analyze_memory, apply_memory_changes
         
         db_path = os.path.join(self.tmp.name, "retire_smoke.db")
         init_db(db_path)
         user_id = create_user(db_path, "TestUser", "es")
         save_fact(db_path, user_id, "Trabaja en TaxL")
         
-        facts = get_facts(db_path, user_id)
-        fact_id = facts[0]["id"]
+        fact_id = get_facts(db_path, user_id)[0]["id"]
         
         mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}", tool_calls=None)
-        update_memory([], db_path, user_id, language="es")
+        changes = analyze_memory([], db_path, user_id, language="es")
+        apply_memory_changes(db_path, user_id, changes)
         
         self.assertEqual(get_facts(db_path, user_id), [])
         
         prompt_sent = mock_chat.call_args[0][1][0]["content"]
         self.assertIn(f"[{fact_id}]", prompt_sent)
+
 
 class TestNewUserLanguageE2E(unittest.TestCase):
     

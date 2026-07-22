@@ -1,13 +1,15 @@
+import pytest
 import sys
+import unittest
+
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import tempfile
-import unittest
 from core import providers
-from core.db import init_db, create_user, get_facts
-from core.memory_manager import filter_valid_retire_ids, update_memory, parse_facts_response
+from core.db import init_db, create_user, get_facts, save_fact
+from core.memory_manager import analyze_memory, apply_memory_changes, filter_valid_retire_ids, MemoryChanges, parse_facts_response
 from unittest.mock import patch
+
 
 class TestParseFactsResponse(unittest.TestCase):
     
@@ -47,139 +49,121 @@ class TestParseFactsResponse(unittest.TestCase):
         self.assertFalse(has_changes)
         self.assertIsNotNone(error)
 
-class TestUpdateMemory(unittest.TestCase):
-    
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tmp.name, "test.db")
-        init_db(self.db_path)
-        self.user_id = create_user(self.db_path, "Rumpel", "es")
-    
-    def tearDown(self):
-        self.tmp.cleanup()
-    
-    @patch("builtins.input", return_value="si")
-    @patch("core.providers.chat")
-    def test_saves_confirmed_facts(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes\nNEW_FACTS:\n- Likes short answers\n- Works on TaxL", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
-        self.assertIn("Likes short answers", contents)
-        self.assertIn("Works on TaxL", contents)
-    
-    @patch("builtins.input", return_value="no")
-    @patch("core.providers.chat")
-    def test_rejected_facts_not_saved(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes\nNEW_FACTS:\n- Should not be saved", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        contents = [f["content"] for f in get_facts(self.db_path, self.user_id)]
-        self.assertNotIn("Should not be saved", contents)
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_no_changes_saves_nothing(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        self.assertEqual(get_facts(self.db_path, self.user_id), [])
-        mock_input.assert_not_called()
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat", side_effect=Exception("connection refused"))
-    def test_connection_error_handled(self, mock_chat, mock_input):
-        update_memory([], self.db_path, self.user_id, language="es")
-        self.assertEqual(get_facts(self.db_path, self.user_id), [])
-        mock_input.assert_not_called()
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_malformed_response_not_saved(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: yes", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        self.assertEqual(get_facts(self.db_path, self.user_id), [])
-        mock_input.assert_not_called()
-    
-    @patch("builtins.input", return_value="si")
-    @patch("core.providers.chat")
-    def test_retires_confirmed_ids(self, mock_chat, mock_input):
-        from core.db import save_fact, get_facts
-        save_fact(self.db_path, self.user_id, "Hecho a retirar")
-        facts_before = get_facts(self.db_path, self.user_id)
-        fact_id = facts_before[0]["id"]
-        
-        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        
-        facts_after = get_facts(self.db_path, self.user_id)
-        self.assertEqual(facts_after, [])
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_watermark_limits_conversation_sent(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
-        history = [
-            {"role": "system", "content": "system prompt"},
-            {"role": "user", "content": "mensaje viejo"},
-            {"role": "assistant", "content": "respuesta vieja"},
-            {"role": "user", "content": "mensaje nuevo"},
-            {"role": "assistant", "content": "respuesta nueva"},
-        ]
-        update_memory(history, self.db_path, self.user_id, language="es", watermark=3)
-        
-        prompt_sent = mock_chat.call_args[0][1][0]["content"]
-        self.assertNotIn("mensaje viejo", prompt_sent)
-        self.assertIn("mensaje nuevo", prompt_sent)
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_assistant_turns_excluded_from_prompt(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
-        history = [
-            {"role": "system", "content": "system prompt"},
-            {"role": "user", "content": "Hola, soy Rumpel"},
-            {"role": "assistant", "content": "Soy Tabris y mis capacidades son responder preguntas"},
-        ]
-        update_memory(history, self.db_path, self.user_id, language="es")
-        
-        prompt_sent = mock_chat.call_args[0][1][0]["content"]
-        self.assertIn("Hola, soy Rumpel", prompt_sent)
-        self.assertNotIn("mis capacidades son", prompt_sent)
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_prompt_instructs_user_facts_only(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
-        history = [{"role": "user", "content": "Hola"}]
-        update_memory(history, self.db_path, self.user_id, language="es")
-        
-        prompt_sent = mock_chat.call_args[0][1][0]["content"]
-        self.assertIn("about the user", prompt_sent)
-        self.assertIn("NOT", prompt_sent)
-    
-    @patch("builtins.input")
-    @patch("core.providers.chat")
-    def test_prompt_specifies_user_language(self, mock_chat, mock_input):
-        mock_chat.return_value = providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
-        history = [{"role": "user", "content": "Hola"}]
-        update_memory(history, self.db_path, self.user_id, language="es")
-        
-        prompt_sent = mock_chat.call_args[0][1][0]["content"]
-        self.assertIn("Spanish", prompt_sent)
-    
-    @patch("builtins.input", return_value="si")
-    @patch("core.memory_manager.deactivate_fact")
-    @patch("core.providers.chat")
-    def test_retire_ids_not_in_known_facts_are_ignored(self, mock_chat, mock_deactivate, mock_input):
-        from core.db import save_fact, get_facts
-        save_fact(self.db_path, self.user_id, "Hecho real")
-        real_id = get_facts(self.db_path, self.user_id)[0]["id"]
-        bogus_id = real_id + 999
-        
-        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {bogus_id}", tool_calls=None)
-        update_memory([], self.db_path, self.user_id, language="es")
-        
-        called_ids = [call.args[2] for call in mock_deactivate.call_args_list]
-        self.assertIn(real_id, called_ids)
-        self.assertNotIn(bogus_id, called_ids)
+
+@pytest.fixture
+def db(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    return db_path, user_id
+
+
+def _resp(content):
+    return providers.ChatResponse(content=content, tool_calls=None)
+
+
+# --- analyze_memory: pure analysis, no DB writes, no I/O ---
+
+@patch("core.providers.chat")
+def test_analyze_returns_new_facts_without_writing_db(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: yes\nNEW_FACTS:\n- Likes short answers\n- Works on TaxL")
+    changes = analyze_memory([], db_path, user_id, language="es")
+    assert changes.new_facts == ["Likes short answers", "Works on TaxL"]
+    assert changes.retire_ids == []
+    assert get_facts(db_path, user_id) == []   # pure: analyze must not write
+
+
+@patch("core.providers.chat")
+def test_analyze_no_changes_is_empty(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    assert analyze_memory([], db_path, user_id, language="es").is_empty
+
+
+@patch("core.providers.chat", side_effect=Exception("connection refused"))
+def test_analyze_model_error_is_empty(mock_chat, db):
+    db_path, user_id = db
+    assert analyze_memory([], db_path, user_id, language="es").is_empty
+
+
+@patch("core.providers.chat")
+def test_analyze_malformed_is_empty(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: yes")
+    assert analyze_memory([], db_path, user_id, language="es").is_empty
+
+
+@patch("core.providers.chat")
+def test_analyze_drops_unknown_retire_ids(mock_chat, db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Hecho real")
+    real_id = get_facts(db_path, user_id)[0]["id"]
+    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {real_id + 999}")
+    assert analyze_memory([], db_path, user_id, language="es").retire_ids == [real_id]
+
+
+@patch("core.providers.chat")
+def test_analyze_watermark_limits_conversation(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    history = [
+        {"role": "system", "content": "system prompt"},
+        {"role": "user", "content": "mensaje viejo"},
+        {"role": "assistant", "content": "respuesta vieja"},
+        {"role": "user", "content": "mensaje nuevo"},
+        {"role": "assistant", "content": "respuesta nueva"},
+    ]
+    analyze_memory(history, db_path, user_id, language="es", watermark=3)
+    prompt_sent = mock_chat.call_args[0][1][0]["content"]
+    assert "mensaje viejo" not in prompt_sent
+    assert "mensaje nuevo" in prompt_sent
+
+
+@patch("core.providers.chat")
+def test_analyze_excludes_assistant_turns(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    history = [
+        {"role": "system", "content": "system prompt"},
+        {"role": "user", "content": "Hola, soy Rumpel"},
+        {"role": "assistant", "content": "Soy Tabris y mis capacidades son responder"},
+    ]
+    analyze_memory(history, db_path, user_id, language="es")
+    prompt_sent = mock_chat.call_args[0][1][0]["content"]
+    assert "Hola, soy Rumpel" in prompt_sent
+    assert "mis capacidades son" not in prompt_sent
+
+
+@pytest.mark.parametrize("needle", ["about the user", "NOT", "Spanish"])
+@patch("core.providers.chat")
+def test_analyze_prompt_contents(mock_chat, db, needle):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    analyze_memory([{"role": "user", "content": "Hola"}], db_path, user_id, language="es")
+    assert needle in mock_chat.call_args[0][1][0]["content"]
+
+
+# --- apply_memory_changes: writes only ---
+
+def test_apply_saves_new_facts(db):
+    db_path, user_id = db
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=["Likes short answers"], retire_ids=[]))
+    assert "Likes short answers" in [f["content"] for f in get_facts(db_path, user_id)]
+
+
+def test_apply_retires_ids(db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Hecho a retirar")
+    fact_id = get_facts(db_path, user_id)[0]["id"]
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[], retire_ids=[fact_id]))
+    assert get_facts(db_path, user_id) == []
+
+
+def test_apply_empty_is_noop(db):
+    db_path, user_id = db
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[], retire_ids=[]))
+    assert get_facts(db_path, user_id) == []
 
 
 class TestFilterValidRetireIds(unittest.TestCase):

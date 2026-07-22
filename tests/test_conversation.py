@@ -11,6 +11,7 @@ from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, get_messages, init_db, save_fact
+from core.memory_manager import MemoryChanges
 from core.session import Session
 from types import SimpleNamespace
 
@@ -134,20 +135,24 @@ class TestHandleTurn(unittest.TestCase):
         self.assertEqual(self.session.exchange_count, 0)
         self.assertEqual(get_messages(self.db_path, self.user_id), [])
     
-    @patch("core.conversation.memory_manager.update_memory")
+    @patch("core.conversation.memory_manager.apply_memory_changes")
+    @patch("core.conversation.memory_manager.analyze_memory")
     @patch("core.conversation.providers.chat")
     @patch("core.conversation.should_trigger_memory", return_value=True)
-    def test_fires_memory_trigger_and_resets_counters(self, mock_trigger, mock_chat, mock_update):
+    def test_fires_memory_trigger_and_resets_counters(self, mock_trigger, mock_chat, mock_analyze, mock_apply):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
-        
+        mock_analyze.return_value = MemoryChanges(new_facts=["algo"], retire_ids=[])
+
         handle_turn(self.session, "Hola", "general", self.db_path)
         
-        mock_update.assert_called_once()
+        mock_analyze.assert_called_once()
+        mock_apply.assert_called_once()
         self.assertEqual(self.session.exchange_count, 0)
         self.assertEqual(
             self.session.last_analyzed_index,
             len(self.session.conversation_history),
         )
+
     
     @patch("core.conversation.providers.chat")
     def test_offers_web_search_and_web_fetch_tools(self, mock_chat):
