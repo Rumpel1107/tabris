@@ -115,3 +115,15 @@ def apply_memory_changes(db_path, user_id, changes: MemoryChanges) -> None:
         save_fact(db_path, user_id, fact)
     for fact_id in changes.retire_ids:
         deactivate_fact(db_path, user_id, fact_id)
+
+def forget_fact(db_path, user_id, fact_id) -> str | None:
+    """Retire one active fact by id if it belongs to the user.
+
+    Returns the forgotten fact's content, or None when no active fact with that
+    id exists for this user (unknown id, already retired, or another user's).
+    """
+    match = next((f for f in get_facts(db_path, user_id) if f["id"] == fact_id), None)
+    if match is None:
+        return None
+    deactivate_fact(db_path, user_id, fact_id)
+    return match["content"]

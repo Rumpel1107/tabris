@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from core import providers
 from core.db import init_db, create_user, get_facts, save_fact
-from core.memory_manager import analyze_memory, apply_memory_changes, filter_valid_retire_ids, MemoryChanges, parse_facts_response
+from core.memory_manager import analyze_memory, apply_memory_changes, filter_valid_retire_ids, forget_fact, MemoryChanges, parse_facts_response
 from unittest.mock import patch
 
 
@@ -164,6 +164,29 @@ def test_apply_empty_is_noop(db):
     db_path, user_id = db
     apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[], retire_ids=[]))
     assert get_facts(db_path, user_id) == []
+
+
+def test_forget_fact_retires_and_returns_content(db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Trabaja en TaxL")
+    fact_id = get_facts(db_path, user_id)[0]["id"]
+    forgotten = forget_fact(db_path, user_id, fact_id)
+    assert forgotten == "Trabaja en TaxL"
+    assert get_facts(db_path, user_id) == []
+
+
+def test_forget_fact_unknown_id_returns_none(db):
+    db_path, user_id = db
+    assert forget_fact(db_path, user_id, 999) is None
+
+
+def test_forget_fact_other_user_untouched(db):
+    db_path, user_id = db
+    other = create_user(db_path, "Otro", "es")
+    save_fact(db_path, other, "Secreto de otro")
+    other_fact_id = get_facts(db_path, other)[0]["id"]
+    assert forget_fact(db_path, user_id, other_fact_id) is None
+    assert len(get_facts(db_path, other)) == 1
 
 
 class TestFilterValidRetireIds(unittest.TestCase):

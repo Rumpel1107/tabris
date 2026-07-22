@@ -322,5 +322,21 @@ class TestNonUniqueNames(unittest.TestCase):
             self.assertNotEqual(id1, id2)
 
 
+def test_deactivate_fact_sets_retired_at(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    save_fact(db_path, user_id, "Trabaja en TaxL")
+    fact_id = get_facts(db_path, user_id)[0]["id"]
+
+    deactivate_fact(db_path, user_id, fact_id)
+
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    retired_at = conn.execute("SELECT retired_at FROM facts WHERE id=?", (fact_id,)).fetchone()[0]
+    conn.close()
+    assert retired_at is not None
+
+
 if __name__ == "__main__":
     unittest.main()

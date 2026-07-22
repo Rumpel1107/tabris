@@ -24,6 +24,7 @@ def init_db(db_path):
                 user_id    INTEGER NOT NULL REFERENCES users(id),
                 content    TEXT NOT NULL,
                 is_active  INTEGER NOT NULL DEFAULT 1,
+                retired_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             
@@ -53,6 +54,9 @@ def init_db(db_path):
         if "timezone" not in existing:
             conn.execute("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
         conn.commit()
+        facts_cols = {row[1] for row in conn.execute("PRAGMA table_info(facts)")}
+        if "retired_at" not in facts_cols:
+            conn.execute("ALTER TABLE facts ADD COLUMN retired_at TEXT")
 
 def create_user(db_path, name, language="en", location="", timezone="UTC"):
     with contextlib.closing(_connect(db_path)) as conn:
@@ -118,7 +122,7 @@ def update_user_language(db_path, user_id, language):
 def deactivate_fact(db_path, user_id, fact_id):
     with contextlib.closing(_connect(db_path)) as conn:
         conn.execute(
-            "UPDATE facts SET is_active=0 WHERE id=? AND user_id=?",
+            "UPDATE facts SET is_active=0, retired_at=datetime('now') WHERE id=? AND user_id=?",
             (fact_id, user_id)
         )
         conn.commit()
