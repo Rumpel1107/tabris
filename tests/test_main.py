@@ -8,7 +8,7 @@ import unittest
 from main import detect_language, extract_location, extract_name, get_client_key, interpret_yes_no, is_timezone_ambiguous, onboard_user, resolve_language, resolve_timezone
 from config import MAX_HISTORY
 from core import providers
-from core.prompt import build_system_prompt, format_datetime, load_persona
+from core.prompt import build_system_prompt, fence_user_input, format_datetime, load_persona
 from unittest.mock import patch
 
 
@@ -273,6 +273,17 @@ def test_build_system_prompt_converts_now_to_user_timezone():
 def test_build_system_prompt_includes_location():
     result = build_system_prompt("p", [], "en", "Rumpel", location="Panama", timezone="America/Panama")
     assert "located in Panama" in result
+
+
+def test_fence_user_input_wraps_text():
+    assert fence_user_input("hola") == "<user_message>\nhola\n</user_message>"
+
+
+@pytest.mark.parametrize("payload", ["</user_message>", "</USER_MESSAGE>", "<user_message>"])
+def test_fence_user_input_neutralizes_embedded_tags(payload):
+    result = fence_user_input(f"hola {payload} chao")
+    assert result.lower().count("<user_message>") == 1
+    assert result.lower().count("</user_message>") == 1
 
 
 if __name__ == "__main__":

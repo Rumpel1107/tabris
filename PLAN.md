@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-07-21
+Last updated: 2026-07-23 (item 34: memory auto-apply + forget_fact tool done)
 
 ---
 
@@ -120,15 +120,17 @@ Evolution path — build the step you need, not the whole ladder:
 | M3 (candidate) | Graph / GraphRAG memory: facts stored as entities + relations, retrieval by traversing connections (or plain embeddings-RAG as the cheaper precursor). | **Only if M1/M2 prove insufficient.** Entry criteria for the full graph, ALL must hold: (1) plain embeddings-RAG over `facts` returns disconnected fragments the model can't relate on its own; (2) more than one real user with richly interrelated facts; (3) a need to explain *why* a memory was recalled. Until then this is over-engineering — see §9 scope-creep risk. Cheaper middle ground reachable from M1: a `fact_links(fact_id, related_fact_id, relation)` table = navigable relations on SQLite, no graph DB. **Separate, lower-bar trigger for the embeddings-RAG precursor alone (identified 2026-07-08):** `get_facts()`/`build_system_prompt()` inject every active fact into the system prompt with no cap, unlike conversation history (§4.4). If facts volume alone risks overflowing the context window — regardless of any relational need — that alone justifies moving to embeddings-RAG top-K retrieval, without waiting on the 3 criteria above (those gate the full graph, not this precursor). |
 
 Principles: persistent facts ≠ conversation history (separate tables); every memory write keeps
-a backup or is transactional; human-in-the-loop confirmation stays for profile-level changes.
+a backup or is transactional; memory writes auto-apply (2026-07-23) — reversibility (soft-delete +
+`retired_at`) and the user-facing `forget_fact` flow replace the blocking confirmation.
 
 **Fact lifecycle rule:** facts are append-only — never edited in place, never hard-deleted.
 A fact that becomes false or obsolete is *retired* via soft-delete (`is_active=0`), preserving
 history. A change of information = retire the stale fact + insert the corrected one (never an
 in-place `UPDATE` of `content`). Only `is_active=1` facts feed the system prompt. Obsolescence is
 detected during distillation (the LLM receives known facts *with their `id`* and returns two sets:
-new facts to add + `id`s to retire, with reason); additions and retirements are confirmed together
-by the user before any write.
+new facts to add + `id`s to retire, with reason); additions and retirements auto-apply (2026-07-23,
+Hermes-style — the memory-role model is the quality safeguard); the user audits via the numbered
+facts list and prunes any fact with the `forget_fact` tool (soft-delete, reversible).
 
 ### 4.4 Context window management (applies at every stage)
 - History sent to the model must be **bounded**: system prompt + last N exchanges (start N=10).
@@ -220,8 +222,10 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 33f. ✅ (2026-07-18, validated with a real run) Normalize stored location. `extract_location` (LLM helper, few-shot + `Location:` cue, no fabrication) cleans the raw city answer before `create_user`; `is_timezone_ambiguous` judges whether the answer pins one timezone and, if not, `onboard_user` re-asks once (`ask_location_clarify`) and combines the answer instead of replacing it; `resolve_timezone` keeps receiving the raw/combined phrase for disambiguation. Real run: "Madrid" → re-ask → stored `Madrid, Cundinamarca`, timezone `America/Bogota`.
 34. 🔄 Discord bot via the Discord Developer Portal + `discord.py`/`py-cord` (gateway/WebSocket — no public webhook needed, infra-light like polling). Enable the **Message Content Intent** so the bot reads message text (a toggle for a private server). Discord's numeric `user_id` is the channel key (free, stable) — register it in `user_channels` exactly like the CLI key. **Account linking (same human, multiple channels → one profile/context):** via a short-lived **link-code**, never by name. Flow: on an already-registered channel the user requests a code; entering it on the new channel inserts a `user_channels` row pointing the new `(channel, key)` to the existing `user_id`. The `user_channels` schema (item 30) already supports this with zero migration — multiple rows per `user_id`. Name-based linking is explicitly rejected (impersonation risk). First-real-remote-channel hardening from code review 2026-07-02 (the CLI's `input()` confirmation disappears; all channel-agnostic, reused by any later channel like Telegram):
    - Message length cap (~4000 chars) + basic per-user rate limit (in-memory counter is enough at this scale).
-   - Delimit user input in the 4 LLM-facing prompts (`route_message`, `detect_language`, `extract_name`, memory analysis) — e.g. wrap in `<user_message>...</user_message>` and instruct the model to treat it as data only. Mitigates prompt injection now that a malicious message could reach real other users.
-   - Redesign memory HITL for a messaging channel: no more blocking `input()` — use interactive buttons for confirm/reject, or auto-apply with an audit log + a command to review/delete facts.
+   - Delimit user input in the 4 LLM-facing prompts (`route_message`, `detect_language`, `extract_name`, memory analysis) — e.g. wrap in `<user_message>...</user_message>` and instruct the model to treat it as data only. Mitigates prompt injection now that a malicious message could reach real other users. **Priority ↑ (2026-07-23): auto-apply removed the human gate → first hardening step, gates any external user.**
+   - Anomaly guard on distillation (registered 2026-07-23): reject + log a memory pass proposing more than N new facts / M retires in one shot — deterministic cap in code, catches mass injection regardless of model obedience. Normal conversations produce 1-3 facts per pass.
+   - Learning transparency (registered 2026-07-23): after an auto-applied pass, Tabris reports in-channel what it just learned and reminds the user they can ask it to forget — makes any planted fact immediately visible; pairs with the forget flow. Same act-and-report pattern as forget_fact.
+   - ✅ (2026-07-23, validated with real runs on CLI + Discord) Memory HITL redesigned as auto-apply: `update_memory` split into pure `analyze_memory` + `apply_memory_changes` (no `print`/`input` in core); `handle_turn` auto-applies and logs. `facts.retired_at` column (idempotent migration) makes `facts` the full ledger — no separate audit table. `forget_fact` core function + conversation tool (model supplies only `fact_id`; `db_path`/`user_id` session-bound in `handle_turn` — security boundary). System prompt lists facts with `[id]`; `persona.md` teaches the flow: numbered list on request, forget only on explicit ask, confirm + reversibility note, correction = forget + re-learn (no edit action).
    - Generic error message to the user on failure; full exception detail goes to the log only (not stdout/chat) — today `model_error` echoes the raw exception, which is fine in a personal CLI but leaks internals to strangers on a public channel.
    - Fire `update_memory`'s distillation as a background task (`asyncio.create_task`) instead of blocking the reply — natural once the bot is async.
    - Rebuild the system prompt's `## Current context` datetime block per turn (not just once at session start) — cheap, and sessions on a messaging channel live much longer than a CLI run.
@@ -352,5 +356,5 @@ Project-level drivers stay here as source of truth: budget constraint (§2); shi
 | API price changes | Role→provider map makes switching a one-line change; re-check prices quarterly |
 | Scope creep (7 projects, multi-agent dreams) | §6 sequence + "do not build before the second user exists" rule (M2) |
 | Leaked secrets | `.env` pattern + history check before going public + key rotation if in doubt. (Verified 2026-06-24: `.env` never in git history — clean.) |
-| Prompt injection in memory distillation | Raw conversation text is embedded in the distillation prompt; a user could type `HAS_NEW_FACTS: yes` / `FACTS:` lines to spoof the parser format. Mitigated today by the human `si/no` confirmation before any `save_fact` (single-user → low real risk). Becomes real with multi-user or auto-confirmation — revisit then: fence/escape user turns or separate them from the instruction block. (Code review 2026-06-24.) |
+| Prompt injection in memory distillation | Raw conversation text is embedded in the distillation prompt; a user could type `HAS_NEW_FACTS: yes` / `FACTS:` lines to spoof the parser format. The human `si/no` gate was removed by auto-apply (2026-07-23) → this risk is now **live**; mitigation is the item-34 delimiting bullet (fence user turns in the 4 LLM-facing prompts), now higher priority. (Code review 2026-06-24.) |
 | Burnout / runway pressure | Portfolio milestones every phase = visible progress even if revenue lags |

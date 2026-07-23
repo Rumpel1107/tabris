@@ -1,4 +1,5 @@
 import config
+import re
 from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
@@ -35,3 +36,8 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
         return persona + name_block + context_block + directive
     facts_block = "\n".join(f"- [{fact['id']}] {fact['content']}" for fact in facts)
     return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
+
+def fence_user_input(text: str) -> str:
+    """Wrap untrusted user text so prompts treat it as data, never as instructions."""
+    cleaned = re.sub(r"</?user_message>", "[tag removed]", text, flags=re.IGNORECASE)
+    return f"<user_message>\n{cleaned}\n</user_message>"
