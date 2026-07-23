@@ -14,6 +14,7 @@ class MemoryChanges:
     """Distilled memory changes proposed for a user, as data (no I/O)."""
     new_facts: list[str] = field(default_factory=list)
     retire_ids: list[int] = field(default_factory=list)
+    rejected: bool = False
 
     @property
     def is_empty(self) -> bool:
@@ -106,9 +107,17 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
     if not has_changes:
         return MemoryChanges()
 
+    filtered_retire_ids = filter_valid_retire_ids(retire_ids, known_facts)
+    if len(new_facts) > config.MEMORY_MAX_NEW_FACTS or len(filtered_retire_ids) > config.MEMORY_MAX_RETIRE_IDS:
+        logger.warning(
+            f"analyze_memory: rejected anomalous pass for user {user_id} "
+            f"({len(new_facts)} new facts, {len(filtered_retire_ids)} retires)"
+        )
+        return MemoryChanges(rejected=True)
+
     return MemoryChanges(
         new_facts=new_facts,
-        retire_ids=filter_valid_retire_ids(retire_ids, known_facts),
+        retire_ids=filtered_retire_ids,
     )
 
 def apply_memory_changes(db_path, user_id, changes: MemoryChanges) -> None:

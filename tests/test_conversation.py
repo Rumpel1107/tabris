@@ -1,3 +1,4 @@
+import config
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -13,6 +14,7 @@ from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, rou
 from core.db import create_user, get_facts, get_messages, init_db, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
+from core.strings import msg
 from types import SimpleNamespace
 
 
@@ -154,6 +156,19 @@ class TestHandleTurn(unittest.TestCase):
             self.session.last_analyzed_index,
             len(self.session.conversation_history),
         )
+    
+    @patch("core.conversation.memory_manager.apply_memory_changes")
+    @patch("core.conversation.memory_manager.analyze_memory")
+    @patch("core.conversation.providers.chat")
+    @patch("core.conversation.should_trigger_memory", return_value=True)
+    def test_rejected_memory_pass_notifies_user_and_skips_apply(self, mock_trigger, mock_chat, mock_analyze, mock_apply):
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+        mock_analyze.return_value = MemoryChanges(rejected=True)
+
+        reply = handle_turn(self.session, "Hola", "general", self.db_path)
+
+        mock_apply.assert_not_called()
+        self.assertIn(msg("memory_anomaly_notice", self.session.language, agent=config.AGENT_NAME), reply)
 
     
     @patch("core.conversation.providers.chat")

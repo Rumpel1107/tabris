@@ -1,3 +1,4 @@
+import config
 import pytest
 import sys
 import unittest
@@ -156,6 +157,38 @@ def test_analyze_fences_user_turns(mock_chat, db):
     prompt_sent = mock_chat.call_args[0][1][0]["content"]
     assert prompt_sent.lower().count("<user_message>") == 1
     assert prompt_sent.lower().count("</user_message>") == 1
+
+
+@patch("core.providers.chat")
+def test_analyze_rejects_pass_with_too_many_new_facts(mock_chat, db):
+    db_path, user_id = db
+    facts_block = "\n".join(f"- fact {i}" for i in range(config.MEMORY_MAX_NEW_FACTS + 1))
+    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nNEW_FACTS:\n{facts_block}")
+    changes = analyze_memory([], db_path, user_id, language="es")
+    assert changes.rejected is True
+    assert changes.new_facts == []
+    assert changes.retire_ids == []
+
+
+@patch("core.providers.chat")
+def test_analyze_rejects_pass_with_too_many_retire_ids(mock_chat, db):
+    db_path, user_id = db
+    for i in range(config.MEMORY_MAX_RETIRE_IDS + 1):
+        save_fact(db_path, user_id, f"hecho {i}")
+    ids = [f["id"] for f in get_facts(db_path, user_id)]
+    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nRETIRE_IDS: {', '.join(map(str, ids))}")
+    changes = analyze_memory([], db_path, user_id, language="es")
+    assert changes.rejected is True
+
+
+@patch("core.providers.chat")
+def test_analyze_accepts_pass_at_exact_limit(mock_chat, db):
+    db_path, user_id = db
+    facts_block = "\n".join(f"- fact {i}" for i in range(config.MEMORY_MAX_NEW_FACTS))
+    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nNEW_FACTS:\n{facts_block}")
+    changes = analyze_memory([], db_path, user_id, language="es")
+    assert changes.rejected is False
+    assert len(changes.new_facts) == config.MEMORY_MAX_NEW_FACTS
 
 
 # --- apply_memory_changes: writes only ---

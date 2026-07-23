@@ -53,6 +53,8 @@ DB_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}.db")
 CLIENT_ID_PATH = os.path.join(BASE_DIR, f"{AGENT_NAME.lower()}_client_id")
 MEMORY_TRIGGER_EXCHANGES = 15
 MEMORY_TRIGGER_SECONDS = 1200
+MEMORY_MAX_NEW_FACTS = 5
+MEMORY_MAX_RETIRE_IDS = 5
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
