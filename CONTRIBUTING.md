@@ -15,6 +15,7 @@ How this project is built and how to keep building it — for any collaborator, 
 - **Style for new tests:** function style with plain `assert`. Use `@pytest.mark.parametrize` instead of copy-pasting near-identical tests. Mock external APIs (models, search) — tests must not hit the network.
 - **Per item:** unit tests (TDD) inside, plus an end-to-end smoke check that runs the real flow with no mocks.
 - Existing `unittest.TestCase` tests are fine; migrate them to function style opportunistically when you touch a file, not in bulk.
+- **Reuse before adding.** Before writing a new test, search the suite for one that already exercises the behavior. If it exists, extend or parametrize it instead of adding a near-duplicate — a new test must assert something no existing test does. When a test becomes a strict subset of another, merge or drop it as part of the same change.
 
 ## Code conventions
 

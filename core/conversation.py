@@ -77,13 +77,36 @@ WEB_FETCH_TOOL = {
     },
 }
 
-def _execute_tool_call(tool_call):
-    tools = {"web_search": web_search, "web_fetch": web_fetch}
+FORGET_FACT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "forget_fact",
+        "description": "Retire one fact from the user's persistent memory, using the id shown in the facts list of the system prompt. Use it ONLY when the user explicitly asks to forget or correct a specific fact.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact_id": {"type": "integer", "description": "The id of the fact to forget"}
+            },
+            "required": ["fact_id"],
+        },
+    },
+}
+
+def _run_forget_fact(db_path, user_id, fact_id):
+    forgotten = memory_manager.forget_fact(db_path, user_id, fact_id)
+    if forgotten is None:
+        return f"No active fact with id {fact_id}."
+    return f"Forgotten fact [{fact_id}]: {forgotten}"
+
+def _execute_tool_call(tool_call, executors):
     args = json.loads(tool_call.function.arguments)
-    result = tools[tool_call.function.name](**args)
+    result = executors[tool_call.function.name](**args)
     return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
-def run_with_tools(role, messages, tools):
+def run_with_tools(role, messages, tools, extra_executors=None):
+    executors = {"web_search": web_search, "web_fetch": web_fetch}
+    if extra_executors:
+        executors.update(extra_executors)
     while True:
         response = providers.chat(role, messages, tools=tools)
         if not response.tool_calls:
@@ -94,7 +117,7 @@ def run_with_tools(role, messages, tools):
             "tool_calls": response.tool_calls,
         })
         for tool_call in response.tool_calls:
-            messages.append(_execute_tool_call(tool_call))
+            messages.append(_execute_tool_call(tool_call, executors))
 
 def handle_turn(session, user_input, role, db_path, persona=None):
     if persona is not None:
@@ -114,7 +137,7 @@ def handle_turn(session, user_input, role, db_path, persona=None):
 
     session.conversation_history.append({"role": "user", "content": user_input})
     try:
-        reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
+        reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL], extra_executors={"forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id)})
     except Exception:
         session.conversation_history.pop()
         raise

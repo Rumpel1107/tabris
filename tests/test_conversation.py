@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, get_messages, init_db, save_fact
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.db import create_user, get_facts, get_messages, init_db, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
 from types import SimpleNamespace
@@ -25,17 +25,11 @@ class TestBuildMessages(unittest.TestCase):
         self.assertEqual(len(result), 5)
         self.assertEqual(result[0]["role"], "system")
     
-    def test_truncates_when_over_limit(self):
+    def test_truncates_over_limit_keeping_system_first_and_recent_tail(self):
         history = [{"role": "system", "content": "sys"}]
         history += [{"role": "user", "content": f"m{i}"} for i in range(50)]
         result = build_messages(history)
         self.assertEqual(len(result), MAX_HISTORY * 2 + 1)
-        self.assertEqual(result[0]["role"], "system")
-    
-    def test_system_prompt_always_first(self):
-        history = [{"role": "system", "content": "sys"}]
-        history += [{"role": "user", "content": f"m{i}"} for i in range(50)]
-        result = build_messages(history)
         self.assertEqual(result[0]["content"], "sys")
         self.assertEqual(result[-1]["content"], "m49")
 
@@ -155,13 +149,13 @@ class TestHandleTurn(unittest.TestCase):
 
     
     @patch("core.conversation.providers.chat")
-    def test_offers_web_search_and_web_fetch_tools(self, mock_chat):
+    def test_offers_conversation_tools(self, mock_chat):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL])
 
 
 @patch("core.conversation.providers.chat")
@@ -236,6 +230,34 @@ def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
     assert tool_message["role"] == "tool"
     assert tool_message["content"] == "contenido de la pagina"
     assert tool_message["tool_call_id"] == "call_2"
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "forget.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        save_fact(db_path, user_id, "Trabaja en TaxL")
+        fact_id = get_facts(db_path, user_id)[0]["id"]
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        tool_call = SimpleNamespace(
+            id="call_f1",
+            function=SimpleNamespace(name="forget_fact", arguments=f'{{"fact_id": {fact_id}}}'),
+        )
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Listo, olvidado", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "olvida ese dato", "general", db_path)
+
+        assert reply == "Listo, olvidado"
+        assert get_facts(db_path, user_id) == []
 
 
 if __name__ == "__main__":

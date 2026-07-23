@@ -33,5 +33,5 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
     name_block = f"\n\nYou are talking to {name}{location_part}."
     if not facts:
         return persona + name_block + context_block + directive
-    facts_block = "\n".join(f"- {fact['content']}" for fact in facts)
+    facts_block = "\n".join(f"- [{fact['id']}] {fact['content']}" for fact in facts)
     return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
