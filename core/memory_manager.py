@@ -4,7 +4,6 @@ import logging
 from core import providers
 from core.db import get_facts, save_fact, deactivate_fact
 from core.prompt import fence_user_input
-from core.strings import msg
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
