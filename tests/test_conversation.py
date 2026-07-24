@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_with_tools, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, get_facts, get_messages, init_db, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
@@ -281,6 +281,25 @@ def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
 
         assert reply == "Listo, olvidado"
         assert get_facts(db_path, user_id) == []
+
+
+@patch("core.conversation.providers.chat", side_effect=Exception("all providers down"))
+def test_safe_handle_turn_returns_generic_message_on_failure(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "safe.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        reply = safe_handle_turn(session, "Hola", "general", db_path)
+
+        assert "all providers down" not in reply
+        assert reply == msg("model_error", "es", agent=config.AGENT_NAME)
+        assert session.conversation_history == [{"role": "system", "content": "sys"}]
 
 
 if __name__ == "__main__":

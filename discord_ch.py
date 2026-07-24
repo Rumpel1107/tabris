@@ -2,7 +2,7 @@ import config
 import discord
 import logging
 
-from core.conversation import handle_turn, route_message
+from core.conversation import route_message, safe_handle_turn
 from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
 from core.prompt import build_system_prompt, load_persona
 from core.session import get_or_create_session
@@ -57,7 +57,7 @@ def handle_message(db_path, sessions, key, name, user_input, persona):
     role = route_message(user_input)
     if role == "exit":
         role = "general"
-    return handle_turn(session, user_input, role, db_path, persona)
+    return safe_handle_turn(session, user_input, role, db_path, persona)
 
 
 if __name__ == "__main__":

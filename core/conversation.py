@@ -168,3 +168,11 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         session.exchange_count = 0
         session.last_trigger_time = time.time()
     return reply
+
+def safe_handle_turn(session, user_input, role, db_path, persona=None):
+    """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
+    try:
+        return handle_turn(session, user_input, role, db_path, persona)
+    except Exception:
+        logger.exception(f"handle_turn failed for user {session.user_id}")
+        return msg("model_error", session.language, agent=config.AGENT_NAME)

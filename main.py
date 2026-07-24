@@ -6,7 +6,7 @@ import uuid
 from core.strings import msg
 
 from core import memory_manager, providers
-from core.conversation import handle_turn, route_message
+from core.conversation import route_message, safe_handle_turn
 from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
 from core.prompt import build_system_prompt, fence_user_input, load_persona
 from core.session import get_or_create_session
@@ -212,11 +212,7 @@ def chat():
             memory_manager.apply_memory_changes(db_path, session.user_id, changes)
             break
 
-        try:
-            reply = handle_turn(session, user_input, role, db_path, persona)
-        except Exception as e:
-            print(msg("model_error", session.language, agent=config.AGENT_NAME, error=e))
-            continue
+        reply = safe_handle_turn(session, user_input, role, db_path, persona)
 
         print(msg("agent_reply", session.language, agent=config.AGENT_NAME, role=role, reply=reply))
 
