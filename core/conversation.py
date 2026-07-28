@@ -171,6 +171,8 @@ def handle_turn(session, user_input, role, db_path, persona=None):
 
 def safe_handle_turn(session, user_input, role, db_path, persona=None):
     """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
+    if len(user_input) > config.MESSAGE_MAX_CHARS:
+        return msg("message_too_long", session.language, limit=config.MESSAGE_MAX_CHARS)
     try:
         return handle_turn(session, user_input, role, db_path, persona)
     except Exception:

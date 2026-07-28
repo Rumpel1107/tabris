@@ -13,6 +13,7 @@ MESSAGES = {
         "ask_location":            "{agent}: Para poder darte un mejor apoyo, ¿podrías confirmarme en qué ciudad estás ubicado, por favor? ",
         "ask_location_clarify":    "{agent}: Esa ciudad existe en varios lugares. ¿En qué país o región está, por favor? ",
         "memory_anomaly_notice":   "\n{agent}: Nota — detecté un patrón inusual en la conversación (demasiados cambios de memoria propuestos a la vez) y no guardé nada por seguridad.",
+        "message_too_long":        "Tu mensaje es demasiado largo (máximo {limit} caracteres). ¿Podrías acortarlo, por favor?",
     },
     "en": {
         "user_prompt":             "You: ",
@@ -28,6 +29,7 @@ MESSAGES = {
         "ask_location":            "{agent}: To support you better, could you please confirm which city you're located in? ",
         "ask_location_clarify":    "{agent}: That city exists in several places. Which country or region is it in, please? ",
         "memory_anomaly_notice":   "\n{agent}: Note — I detected an unusual pattern in the conversation (too many memory changes proposed at once) and saved nothing, as a precaution.",
+        "message_too_long":        "Your message is too long (maximum {limit} characters). Could you please shorten it?",
     },
 }
 

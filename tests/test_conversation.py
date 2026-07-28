@@ -302,5 +302,26 @@ def test_safe_handle_turn_returns_generic_message_on_failure(mock_chat):
         assert session.conversation_history == [{"role": "system", "content": "sys"}]
 
 
+@patch("core.conversation.providers.chat")
+def test_safe_handle_turn_rejects_oversized_message(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "cap.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        oversized = "a" * (config.MESSAGE_MAX_CHARS + 1)
+        reply = safe_handle_turn(session, oversized, "general", db_path)
+
+        assert reply == msg("message_too_long", "es", limit=config.MESSAGE_MAX_CHARS)
+        mock_chat.assert_not_called()
+        assert session.conversation_history == [{"role": "system", "content": "sys"}]
+        assert get_messages(db_path, user_id) == []
+
+
 if __name__ == "__main__":
     unittest.main()

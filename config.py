@@ -60,6 +60,7 @@ MEMORY_MAX_RETIRE_IDS = 5
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
 NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
+MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
 
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
