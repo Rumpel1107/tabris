@@ -10,6 +10,9 @@ class Session:
     exchange_count: int = 0
     last_trigger_time: float = field(default_factory=time.time)
     last_analyzed_index: int = 0
+    rate_tokens: float = 0.0
+    rate_last_refill: float = 0.0
+
 
 def get_or_create_session(sessions, channel, key, user_id, language):
     session_key = (channel, key)

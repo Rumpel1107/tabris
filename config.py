@@ -61,6 +61,8 @@ MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the mo
 NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
+MESSAGE_RATE_MAX = 10       # token-bucket capacity: max messages a user can burst
+MESSAGE_RATE_SECONDS = 60   # window the bucket refills over (MAX tokens per this many seconds)
 
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure

@@ -173,6 +173,16 @@ def safe_handle_turn(session, user_input, role, db_path, persona=None):
     """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
     if len(user_input) > config.MESSAGE_MAX_CHARS:
         return msg("message_too_long", session.language, limit=config.MESSAGE_MAX_CHARS)
+    # token-bucket rate limit: refill by elapsed time (capped), then spend one token
+    now = time.time()
+    session.rate_tokens = min(
+        config.MESSAGE_RATE_MAX,
+        session.rate_tokens + (now - session.rate_last_refill) * config.MESSAGE_RATE_MAX / config.MESSAGE_RATE_SECONDS,
+    )
+    session.rate_last_refill = now
+    if session.rate_tokens < 1:
+        return msg("rate_limited", session.language)
+    session.rate_tokens -= 1
     try:
         return handle_turn(session, user_input, role, db_path, persona)
     except Exception:

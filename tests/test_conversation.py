@@ -323,5 +323,48 @@ def test_safe_handle_turn_rejects_oversized_message(mock_chat):
         assert get_messages(db_path, user_id) == []
 
 
+@patch("core.conversation.providers.chat")
+def test_safe_handle_turn_rejects_when_rate_limited(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "rate.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+            rate_tokens=0.0,
+            rate_last_refill=time.time(),
+        )
+
+        reply = safe_handle_turn(session, "Hola", "general", db_path)
+
+        assert reply == msg("rate_limited", "es")
+        mock_chat.assert_not_called()
+        assert session.conversation_history == [{"role": "system", "content": "sys"}]
+        assert get_messages(db_path, user_id) == []
+
+
+@patch("core.conversation.providers.chat")
+def test_safe_handle_turn_allows_after_bucket_refills(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "refill.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+            rate_tokens=0.0,
+            rate_last_refill=time.time() - config.MESSAGE_RATE_SECONDS,
+        )
+
+        reply = safe_handle_turn(session, "Hola", "general", db_path)
+
+        assert reply == "Respuesta de Tabris"
+        mock_chat.assert_called()
+
+
 if __name__ == "__main__":
     unittest.main()
