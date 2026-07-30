@@ -1,5 +1,6 @@
 import config
 import logging
+import sqlite3
 
 from core import providers
 from core.db import get_facts, save_fact, deactivate_fact
@@ -123,7 +124,10 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
 def apply_memory_changes(db_path, user_id, changes: MemoryChanges) -> None:
     """Persist distilled changes: save new facts, soft-delete retired ones."""
     for fact in changes.new_facts:
-        save_fact(db_path, user_id, fact)
+        try:
+            save_fact(db_path, user_id, fact)
+        except sqlite3.IntegrityError:
+            logger.info(f"memory: user {user_id} — duplicate fact not saved again")
     for fact_id in changes.retire_ids:
         deactivate_fact(db_path, user_id, fact_id)
 

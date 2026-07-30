@@ -56,6 +56,9 @@ MEMORY_TRIGGER_SECONDS = 1200
 MEMORY_MAX_NEW_FACTS = 5
 MEMORY_MAX_RETIRE_IDS = 5
 
+# --- Database Configuration ---
+DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before failing (0 = fail instantly)
+
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
 NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)

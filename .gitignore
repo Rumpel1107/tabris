@@ -2,7 +2,7 @@ venv/
 ollama.log
 __pycache__/
 *.pyc
-*.db
+*.db*
 *.env
 .env
 *_client_id

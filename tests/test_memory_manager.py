@@ -213,6 +213,17 @@ def test_apply_empty_is_noop(db):
     assert get_facts(db_path, user_id) == []
 
 
+def test_apply_skips_duplicate_and_saves_the_rest(db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Trabaja en TaxL")
+    apply_memory_changes(db_path, user_id, MemoryChanges(
+        new_facts=["Trabaja en TaxL", "Es Scrum Master"], retire_ids=[]
+    ))
+    contents = [f["content"] for f in get_facts(db_path, user_id)]
+    assert contents.count("Trabaja en TaxL") == 1
+    assert "Es Scrum Master" in contents
+
+
 def test_forget_fact_retires_and_returns_content(db):
     db_path, user_id = db
     save_fact(db_path, user_id, "Trabaja en TaxL")

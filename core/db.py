@@ -1,9 +1,12 @@
+import config
 import contextlib
 import sqlite3
 
 def _connect(db_path):
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute(f"PRAGMA busy_timeout = {config.DB_BUSY_TIMEOUT_MS}") # PRAGMA does not accept bound parameters, hence the interpolation; the value from the system, not user input
     conn.row_factory = sqlite3.Row
     return conn
 

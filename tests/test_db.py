@@ -1,12 +1,15 @@
-import sys
+import config
+import contextlib
 import os
+import pytest
 import sqlite3
+import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, save_fact, save_message, update_user_language
+from core.db import deactivate_fact, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, save_fact, save_message, update_user_language, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -336,6 +339,17 @@ def test_deactivate_fact_sets_retired_at(tmp_path):
     retired_at = conn.execute("SELECT retired_at FROM facts WHERE id=?", (fact_id,)).fetchone()[0]
     conn.close()
     assert retired_at is not None
+
+
+@pytest.mark.parametrize("pragma, expected", [
+    ("journal_mode", "wal"),
+    ("busy_timeout", config.DB_BUSY_TIMEOUT_MS),
+])
+def test_connect_sets_concurrency_pragmas(tmp_path, pragma, expected):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    with contextlib.closing(_connect(db_path)) as conn:
+        assert conn.execute(f"PRAGMA {pragma}").fetchone()[0] == expected
 
 
 if __name__ == "__main__":
