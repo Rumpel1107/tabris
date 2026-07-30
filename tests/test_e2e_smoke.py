@@ -116,3 +116,24 @@ class TestNewUserLanguageE2E(unittest.TestCase):
         contents = [m["content"] for m in get_messages(self.db_path, user["id"])]
         self.assertIn("Cuentame algo", contents)
         self.assertIn("Respuesta de Tabris", contents)
+
+@patch("main.memory_manager.analyze_memory")
+@patch("main.providers.chat")
+@patch("builtins.input")
+@patch("main.get_client_key", return_value="test-key-123")
+def test_exit_without_new_turns_skips_distillation(mock_key, mock_input, mock_chat, mock_analyze):
+    from core.db import init_db, create_user
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "exit_smoke.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "TestUser", "es")
+        register_user_channel(db_path, user_id, "cli", "test-key-123")
+
+        mock_input.side_effect = [msg("exit_command", "es")]
+        mock_chat.side_effect = [providers.ChatResponse(content="exit", tool_calls=None)]
+
+        with patch.object(config, "DB_PATH", db_path):
+            main.chat()
+
+        mock_analyze.assert_not_called()

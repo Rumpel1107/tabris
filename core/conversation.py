@@ -1,6 +1,7 @@
 import config
 import json
 import logging
+import threading
 import time
 
 from core import memory_manager, providers
@@ -49,6 +50,18 @@ def should_trigger_memory(exchange_count, last_trigger_time):
     if time.time() - last_trigger_time >= config.MEMORY_TRIGGER_SECONDS:
         return True
     return False
+
+def run_in_background(work) -> threading.Thread:
+    """Run a no-argument blocking function in its own thread, logging any exception it raises."""
+    def guarded():
+        try:
+            work()
+        except Exception:
+            logger.exception("background task failed")
+
+    thread = threading.Thread(target=guarded)
+    thread.start()
+    return thread
 
 WEB_SEARCH_TOOL = {
     "type": "function",
@@ -147,24 +160,33 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     session.conversation_history.append({"role": "assistant", "content": reply})
     save_message(db_path, session.user_id, "user", user_input)
     save_message(db_path, session.user_id, "assistant", reply)
+    
     session.exchange_count += 1
     if should_trigger_memory(session.exchange_count, session.last_trigger_time):
-        changes = memory_manager.analyze_memory(
-            session.conversation_history,
-            db_path,
-            session.user_id,
-            language=session.language,
-            watermark=session.last_analyzed_index,
-        )
-        if not changes.is_empty:
-            memory_manager.apply_memory_changes(db_path, session.user_id, changes)
-            logger.info(
-                f"memory: user {session.user_id} — {len(changes.new_facts)} new, "
-                f"{len(changes.retire_ids)} retired"
-            )
+        pending = list(session.conversation_history)
+        watermark = session.last_analyzed_index
+        user_id = session.user_id
+        language = session.language
         session.last_analyzed_index = len(session.conversation_history)
         session.exchange_count = 0
         session.last_trigger_time = time.time()
+
+        def distill():
+            changes = memory_manager.analyze_memory(
+                pending,
+                db_path,
+                user_id,
+                language=language,
+                watermark=watermark,
+            )
+            if not changes.is_empty:
+                memory_manager.apply_memory_changes(db_path, user_id, changes)
+                logger.info(
+                    f"memory: user {user_id} — {len(changes.new_facts)} new, "
+                    f"{len(changes.retire_ids)} retired"
+                )
+        
+        run_in_background(distill)
     return reply
 
 def safe_handle_turn(session, user_input, role, db_path, persona=None):

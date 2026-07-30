@@ -208,8 +208,9 @@ def chat():
         role = route_message(user_input)
 
         if role == "exit":
-            changes = memory_manager.analyze_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
-            memory_manager.apply_memory_changes(db_path, session.user_id, changes)
+            if session.last_analyzed_index < len(session.conversation_history):
+                changes = memory_manager.analyze_memory(session.conversation_history, db_path, session.user_id, language=session.language, watermark=session.last_analyzed_index)
+                memory_manager.apply_memory_changes(db_path, session.user_id, changes)
             break
 
         reply = safe_handle_turn(session, user_input, role, db_path, persona)

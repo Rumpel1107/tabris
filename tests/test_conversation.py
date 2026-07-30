@@ -1,4 +1,5 @@
 import config
+import logging
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -10,7 +11,7 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, get_facts, get_messages, init_db, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
@@ -138,17 +139,19 @@ class TestHandleTurn(unittest.TestCase):
         )
         self.assertEqual(self.session.exchange_count, 0)
         self.assertEqual(get_messages(self.db_path, self.user_id), [])
-    
+
+    @patch("core.conversation.run_in_background", side_effect=lambda work: work())
     @patch("core.conversation.memory_manager.apply_memory_changes")
     @patch("core.conversation.memory_manager.analyze_memory")
     @patch("core.conversation.providers.chat")
     @patch("core.conversation.should_trigger_memory", return_value=True)
-    def test_fires_memory_trigger_and_resets_counters(self, mock_trigger, mock_chat, mock_analyze, mock_apply):
+    def test_fires_memory_trigger_and_resets_counters(self, mock_trigger, mock_chat, mock_analyze, mock_apply, mock_background):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         mock_analyze.return_value = MemoryChanges(new_facts=["algo"], retire_ids=[])
 
         handle_turn(self.session, "Hola", "general", self.db_path)
         
+        mock_background.assert_called_once()
         mock_analyze.assert_called_once()
         mock_apply.assert_called_once()
         self.assertEqual(self.session.exchange_count, 0)
@@ -199,6 +202,30 @@ def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
         handle_turn(session, "otra", "general", db_path, persona="PERSONA")
 
         assert "Vive en Panama" in session.conversation_history[0]["content"]
+
+
+@patch("core.conversation.memory_manager.analyze_memory")
+@patch("core.conversation.providers.chat")
+@patch("core.conversation.should_trigger_memory", return_value=True)
+@patch("core.conversation.run_in_background")
+def test_handle_turn_advances_counters_before_launching_distillation(mock_background, mock_trigger, mock_chat, mock_analyze):
+    mock_chat.return_value = providers.ChatResponse(content="ok", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "background.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        handle_turn(session, "hola", "general", db_path)
+
+        mock_background.assert_called_once()
+        mock_analyze.assert_not_called()
+        assert session.exchange_count == 0
+        assert session.last_analyzed_index == len(session.conversation_history)
 
 
 class TestRunWithTools(unittest.TestCase):
@@ -363,6 +390,24 @@ def test_safe_handle_turn_allows_after_bucket_refills(mock_chat):
 
         assert reply == "Respuesta de Tabris"
         mock_chat.assert_called()
+
+
+def test_run_in_background_runs_the_work():
+    done = []
+
+    run_in_background(lambda: done.append(True)).join()
+
+    assert done == [True]
+
+
+def test_run_in_background_logs_exceptions_instead_of_losing_them(caplog):
+    def work():
+        raise RuntimeError("boom")
+
+    with caplog.at_level(logging.ERROR, logger="core.conversation"):
+        run_in_background(work).join()
+
+    assert "boom" in caplog.text
 
 
 if __name__ == "__main__":
