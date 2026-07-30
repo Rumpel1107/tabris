@@ -156,9 +156,7 @@ def handle_turn(session, user_input, role, db_path, persona=None):
             language=session.language,
             watermark=session.last_analyzed_index,
         )
-        if changes.rejected:
-            reply += msg("memory_anomaly_notice", session.language, agent=config.AGENT_NAME)
-        elif not changes.is_empty:
+        if not changes.is_empty:
             memory_manager.apply_memory_changes(db_path, session.user_id, changes)
             logger.info(
                 f"memory: user {session.user_id} — {len(changes.new_facts)} new, "

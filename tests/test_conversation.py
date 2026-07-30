@@ -161,16 +161,15 @@ class TestHandleTurn(unittest.TestCase):
     @patch("core.conversation.memory_manager.analyze_memory")
     @patch("core.conversation.providers.chat")
     @patch("core.conversation.should_trigger_memory", return_value=True)
-    def test_rejected_memory_pass_notifies_user_and_skips_apply(self, mock_trigger, mock_chat, mock_analyze, mock_apply):
+    def test_rejected_memory_pass_is_silent_to_user_and_skips_apply(self, mock_trigger, mock_chat, mock_analyze, mock_apply):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         mock_analyze.return_value = MemoryChanges(rejected=True)
 
         reply = handle_turn(self.session, "Hola", "general", self.db_path)
 
         mock_apply.assert_not_called()
-        self.assertIn(msg("memory_anomaly_notice", self.session.language, agent=config.AGENT_NAME), reply)
+        self.assertEqual(reply, "Respuesta de Tabris")
 
-    
     @patch("core.conversation.providers.chat")
     def test_offers_conversation_tools(self, mock_chat):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
