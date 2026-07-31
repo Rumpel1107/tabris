@@ -11,10 +11,11 @@ How this project is built and how to keep building it — for any collaborator, 
 
 ## Testing
 
-- **Runner:** `python3 -m pytest`. It runs both `unittest.TestCase` classes and plain function tests; `unittest discover` silently skips the function ones.
+- **Runner:** `~/.venvs/tabris/bin/python -m pytest` (see `AGENTS.md` § Dev setup). It runs both `unittest.TestCase` classes and plain function tests; `unittest discover` silently skips the function ones.
 - **Style for new tests:** function style with plain `assert`. Use `@pytest.mark.parametrize` instead of copy-pasting near-identical tests. Mock external APIs (models, search) — tests must not hit the network.
 - **Per item:** unit tests (TDD) inside, plus an end-to-end smoke check that runs the real flow with no mocks.
 - Existing `unittest.TestCase` tests are fine; migrate them to function style opportunistically when you touch a file, not in bulk.
+- **Mock at the seam the real code path crosses.** A green test proves nothing if the mock sits where the real path never reaches, or if an error/fallback branch happens to return the value the test expects — both have produced false greens in this project. When changing a contract, confirm each test goes red for the *right reason* before fixing it. Build dispatch tables inside the function rather than at module level (a module-level reference is captured at import and never sees a patch), and pin any config a test depends on instead of relying on production values.
 - **Reuse before adding.** Before writing a new test, search the suite for one that already exercises the behavior. If it exists, extend or parametrize it instead of adding a near-duplicate — a new test must assert something no existing test does. When a test becomes a strict subset of another, merge or drop it as part of the same change.
 
 ## Code conventions
