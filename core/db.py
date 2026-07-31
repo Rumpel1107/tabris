@@ -1,6 +1,9 @@
 import config
 import contextlib
+import secrets
 import sqlite3
+
+_LINK_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"   # no 0/O/1/I/L to avoid ambiguity when typed
 
 def _connect(db_path):
     conn = sqlite3.connect(db_path)
@@ -49,6 +52,15 @@ def init_db(db_path):
                 UNIQUE(channel, key)
             );
             
+            CREATE TABLE IF NOT EXISTS link_codes (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                code       TEXT NOT NULL UNIQUE,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                expires_at TEXT NOT NULL,
+                used       INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             CREATE UNIQUE INDEX IF NOT EXISTS idx_facts_active_content ON facts(user_id, content) WHERE is_active=1;
         """)
         existing = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
@@ -129,6 +141,35 @@ def deactivate_fact(db_path, user_id, fact_id):
             (fact_id, user_id)
         )
         conn.commit()
+
+def create_link_code(db_path: str, user_id: int) -> str:
+    """Generate a short single-use code that links another channel to this user_id."""
+    code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(8))
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO link_codes (code, user_id, expires_at) VALUES (?, ?, datetime('now', ?))",
+            (code, user_id, f"{config.LINK_CODE_TTL_SECONDS} seconds"),
+        )
+        conn.commit()
+    return code
+
+def redeem_link_code(db_path: str, code: str, channel: str, key: str) -> int | None:
+    """Redeem a link code: point (channel, key) to the code's user. Returns the user_id, or None if the code is invalid."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        row = conn.execute(
+            "SELECT user_id FROM link_codes WHERE code=? AND used=0 AND expires_at > datetime('now')",
+            (code,),
+        ).fetchone()
+        if row is None:
+            return None
+        user_id = row["user_id"]
+        conn.execute(
+            "INSERT INTO user_channels (user_id, channel, key) VALUES (?, ?, ?)",
+            (user_id, channel, key),
+        )
+        conn.execute("UPDATE link_codes SET used=1 WHERE code=?", (code,))
+        conn.commit()
+        return user_id
 
 def register_user_channel(db_path, user_id, channel, key):
     with contextlib.closing(_connect(db_path)) as conn:

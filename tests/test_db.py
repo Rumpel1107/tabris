@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel, save_fact, save_message, update_user_language, _connect
+from core.db import deactivate_fact, create_link_code, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -313,6 +313,57 @@ class TestUserChannels(unittest.TestCase):
             register_user_channel(db, id1, "cli", "dup-key")
             with self.assertRaises(sqlite3.IntegrityError):
                 register_user_channel(db, id2, "cli", "dup-key")
+
+def test_create_link_code_returns_unique_codes(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+
+    code1 = create_link_code(db_path, user_id)
+    code2 = create_link_code(db_path, user_id)
+
+    assert isinstance(code1, str) and code1
+    assert code1 != code2
+
+
+def test_redeem_link_code_links_new_channel(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    code = create_link_code(db_path, user_id)
+
+    result = redeem_link_code(db_path, code, "discord", "disc-key-1")
+
+    assert result == user_id
+    assert find_user_by_key(db_path, "discord", "disc-key-1")["id"] == user_id
+
+
+def test_redeem_rejects_expired_code(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    monkeypatch.setattr(config, "LINK_CODE_TTL_SECONDS", -60)   # code is born already expired
+    code = create_link_code(db_path, user_id)
+
+    result = redeem_link_code(db_path, code, "discord", "disc-key-1")
+
+    assert result is None
+    assert find_user_by_key(db_path, "discord", "disc-key-1") is None
+
+
+def test_redeem_code_is_single_use(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    code = create_link_code(db_path, user_id)
+
+    first = redeem_link_code(db_path, code, "discord", "disc-key-1")
+    second = redeem_link_code(db_path, code, "telegram", "tg-key-1")
+
+    assert first == user_id
+    assert second is None
+    assert find_user_by_key(db_path, "telegram", "tg-key-1") is None
+
 
 class TestNonUniqueNames(unittest.TestCase):
     
