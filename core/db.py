@@ -143,9 +143,14 @@ def deactivate_fact(db_path, user_id, fact_id):
         conn.commit()
 
 def create_link_code(db_path: str, user_id: int) -> str:
-    """Generate a short single-use code that links another channel to this user_id."""
+    """Generate a short single-use code that links another channel to this user_id, expiring any previous unused code of that user."""
     code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(8))
     with contextlib.closing(_connect(db_path)) as conn:
+        # Runs before the INSERT so the new code is not caught by its own expiry.
+        conn.execute(
+            "UPDATE link_codes SET expires_at = datetime('now') WHERE user_id=? AND used=0",
+            (user_id,),
+        )
         conn.execute(
             "INSERT INTO link_codes (code, user_id, expires_at) VALUES (?, ?, datetime('now', ?))",
             (code, user_id, f"{config.LINK_CODE_TTL_SECONDS} seconds"),

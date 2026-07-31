@@ -326,6 +326,30 @@ def test_create_link_code_returns_unique_codes(tmp_path):
     assert code1 != code2
 
 
+def test_create_link_code_invalidates_previous_unused_codes(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+
+    old_code = create_link_code(db_path, user_id)
+    new_code = create_link_code(db_path, user_id)
+
+    assert redeem_link_code(db_path, old_code, "discord", "disc-key-1") is None
+    assert redeem_link_code(db_path, new_code, "discord", "disc-key-2") == user_id
+
+
+def test_create_link_code_leaves_other_users_codes_active(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    other_id = create_user(db_path, "Ana", "en")
+    other_code = create_link_code(db_path, other_id)
+
+    create_link_code(db_path, user_id)
+
+    assert redeem_link_code(db_path, other_code, "discord", "disc-key-1") == other_id
+
+
 def test_redeem_link_code_links_new_channel(tmp_path):
     db_path = str(tmp_path / "test.db")
     init_db(db_path)
@@ -333,9 +357,10 @@ def test_redeem_link_code_links_new_channel(tmp_path):
     code = create_link_code(db_path, user_id)
 
     result = redeem_link_code(db_path, code, "discord", "disc-key-1")
+    linked = find_user_by_key(db_path, "discord", "disc-key-1")
 
     assert result == user_id
-    assert find_user_by_key(db_path, "discord", "disc-key-1")["id"] == user_id
+    assert linked is not None and linked["id"] == user_id
 
 
 def test_redeem_rejects_expired_code(tmp_path, monkeypatch):
