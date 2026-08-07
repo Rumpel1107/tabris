@@ -1,7 +1,37 @@
 from zoneinfo import ZoneInfo
 
+import config
 from core import providers
 from core.prompt import fence_user_input
+from core.strings import msg
+
+
+def _confirm_language_and_ask_name(session) -> str:
+    return (
+        msg("language_confirmed", session.language, agent=config.AGENT_NAME)
+        + "\n\n"
+        + msg("ask_name_or_code", session.language)
+    )
+
+
+def advance_onboarding(session, user_input: str) -> str:
+    """Consume one message, move the session to the next onboarding step and return what to say."""
+    if session.onboarding_step is None:
+        session.language = detect_language(user_input)
+        session.onboarding_step = "language"
+        return msg("language_detected", session.language, agent=config.AGENT_NAME)
+
+    if session.onboarding_step == "language":
+        if not interpret_yes_no(user_input):
+            session.onboarding_step = "language_ask"
+            return msg("language_ask", session.language, agent=config.AGENT_NAME)
+        session.onboarding_step = "link_or_name"
+        return _confirm_language_and_ask_name(session)
+
+    if session.onboarding_step == "language_ask":
+        session.language = detect_language(user_input)
+        session.onboarding_step = "link_or_name"
+        return _confirm_language_and_ask_name(session)
 
 
 def detect_language(text):

@@ -2,8 +2,10 @@ import pytest
 import unittest
 from unittest.mock import patch
 
+import config
 from core import providers
 from core.onboarding import (
+    advance_onboarding,
     detect_language,
     extract_location,
     extract_name,
@@ -11,6 +13,8 @@ from core.onboarding import (
     is_timezone_ambiguous,
     resolve_timezone,
 )
+from core.session import Session
+from core.strings import msg
 
 
 class TestDetectLanguage(unittest.TestCase):
@@ -117,6 +121,44 @@ def test_helper_prompts_fence_user_input(helper):
         helper(INJECTION)
     sent_prompt = mock_chat.call_args[0][1][0]["content"]
     assert f"<user_message>\n{INJECTION}\n</user_message>" in sent_prompt
+
+
+def test_first_contact_detects_language_and_asks_to_confirm():
+    session = Session()
+    with patch("core.onboarding.detect_language", return_value="es"):
+        reply = advance_onboarding(session, "Hola, ¿cómo estás?")
+    assert session.language == "es"
+    assert session.onboarding_step == "language"
+    assert reply == msg("language_detected", "es", agent=config.AGENT_NAME)
+
+
+def test_confirmed_language_asks_for_name_or_link_code():
+    session = Session(language="es", onboarding_step="language")
+    with patch("core.onboarding.interpret_yes_no", return_value=True):
+        reply = advance_onboarding(session, "sí, está perfecto")
+    assert session.language == "es"
+    assert session.onboarding_step == "link_or_name"
+    assert msg("language_confirmed", "es", agent=config.AGENT_NAME) in reply
+    assert msg("ask_name_or_code", "es") in reply
+
+
+def test_rejected_language_asks_which_language():
+    session = Session(language="es", onboarding_step="language")
+    with patch("core.onboarding.interpret_yes_no", return_value=False):
+        reply = advance_onboarding(session, "no, prefiero inglés")
+    assert session.language == "es"
+    assert session.onboarding_step == "language_ask"
+    assert reply == msg("language_ask", "es", agent=config.AGENT_NAME)
+
+
+def test_chosen_language_replaces_detected_one_and_continues():
+    session = Session(language="es", onboarding_step="language_ask")
+    with patch("core.onboarding.detect_language", return_value="en"):
+        reply = advance_onboarding(session, "I would rather speak English")
+    assert session.language == "en"
+    assert session.onboarding_step == "link_or_name"
+    assert msg("language_confirmed", "en", agent=config.AGENT_NAME) in reply
+    assert msg("ask_name_or_code", "en") in reply
 
 
 if __name__ == "__main__":
