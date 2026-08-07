@@ -1,5 +1,3 @@
-import unittest
-
 from core.session import Session, get_or_create_session
 
 def test_creates_new_session_with_defaults():
@@ -10,6 +8,14 @@ def test_creates_new_session_with_defaults():
     assert session.conversation_history == []
     assert session.exchange_count == 0
     assert session.last_analyzed_index == 0
+
+
+def test_creates_session_for_unknown_person():
+    sessions = {}
+    session = get_or_create_session(sessions, "discord", "xyz")
+    assert session.user_id is None
+    assert session.language == "en"
+    assert session.onboarding_step is None
 
 
 def test_returns_same_session_for_same_key():

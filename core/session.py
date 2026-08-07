@@ -4,8 +4,9 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Session:
-    user_id: int
-    language: str
+    user_id: int | None = None
+    language: str = "en"
+    onboarding_step: str | None = None
     conversation_history: list = field(default_factory=list)
     exchange_count: int = 0
     last_trigger_time: float = field(default_factory=time.time)
@@ -14,7 +15,7 @@ class Session:
     rate_last_refill: float = 0.0
 
 
-def get_or_create_session(sessions, channel, key, user_id, language):
+def get_or_create_session(sessions, channel, key, user_id=None, language="en"):
     session_key = (channel, key)
     if session_key not in sessions:
         sessions[session_key] = Session(user_id=user_id, language=language)
