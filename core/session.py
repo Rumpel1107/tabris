@@ -13,10 +13,16 @@ class Session:
     last_analyzed_index: int = 0
     rate_tokens: float = 0.0
     rate_last_refill: float = 0.0
+    channel: str = ""
+    key: str = ""
+    pending_name: str = ""
+    pending_location: str = ""
+    pending_city: str = ""
+    pending_timezone: str = ""
 
 
 def get_or_create_session(sessions, channel, key, user_id=None, language="en"):
     session_key = (channel, key)
     if session_key not in sessions:
-        sessions[session_key] = Session(user_id=user_id, language=language)
+        sessions[session_key] = Session(user_id=user_id, language=language, channel=channel, key=key)
     return sessions[session_key]

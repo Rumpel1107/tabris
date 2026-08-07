@@ -142,9 +142,23 @@ def deactivate_fact(db_path, user_id, fact_id):
         )
         conn.commit()
 
+def normalize_link_code(text: str) -> str | None:
+    """Return the canonical form of a link code, or None if the text is not shaped like one."""
+    code = text.strip().upper()
+    if len(code) != 8 or any(char not in _LINK_CODE_ALPHABET for char in code):
+        return None
+    if not any(char.isdigit() for char in code):
+        return None
+    return code
+
+
 def create_link_code(db_path: str, user_id: int) -> str:
     """Generate a short single-use code that links another channel to this user_id, expiring any previous unused code of that user."""
-    code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(8))
+    # Retries the rare all-letter draw so a code can never be mistaken for a name.
+    while True:
+        code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(8))
+        if any(char.isdigit() for char in code):
+            break
     with contextlib.closing(_connect(db_path)) as conn:
         # Runs before the INSERT so the new code is not caught by its own expiry.
         conn.execute(

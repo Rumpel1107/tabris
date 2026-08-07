@@ -2,6 +2,7 @@ from zoneinfo import ZoneInfo
 
 import config
 from core import providers
+from core.db import create_user, get_user, normalize_link_code, redeem_link_code, register_user_channel
 from core.prompt import fence_user_input
 from core.strings import msg
 
@@ -14,7 +15,20 @@ def _confirm_language_and_ask_name(session) -> str:
     )
 
 
-def advance_onboarding(session, user_input: str) -> str:
+def _resolve_location_and_read_back(session, location: str) -> str:
+    session.pending_timezone = resolve_timezone(location)
+    session.pending_city = extract_location(location)
+    session.onboarding_step = "confirm"
+    return msg(
+        "confirm_profile",
+        session.language,
+        agent=config.AGENT_NAME,
+        name=session.pending_name,
+        city=session.pending_city,
+    )
+
+
+def advance_onboarding(session, user_input: str, db_path: str) -> str:
     """Consume one message, move the session to the next onboarding step and return what to say."""
     if session.onboarding_step is None:
         session.language = detect_language(user_input)
@@ -32,6 +46,42 @@ def advance_onboarding(session, user_input: str) -> str:
         session.language = detect_language(user_input)
         session.onboarding_step = "link_or_name"
         return _confirm_language_and_ask_name(session)
+
+    if session.onboarding_step == "link_or_name":
+        code = normalize_link_code(user_input)
+        if code:
+            user_id = redeem_link_code(db_path, code, session.channel, session.key)
+            if user_id is None:
+                return msg("link_failed", session.language, agent=config.AGENT_NAME)
+            user = get_user(db_path, user_id)
+            session.user_id = user_id
+            session.language = user["language"]
+            session.onboarding_step = None
+            return msg("link_success", session.language, agent=config.AGENT_NAME, name=user["name"])
+
+        session.pending_name = extract_name(user_input)
+        session.onboarding_step = "location"
+        return msg("ask_location", session.language, agent=config.AGENT_NAME)
+
+    if session.onboarding_step == "location":
+        if is_timezone_ambiguous(user_input):
+            session.pending_location = user_input.strip()
+            session.onboarding_step = "location_clarify"
+            return msg("ask_location_clarify", session.language, agent=config.AGENT_NAME)
+        return _resolve_location_and_read_back(session, user_input.strip())
+
+    if session.onboarding_step == "location_clarify":
+        return _resolve_location_and_read_back(session, f"{session.pending_location}, {user_input.strip()}")
+
+    if session.onboarding_step == "confirm":
+        if not interpret_yes_no(user_input):
+            session.onboarding_step = "link_or_name"
+            return msg("ask_name", session.language, agent=config.AGENT_NAME)
+        user_id = create_user(db_path, session.pending_name, session.language, session.pending_city, session.pending_timezone)
+        register_user_channel(db_path, user_id, session.channel, session.key)
+        session.user_id = user_id
+        session.onboarding_step = None
+        return msg("onboarding_done", session.language, agent=config.AGENT_NAME, name=session.pending_name)
 
 
 def detect_language(text):

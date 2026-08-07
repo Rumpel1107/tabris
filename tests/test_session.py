@@ -16,6 +16,8 @@ def test_creates_session_for_unknown_person():
     assert session.user_id is None
     assert session.language == "en"
     assert session.onboarding_step is None
+    assert session.channel == "discord"
+    assert session.key == "xyz"
 
 
 def test_returns_same_session_for_same_key():

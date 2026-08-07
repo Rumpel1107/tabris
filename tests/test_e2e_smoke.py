@@ -84,8 +84,9 @@ class TestNewUserLanguageE2E(unittest.TestCase):
         mock_input.side_effect = [
             "Hola, como estas",  # first message (triggers language detection)
             "si",                # confirms detected language
-            "Carlos",          # onboard_user: name
+            "Carlos",            # name (no link code pasted)
             "Panama",            # city (asked after name)
+            "si, correcto",      # confirms the profile read back before saving
             "Cuentame algo",     # first real request, answered normally
             "salir",             # ends the session
         ]
@@ -96,6 +97,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
             providers.ChatResponse(content="no", tool_calls=None),                   # is_timezone_ambiguous (clear, no reask)
             providers.ChatResponse(content="America/Panama", tool_calls=None),       # resolve_timezone
             providers.ChatResponse(content="Panama", tool_calls=None),               # extract_location
+            providers.ChatResponse(content="yes", tool_calls=None),                  # interpret_yes_no confirms the read-back
             providers.ChatResponse(content="general", tool_calls=None),              # route_message for the real request
             providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None),  # model reply
             providers.ChatResponse(content="exit", tool_calls=None),                 # route_message for "salir"

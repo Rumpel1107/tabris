@@ -13,6 +13,7 @@ from core.onboarding import (
     is_timezone_ambiguous,
     resolve_timezone,
 )
+from core.db import create_link_code, create_user, find_user_by_key, get_user, init_db
 from core.session import Session
 from core.strings import msg
 
@@ -126,7 +127,7 @@ def test_helper_prompts_fence_user_input(helper):
 def test_first_contact_detects_language_and_asks_to_confirm():
     session = Session()
     with patch("core.onboarding.detect_language", return_value="es"):
-        reply = advance_onboarding(session, "Hola, ¿cómo estás?")
+        reply = advance_onboarding(session, "Hola, ¿cómo estás?", None)
     assert session.language == "es"
     assert session.onboarding_step == "language"
     assert reply == msg("language_detected", "es", agent=config.AGENT_NAME)
@@ -135,7 +136,7 @@ def test_first_contact_detects_language_and_asks_to_confirm():
 def test_confirmed_language_asks_for_name_or_link_code():
     session = Session(language="es", onboarding_step="language")
     with patch("core.onboarding.interpret_yes_no", return_value=True):
-        reply = advance_onboarding(session, "sí, está perfecto")
+        reply = advance_onboarding(session, "sí, está perfecto", None)
     assert session.language == "es"
     assert session.onboarding_step == "link_or_name"
     assert msg("language_confirmed", "es", agent=config.AGENT_NAME) in reply
@@ -145,7 +146,7 @@ def test_confirmed_language_asks_for_name_or_link_code():
 def test_rejected_language_asks_which_language():
     session = Session(language="es", onboarding_step="language")
     with patch("core.onboarding.interpret_yes_no", return_value=False):
-        reply = advance_onboarding(session, "no, prefiero inglés")
+        reply = advance_onboarding(session, "no, prefiero inglés", None)
     assert session.language == "es"
     assert session.onboarding_step == "language_ask"
     assert reply == msg("language_ask", "es", agent=config.AGENT_NAME)
@@ -154,11 +155,114 @@ def test_rejected_language_asks_which_language():
 def test_chosen_language_replaces_detected_one_and_continues():
     session = Session(language="es", onboarding_step="language_ask")
     with patch("core.onboarding.detect_language", return_value="en"):
-        reply = advance_onboarding(session, "I would rather speak English")
+        reply = advance_onboarding(session, "I would rather speak English", None)
     assert session.language == "en"
     assert session.onboarding_step == "link_or_name"
     assert msg("language_confirmed", "en", agent=config.AGENT_NAME) in reply
     assert msg("ask_name_or_code", "en") in reply
+
+
+def test_pasted_link_code_adopts_the_existing_profile(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    code = create_link_code(db_path, user_id)
+    session = Session(language="en", onboarding_step="link_or_name", channel="discord", key="disc-key-1")
+
+    reply = advance_onboarding(session, f"  {code.lower()}  ", db_path)
+
+    assert session.user_id == user_id
+    assert session.language == "es"
+    assert session.onboarding_step is None
+    assert reply == msg("link_success", "es", agent=config.AGENT_NAME, name="Rumpel")
+
+
+def test_name_answer_is_extracted_and_city_is_asked():
+    session = Session(language="es", onboarding_step="link_or_name", channel="cli", key="cli-key-1")
+
+    with patch("core.onboarding.extract_name", return_value="Carlos"):
+        reply = advance_onboarding(session, "Me llamo Carlos", None)
+
+    assert session.pending_name == "Carlos"
+    assert session.user_id is None
+    assert session.onboarding_step == "location"
+    assert reply == msg("ask_location", "es", agent=config.AGENT_NAME)
+
+
+def test_clear_location_resolves_the_profile_and_reads_it_back():
+    session = Session(language="es", onboarding_step="location", pending_name="Oscar")
+
+    with patch("core.onboarding.is_timezone_ambiguous", return_value=False), \
+         patch("core.onboarding.resolve_timezone", return_value="America/Panama"), \
+         patch("core.onboarding.extract_location", return_value="Panama City, Panama"):
+        reply = advance_onboarding(session, "Vivo en Panama", None)
+
+    assert session.pending_city == "Panama City, Panama"
+    assert session.pending_timezone == "America/Panama"
+    assert session.onboarding_step == "confirm"
+    assert reply == msg("confirm_profile", "es", agent=config.AGENT_NAME, name="Oscar", city="Panama City, Panama")
+
+
+def test_ambiguous_location_reasks_and_combines_answer():
+    session = Session(language="es", onboarding_step="location", pending_name="Oscar")
+
+    with patch("core.onboarding.is_timezone_ambiguous", return_value=True):
+        reply = advance_onboarding(session, "Madrid", None)
+    with patch("core.onboarding.resolve_timezone", return_value="America/Bogota") as rtz, \
+         patch("core.onboarding.extract_location", return_value="Madrid, Colombia") as exloc:
+        advance_onboarding(session, "Colombia", None)
+
+    assert reply == msg("ask_location_clarify", "es", agent=config.AGENT_NAME)
+    rtz.assert_called_once_with("Madrid, Colombia")
+    exloc.assert_called_once_with("Madrid, Colombia")
+    assert session.pending_city == "Madrid, Colombia"
+    assert session.pending_timezone == "America/Bogota"
+    assert session.onboarding_step == "confirm"
+
+
+def test_confirmed_profile_creates_the_user_and_links_the_channel(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    session = Session(language="es", onboarding_step="confirm", channel="cli", key="cli-key-1",
+                      pending_name="Oscar", pending_city="Panama City, Panama", pending_timezone="America/Panama")
+
+    with patch("core.onboarding.interpret_yes_no", return_value=True):
+        reply = advance_onboarding(session, "sí, está bien", db_path)
+
+    user = get_user(db_path, session.user_id)
+    assert user["name"] == "Oscar"
+    assert user["language"] == "es"
+    assert user["location"] == "Panama City, Panama"
+    assert user["timezone"] == "America/Panama"
+    assert find_user_by_key(db_path, "cli", "cli-key-1")["id"] == session.user_id
+    assert session.onboarding_step is None
+    assert reply == msg("onboarding_done", "es", agent=config.AGENT_NAME, name="Oscar")
+
+
+def test_rejected_profile_restarts_from_the_name(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    session = Session(language="es", onboarding_step="confirm", channel="cli", key="cli-key-1",
+                      pending_name="Oscar", pending_city="Panama City, Panama", pending_timezone="America/Panama")
+
+    with patch("core.onboarding.interpret_yes_no", return_value=False):
+        reply = advance_onboarding(session, "no, mi nombre está mal", db_path)
+
+    assert session.user_id is None
+    assert session.onboarding_step == "link_or_name"
+    assert reply == msg("ask_name", "es", agent=config.AGENT_NAME)
+
+
+def test_invalid_link_code_is_reported_and_retryable(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    session = Session(language="es", onboarding_step="link_or_name", channel="discord", key="disc-key-1")
+
+    reply = advance_onboarding(session, "A2CD4FGH", db_path)
+
+    assert session.user_id is None
+    assert session.onboarding_step == "link_or_name"
+    assert reply == msg("link_failed", "es", agent=config.AGENT_NAME)
 
 
 if __name__ == "__main__":
