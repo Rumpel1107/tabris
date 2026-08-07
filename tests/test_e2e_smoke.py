@@ -22,7 +22,7 @@ class TestChatE2ESmoke(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
     
-    @patch("main.providers.chat")
+    @patch("core.providers.chat")
     @patch("builtins.input")
     @patch("main.get_client_key", return_value="test-key-123")
     def test_conversation_persists_to_db(self, mock_key, mock_input, mock_chat):
@@ -77,7 +77,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
     
-    @patch("main.providers.chat")
+    @patch("core.providers.chat")
     @patch("builtins.input")
     @patch("main.get_client_key", return_value="new-user-key")
     def test_new_spanish_user_full_flow(self, mock_key, mock_input, mock_chat):
@@ -118,7 +118,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
         self.assertIn("Respuesta de Tabris", contents)
 
 @patch("main.memory_manager.analyze_memory")
-@patch("main.providers.chat")
+@patch("core.providers.chat")
 @patch("builtins.input")
 @patch("main.get_client_key", return_value="test-key-123")
 def test_exit_without_new_turns_skips_distillation(mock_key, mock_input, mock_chat, mock_analyze):
