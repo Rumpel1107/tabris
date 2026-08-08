@@ -1,11 +1,12 @@
 import config
 import json
 import logging
+import sqlite3
 import threading
 import time
 
 from core import memory_manager, providers
-from core.db import create_link_code, get_facts, get_user, save_message
+from core.db import create_link_code, get_facts, get_user, save_fact, save_message
 from core.prompt import build_system_prompt, fence_user_input
 from core.search import web_fetch, web_search
 from core.strings import msg
@@ -125,6 +126,28 @@ def _run_request_link_code(db_path, user_id):
     code = create_link_code(db_path, user_id)
     return f"Link code: {code} — single use, expires in {config.LINK_CODE_TTL_SECONDS // 60} minutes."
 
+REMEMBER_FACT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "remember_fact",
+        "description": "Save one fact to the user's persistent memory, in the user's own language. Use it ONLY when the user explicitly asks you to remember something or approves the wording of a correction — never on your own initiative.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "The fact to remember, as one sentence"}
+            },
+            "required": ["content"],
+        },
+    },
+}
+
+def _run_remember_fact(db_path, user_id, content):
+    try:
+        fact_id = save_fact(db_path, user_id, content)
+    except sqlite3.IntegrityError:
+        return f"Already known, nothing to add: {content}"
+    return f"Remembered fact [{fact_id}]: {content}"
+
 def _run_forget_fact(db_path, user_id, fact_id):
     forgotten = memory_manager.forget_fact(db_path, user_id, fact_id)
     if forgotten is None:
@@ -151,6 +174,8 @@ def run_with_tools(role, messages, tools, extra_executors=None):
         })
         for tool_call in response.tool_calls:
             messages.append(_execute_tool_call(tool_call, executors))
+        # The only trace a tool ran: tool messages stay inside the turn and are never persisted.
+        logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
 
 def handle_turn(session, user_input, role, db_path, persona=None):
     if persona is not None:
@@ -173,9 +198,10 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         reply = run_with_tools(
             role,
             build_messages(session.conversation_history),
-            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REQUEST_LINK_CODE_TOOL],
+            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL],
             extra_executors={
                 "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
+                "remember_fact": lambda content: _run_remember_fact(db_path, session.user_id, content),
                 "request_link_code": lambda: _run_request_link_code(db_path, session.user_id),
             },
         )

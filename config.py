@@ -12,6 +12,7 @@ LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}
 AGENT_ROLES = {
     "general": {
         "description": "general questions, conversation, explanations, anything not code",
+        "temperature": 0.7,
         "providers": [
             {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
             {"provider": "deepseek", "model": "deepseek-chat"},
@@ -21,6 +22,7 @@ AGENT_ROLES = {
     },
     "code": {
         "description": "programming, debugging, scripts, technical code, functions",
+        "temperature": 0.2,
         "providers": [
             {"provider": "deepseek",   "model": "deepseek-chat"},
             {"provider": "openrouter", "model": "z-ai/glm-5.2"},
@@ -30,6 +32,7 @@ AGENT_ROLES = {
     },
     "memory": {
         "description": "background memory distillation, not user-facing",
+        "temperature": 0.0,
         "providers": [
             {"provider": "deepseek", "model": "deepseek-chat"},
             {"provider": "gemini",   "model": "gemini-3.1-flash-lite"},
@@ -38,6 +41,7 @@ AGENT_ROLES = {
     },
     "router": {
         "description": "classifies user intent into one of the available roles",
+        "temperature": 0.0,
         "providers": [
             {"provider": "groq",   "model": "llama-3.1-8b-instant"},
             {"provider": "gemini", "model": "gemini-3.1-flash-lite"},

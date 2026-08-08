@@ -31,6 +31,14 @@ class TestProvidersChat(unittest.TestCase):
             chat("router", [{"role": "user", "content": "hola"}])
 
     @patch("core.providers._call_provider")
+    def test_passes_the_role_temperature(self, mock_call):
+        chat("router", [{"role": "user", "content": "hola"}])
+        self.assertEqual(
+            mock_call.call_args[1]["temperature"],
+            config.AGENT_ROLES["router"]["temperature"],
+        )
+
+    @patch("core.providers._call_provider")
     def test_fallback_logs_warning(self, mock_call):
         mock_call.side_effect = [Exception("primario caido"), "respuesta del respaldo"]
         with self.assertLogs("core.providers", level="WARNING") as log:

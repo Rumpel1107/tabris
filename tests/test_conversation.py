@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, init_db, redeem_link_code, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
@@ -180,7 +180,7 @@ class TestHandleTurn(unittest.TestCase):
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REQUEST_LINK_CODE_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL])
 
 
 @patch("core.conversation.providers.chat")
@@ -307,6 +307,83 @@ def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_ch
         assert tool_message["role"] == "tool"
         issued = find_link_code(tool_message["content"])
         assert redeem_link_code(db_path, issued, "discord", "disc-key-1") == user_id
+
+
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_logs_which_tools_it_ran(mock_chat, caplog):
+    tool_call = SimpleNamespace(
+        id="call_s1",
+        function=SimpleNamespace(name="web_search", arguments='{"query": "trm de hoy"}'),
+    )
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content="La TRM de hoy es...", tool_calls=None),
+    ]
+
+    with patch("core.conversation.web_search", return_value="resultados"), \
+         caplog.at_level(logging.INFO, logger="core.conversation"):
+        run_with_tools("general", [{"role": "user", "content": "cual es la trm de hoy"}], tools=[])
+
+    assert "web_search" in caplog.text
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_remember_fact_tool_saves_fact_for_session_user(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "remember.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        tool_call = SimpleNamespace(
+            id="call_r1",
+            function=SimpleNamespace(
+                name="remember_fact",
+                arguments='{"content": "El usuario juega GT New Horizons"}',
+            ),
+        )
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Listo, anotado", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "recuerda que juego GTNH", "general", db_path)
+
+        assert reply == "Listo, anotado"
+        assert [fact["content"] for fact in get_facts(db_path, user_id)] == ["El usuario juega GT New Horizons"]
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_remember_fact_tool_tolerates_an_already_known_fact(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "remember_dup.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        save_fact(db_path, user_id, "El usuario juega GT New Horizons")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        tool_call = SimpleNamespace(
+            id="call_r2",
+            function=SimpleNamespace(
+                name="remember_fact",
+                arguments='{"content": "El usuario juega GT New Horizons"}',
+            ),
+        )
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Eso ya lo tenía", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "recuerda que juego GTNH", "general", db_path)
+
+        assert reply == "Eso ya lo tenía"
+        assert len(get_facts(db_path, user_id)) == 1
 
 
 @patch("core.conversation.providers.chat")
