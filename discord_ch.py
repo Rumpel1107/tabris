@@ -3,7 +3,8 @@ import discord
 import logging
 
 from core.conversation import route_message, safe_handle_turn
-from core.db import create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, register_user_channel
+from core.db import find_user_by_key, get_facts, get_messages, get_user, init_db
+from core.onboarding import advance_onboarding
 from core.prompt import build_system_prompt, load_persona
 from core.session import get_or_create_session
 
@@ -23,31 +24,32 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    reply = handle_message(db_path, sessions, str(message.author.id), message.author.display_name, message.content, persona)
+    reply = handle_message(db_path, sessions, str(message.author.id), message.content, persona)
     await message.channel.send(reply)
 
 
-def handle_message(db_path, sessions, key, name, user_input, persona):
+def handle_message(db_path, sessions, key, user_input, persona):
     user = find_user_by_key(db_path, "discord", key)
-    if user:
-        user_id = user["id"]
-        language = user["language"]
-    else:
-        language = "en"
-        user_id = create_user(db_path, name, language)
-        register_user_channel(db_path, user_id, "discord", key)
+    session = get_or_create_session(
+        sessions,
+        "discord",
+        key,
+        user["id"] if user else None,
+        user["language"] if user else "en",
+    )
 
-    session = get_or_create_session(sessions, "discord", key, user_id, language)
+    if session.user_id is None:
+        return advance_onboarding(session, user_input, db_path)
 
     if not session.conversation_history:
-        user_row = get_user(db_path, user_id)
-        facts = get_facts(db_path, user_id)
+        user_row = get_user(db_path, session.user_id)
+        facts = get_facts(db_path, session.user_id)
         system_prompt = build_system_prompt(
             persona, facts, language=session.language,
             name=user_row["name"], location=user_row["location"], timezone=user_row["timezone"],
         )
         session.conversation_history = [{"role": "system", "content": system_prompt}]
-        past_messages = get_messages(db_path, user_id, limit=config.MAX_HISTORY * 2)
+        past_messages = get_messages(db_path, session.user_id, limit=config.MAX_HISTORY * 2)
         session.conversation_history += [
             {"role": message["role"], "content": message["content"]}
             for message in past_messages

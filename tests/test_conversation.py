@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, get_facts, get_messages, init_db, save_fact
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.db import create_user, find_link_code, get_facts, get_messages, init_db, redeem_link_code, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
 from core.strings import msg
@@ -180,7 +180,7 @@ class TestHandleTurn(unittest.TestCase):
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REQUEST_LINK_CODE_TOOL])
 
 
 @patch("core.conversation.providers.chat")
@@ -279,6 +279,34 @@ def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
     assert tool_message["role"] == "tool"
     assert tool_message["content"] == "contenido de la pagina"
     assert tool_message["tool_call_id"] == "call_2"
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "link.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        tool_call = SimpleNamespace(
+            id="call_l1",
+            function=SimpleNamespace(name="request_link_code", arguments="{}"),
+        )
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Ahí va tu código", tool_calls=None),
+        ]
+
+        handle_turn(session, "quiero usarte también en Discord", "general", db_path)
+
+        tool_message = mock_chat.call_args_list[1][0][1][-1]
+        assert tool_message["role"] == "tool"
+        issued = find_link_code(tool_message["content"])
+        assert redeem_link_code(db_path, issued, "discord", "disc-key-1") == user_id
 
 
 @patch("core.conversation.providers.chat")

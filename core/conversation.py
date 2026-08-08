@@ -5,7 +5,7 @@ import threading
 import time
 
 from core import memory_manager, providers
-from core.db import get_facts, get_user, save_message
+from core.db import create_link_code, get_facts, get_user, save_message
 from core.prompt import build_system_prompt, fence_user_input
 from core.search import web_fetch, web_search
 from core.strings import msg
@@ -108,6 +108,23 @@ FORGET_FACT_TOOL = {
     },
 }
 
+REQUEST_LINK_CODE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "request_link_code",
+        "description": "Issue a short code the user pastes on another channel to link it to this same profile, so both channels share one memory. Use it ONLY when the user asks to reach you somewhere else or to link an account. It takes no arguments.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+}
+
+def _run_request_link_code(db_path, user_id):
+    code = create_link_code(db_path, user_id)
+    return f"Link code: {code} — single use, expires in {config.LINK_CODE_TTL_SECONDS // 60} minutes."
+
 def _run_forget_fact(db_path, user_id, fact_id):
     forgotten = memory_manager.forget_fact(db_path, user_id, fact_id)
     if forgotten is None:
@@ -153,7 +170,15 @@ def handle_turn(session, user_input, role, db_path, persona=None):
 
     session.conversation_history.append({"role": "user", "content": user_input})
     try:
-        reply = run_with_tools(role, build_messages(session.conversation_history), tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL], extra_executors={"forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id)})
+        reply = run_with_tools(
+            role,
+            build_messages(session.conversation_history),
+            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REQUEST_LINK_CODE_TOOL],
+            extra_executors={
+                "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
+                "request_link_code": lambda: _run_request_link_code(db_path, session.user_id),
+            },
+        )
     except Exception:
         session.conversation_history.pop()
         raise

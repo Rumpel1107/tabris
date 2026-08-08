@@ -142,14 +142,15 @@ def deactivate_fact(db_path, user_id, fact_id):
         )
         conn.commit()
 
-def normalize_link_code(text: str) -> str | None:
-    """Return the canonical form of a link code, or None if the text is not shaped like one."""
-    code = text.strip().upper()
-    if len(code) != 8 or any(char not in _LINK_CODE_ALPHABET for char in code):
-        return None
-    if not any(char.isdigit() for char in code):
-        return None
-    return code
+def find_link_code(text: str) -> str | None:
+    """Return the link code contained in the text, or None if no word in it is shaped like one."""
+    for word in text.split():
+        code = word.strip(".,;:!?()[]{}<>\"'").upper()
+        if len(code) != 8 or any(char not in _LINK_CODE_ALPHABET for char in code):
+            continue
+        if any(char.isdigit() for char in code):
+            return code
+    return None
 
 
 def create_link_code(db_path: str, user_id: int) -> str:

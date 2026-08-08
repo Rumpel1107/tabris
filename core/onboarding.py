@@ -2,7 +2,7 @@ from zoneinfo import ZoneInfo
 
 import config
 from core import providers
-from core.db import create_user, get_user, normalize_link_code, redeem_link_code, register_user_channel
+from core.db import create_user, find_link_code, get_user, redeem_link_code, register_user_channel
 from core.prompt import fence_user_input
 from core.strings import msg
 
@@ -48,7 +48,7 @@ def advance_onboarding(session, user_input: str, db_path: str) -> str:
         return _confirm_language_and_ask_name(session)
 
     if session.onboarding_step == "link_or_name":
-        code = normalize_link_code(user_input)
+        code = find_link_code(user_input)
         if code:
             user_id = redeem_link_code(db_path, code, session.channel, session.key)
             if user_id is None:

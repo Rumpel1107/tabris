@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_link_code, create_user, find_user_by_key, get_facts, get_messages, get_user, init_db, normalize_link_code, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
+from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -329,25 +329,28 @@ def test_create_link_code_returns_unique_codes(tmp_path):
 @pytest.mark.parametrize("text, expected", [
     ("A2CD4FGH", "A2CD4FGH"),
     ("  a2cd4fgh  ", "A2CD4FGH"),
+    ("Tengo este codigo A2CD4FGH", "A2CD4FGH"),
+    ("mi codigo es a2cd4fgh, gracias", "A2CD4FGH"),
+    ("Me llamo Carlos", None),
     ("MARGARET", None),
     ("A2CD4FG", None),
     ("A2CD4FGHJ", None),
-    ("A2CD4FG!", None),
+    ("A2CD4F$H", None),
     ("A2CD4FG0", None),
     ("", None),
 ])
-def test_normalize_link_code(text, expected):
-    assert normalize_link_code(text) == expected
+def test_find_link_code(text, expected):
+    assert find_link_code(text) == expected
 
 
-def test_normalize_link_code_accepts_what_create_link_code_produces(tmp_path):
+def test_find_link_code_accepts_what_create_link_code_produces(tmp_path):
     db_path = str(tmp_path / "test.db")
     init_db(db_path)
     user_id = create_user(db_path, "Rumpel", "es")
 
     code = create_link_code(db_path, user_id)
 
-    assert normalize_link_code(code) == code
+    assert find_link_code(code) == code
 
 
 def test_create_link_code_always_contains_a_digit(tmp_path):
