@@ -6,7 +6,7 @@ import threading
 import time
 
 from core import memory_manager, providers
-from core.db import create_link_code, get_facts, get_user, save_fact, save_message
+from core.db import create_link_code, get_facts, get_user, get_user_channels, save_fact, save_message
 from core.prompt import build_system_prompt, fence_user_input
 from core.search import web_fetch, web_search
 from core.strings import msg
@@ -186,6 +186,7 @@ def handle_turn(session, user_input, role, db_path, persona=None):
             "content": build_system_prompt(
                 persona, facts, language=session.language,
                 name=user_row["name"], location=user_row["location"], timezone=user_row["timezone"],
+                channels=get_user_channels(db_path, session.user_id),
             ),
         }
         if session.conversation_history and session.conversation_history[0]["role"] == "system":

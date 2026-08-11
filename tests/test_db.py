@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
+from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -452,6 +452,36 @@ def test_deactivate_fact_sets_retired_at(tmp_path):
     retired_at = conn.execute("SELECT retired_at FROM facts WHERE id=?", (fact_id,)).fetchone()[0]
     conn.close()
     assert retired_at is not None
+
+
+def test_get_facts_orders_by_id_when_timestamps_tie(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    saved_ids = [save_fact(db_path, user_id, f"Hecho {n}") for n in range(12)]
+
+    assert [fact["id"] for fact in get_facts(db_path, user_id)] == saved_ids
+
+
+def test_get_user_channels_returns_channel_names(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    register_user_channel(db_path, user_id, "cli", "cli-key-1")
+    register_user_channel(db_path, user_id, "discord", "disc-key-1")
+
+    assert get_user_channels(db_path, user_id) == ["cli", "discord"]
+
+
+def test_get_user_channels_excludes_other_users(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    other_id = create_user(db_path, "Ana", "en")
+    register_user_channel(db_path, user_id, "cli", "cli-key-1")
+    register_user_channel(db_path, other_id, "discord", "disc-key-1")
+
+    assert get_user_channels(db_path, user_id) == ["cli"]
 
 
 @pytest.mark.parametrize("pragma, expected", [

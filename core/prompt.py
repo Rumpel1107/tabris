@@ -21,7 +21,7 @@ def format_datetime(dt, language):
     return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
 
 
-def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", now=None):
+def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None):
     if now is None:
         now = datetime.now(dt_timezone.utc)
     if now.tzinfo is None:
@@ -31,7 +31,8 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
     directive = f"\nAlways respond in {lang_name}."
     context_block = f"\n\n## Current context\nDate and time: {format_datetime(local_now, language)}"
     location_part = f", located in {location}" if location else ""
-    name_block = f"\n\nYou are talking to {name}{location_part}."
+    channels_part = f" You talk to them over {', '.join(channels)}." if channels else ""
+    name_block = f"\n\n## Profile\nYou are talking to {name}{location_part}.{channels_part}"
     if not facts:
         return persona + name_block + context_block + directive
     facts_block = "\n".join(f"- [{fact['id']}] {fact['content']}" for fact in facts)

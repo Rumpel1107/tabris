@@ -104,7 +104,7 @@ def save_fact(db_path, user_id, content):
 def get_facts(db_path, user_id):
     with contextlib.closing(_connect(db_path)) as conn:
         rows = conn.execute(
-            "SELECT * FROM facts WHERE user_id=? AND is_active=1 ORDER BY created_at",
+            "SELECT * FROM facts WHERE user_id=? AND is_active=1 ORDER BY created_at, id",
             (user_id,)
         ).fetchall()
         return [dict(row) for row in rows]
@@ -198,6 +198,15 @@ def register_user_channel(db_path, user_id, channel, key):
             (user_id, channel, key)
         )
         conn.commit()
+
+def get_user_channels(db_path: str, user_id: int) -> list[str]:
+    """Return the names of the channels linked to a user, never their keys."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT channel FROM user_channels WHERE user_id=? ORDER BY id",
+            (user_id,)
+        ).fetchall()
+        return [row["channel"] for row in rows]
 
 def find_user_by_key(db_path, channel, key):
     with contextlib.closing(_connect(db_path)) as conn:

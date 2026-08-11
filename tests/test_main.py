@@ -114,7 +114,7 @@ class TestBuildSystemPromptDatetime(unittest.TestCase):
 def test_includes_user_name():
     persona = "You are Tabris."
     result = build_system_prompt(persona, [], name="Rumpel", language="en")
-    assert "You are talking to Rumpel." in result
+    assert "## Profile\nYou are talking to Rumpel." in result
 
 
 def test_build_system_prompt_converts_now_to_user_timezone():
@@ -128,6 +128,15 @@ def test_build_system_prompt_converts_now_to_user_timezone():
 def test_build_system_prompt_includes_location():
     result = build_system_prompt("p", [], "en", "Rumpel", location="Panama", timezone="America/Panama")
     assert "located in Panama" in result
+
+
+@pytest.mark.parametrize("channels, snippet, present", [
+    (["cli", "discord"], "You talk to them over cli, discord.", True),
+    ((), "You talk to them over", False),
+])
+def test_build_system_prompt_lists_linked_channels(channels, snippet, present):
+    result = build_system_prompt("p", [], "en", "Rumpel", channels=channels)
+    assert (snippet in result) is present
 
 
 def test_fence_user_input_wraps_text():

@@ -12,7 +12,7 @@ from unittest.mock import patch
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, find_link_code, get_facts, get_messages, init_db, redeem_link_code, save_fact
+from core.db import create_user, find_link_code, get_facts, get_messages, init_db, redeem_link_code, register_user_channel, save_fact
 from core.memory_manager import MemoryChanges
 from core.session import Session
 from core.strings import msg
@@ -191,6 +191,7 @@ def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
         save_fact(db_path, user_id, "Le gusta el café")
+        register_user_channel(db_path, user_id, "cli", "cli-key-1")
         session = Session(
             user_id=user_id,
             language="es",
@@ -202,6 +203,7 @@ def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
         handle_turn(session, "otra", "general", db_path, persona="PERSONA")
 
         assert "Vive en Panama" in session.conversation_history[0]["content"]
+        assert "You talk to them over cli." in session.conversation_history[0]["content"]
 
 
 @patch("core.conversation.memory_manager.analyze_memory")
