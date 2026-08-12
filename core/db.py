@@ -109,18 +109,28 @@ def get_facts(db_path, user_id):
         ).fetchall()
         return [dict(row) for row in rows]
 
-def save_message(db_path, user_id, role, content):
+def save_message(db_path, user_id, role, content) -> int:
     with contextlib.closing(_connect(db_path)) as conn:
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)",
             (user_id, role, content)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+def deactivate_message(db_path: str, user_id: int, message_id: int) -> None:
+    """Retire a message so it no longer belongs to the conversation, scoped to its owner."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute(
+            "UPDATE messages SET is_active=0 WHERE id=? AND user_id=?",
+            (message_id, user_id)
         )
         conn.commit()
 
 def get_messages(db_path, user_id, limit=20):
     with contextlib.closing(_connect(db_path)) as conn:
         rows = conn.execute(
-            """SELECT * FROM messages WHERE user_id=?
+            """SELECT * FROM messages WHERE user_id=? AND is_active=1
             ORDER BY id DESC LIMIT ?""",
             (user_id, limit)
         ).fetchall()

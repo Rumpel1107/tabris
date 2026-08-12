@@ -18,6 +18,7 @@ MESSAGES = {
         "confirm_profile":         "{agent}: Antes de guardar, confírmame que quedó bien: te llamas {name}, estás en {city} y hablamos en español. ¿Es correcto?",
         "message_too_long":        "Tu mensaje es demasiado largo (máximo {limit} caracteres). ¿Podrías acortarlo, por favor?",
         "rate_limited":            "Estás enviando mensajes demasiado rápido. Por favor espera un momento antes de continuar.",
+        "send_failed":             "Al parecer se presentaron problemas con el envío de mensajes. Si quieres puedes enviar tu mensaje de nuevo.",
     },
     "en": {
         "user_prompt":             "You: ",
@@ -38,6 +39,7 @@ MESSAGES = {
         "confirm_profile":         "{agent}: Before I save this, let me confirm: your name is {name}, you're in {city}, and we speak English. Is that right?",
         "message_too_long":        "Your message is too long (maximum {limit} characters). Could you please shorten it?",
         "rate_limited":            "You're sending messages too quickly. Please wait a moment before continuing.",
+        "send_failed":             "It seems there were problems sending the messages. If you want, you can send your message again.",
     },
 }
 

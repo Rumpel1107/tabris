@@ -2,12 +2,16 @@ import config
 import discord
 import logging
 
-from core.conversation import route_message, safe_handle_turn
+from core.conversation import route_message, safe_handle_turn, undo_last_turn
 from core.db import find_user_by_key, get_facts, get_messages, get_user, init_db
 from core.onboarding import advance_onboarding
 from core.prompt import build_system_prompt, load_persona
 from core.session import get_or_create_session
+from core.strings import msg
+from core.text import split_message
 
+
+logger = logging.getLogger(__name__)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -24,8 +28,26 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    reply = handle_message(db_path, sessions, str(message.author.id), message.content, persona)
-    await message.channel.send(reply)
+    key = str(message.author.id)
+    reply = handle_message(db_path, sessions, key, message.content, persona)
+    session = sessions[("discord", key)]
+    if not await send_reply(message.channel, reply, session):
+        undo_last_turn(session, db_path)
+
+
+async def send_reply(channel, reply, session):
+    """Send the reply split into pieces Discord will accept. Return whether the whole reply was delivered."""
+    for piece in split_message(reply, config.DISCORD_MESSAGE_LIMIT):
+        try:
+            await channel.send(piece)
+        except Exception:
+            logger.exception("Failed to deliver a reply piece on discord")
+            try:
+                await channel.send(msg("send_failed", session.language))
+            except Exception:
+                logger.exception("Failed to deliver the send-failure notice on discord")
+            return False
+    return True
 
 
 def handle_message(db_path, sessions, key, user_input, persona):

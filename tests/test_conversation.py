@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, update_user_profile
 from core.memory_manager import MemoryChanges
 from core.session import Session
@@ -122,9 +122,28 @@ class TestHandleTurn(unittest.TestCase):
         )
         self.assertEqual(self.session.exchange_count, 1)
         
-        contents = [m["content"] for m in get_messages(self.db_path, self.user_id)]
+        stored = get_messages(self.db_path, self.user_id)
+        contents = [m["content"] for m in stored]
         self.assertIn("Hola", contents)
         self.assertIn("Respuesta de Tabris", contents)
+        self.assertEqual(self.session.last_turn_message_ids, [m["id"] for m in stored])
+
+    @patch("core.conversation.providers.chat")
+    def test_undo_last_turn_removes_it_from_the_database_and_the_history(self, mock_chat):
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+        handle_turn(self.session, "Hola", "general", self.db_path)
+
+        undo_last_turn(self.session, self.db_path)
+
+        self.assertEqual(get_messages(self.db_path, self.user_id), [])
+        self.assertEqual(self.session.conversation_history, [{"role": "system", "content": "sys"}])
+        self.assertEqual(self.session.last_turn_message_ids, [])
+        self.assertLessEqual(self.session.last_analyzed_index, len(self.session.conversation_history))
+
+    def test_undo_last_turn_does_nothing_without_a_turn_to_undo(self):
+        undo_last_turn(self.session, self.db_path)
+
+        self.assertEqual(self.session.conversation_history, [{"role": "system", "content": "sys"}])
     
     @patch("core.conversation.providers.chat")
     def test_model_error_propagates_and_rolls_back(self, mock_chat):
@@ -545,6 +564,26 @@ def test_safe_handle_turn_rejects_oversized_message(mock_chat):
         mock_chat.assert_not_called()
         assert session.conversation_history == [{"role": "system", "content": "sys"}]
         assert get_messages(db_path, user_id) == []
+
+
+@patch("core.conversation.providers.chat")
+def test_safe_handle_turn_forgets_the_previous_turn_when_it_rejects_a_message(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "cap.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        safe_handle_turn(session, "Hola", "general", db_path)
+
+        safe_handle_turn(session, "a" * (config.MESSAGE_MAX_CHARS + 1), "general", db_path)
+
+        assert session.last_turn_message_ids == []
+        assert len(get_messages(db_path, user_id)) == 2
 
 
 @patch("core.conversation.providers.chat")

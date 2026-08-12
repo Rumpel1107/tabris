@@ -11,6 +11,7 @@ class Session:
     exchange_count: int = 0
     last_trigger_time: float = field(default_factory=time.time)
     last_analyzed_index: int = 0
+    last_turn_message_ids: list = field(default_factory=list)
     rate_tokens: float = 0.0
     rate_last_refill: float = 0.0
     channel: str = ""

@@ -74,6 +74,9 @@ MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (cha
 MESSAGE_RATE_MAX = 10       # token-bucket capacity: max messages a user can burst
 MESSAGE_RATE_SECONDS = 60   # window the bucket refills over (MAX tokens per this many seconds)
 
+# --- Channel Limits ---
+DISCORD_MESSAGE_LIMIT = 2000   # hard limit Discord enforces per outgoing message; longer replies are split
+
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
 

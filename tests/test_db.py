@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -169,13 +169,29 @@ class TestMessages(unittest.TestCase):
         self.tmp.cleanup()
     
     def test_save_and_retrieve_message(self):
-        save_message(self.db_path, self.user_id, "user", "Hola Tabris")
-        
+        message_id = save_message(self.db_path, self.user_id, "user", "Hola Tabris")
+
         messages = get_messages(self.db_path, self.user_id)
-        
+
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]["role"], "user")
         self.assertEqual(messages[0]["content"], "Hola Tabris")
+        self.assertEqual(messages[0]["id"], message_id)
+
+    def test_deactivated_message_is_not_returned(self):
+        message_id = save_message(self.db_path, self.user_id, "user", "Hola Tabris")
+
+        deactivate_message(self.db_path, self.user_id, message_id)
+
+        self.assertEqual(get_messages(self.db_path, self.user_id), [])
+
+    def test_deactivate_message_ignores_another_users_message(self):
+        other_id = create_user(self.db_path, name="Ana")
+        message_id = save_message(self.db_path, self.user_id, "user", "Hola Tabris")
+
+        deactivate_message(self.db_path, other_id, message_id)
+
+        self.assertEqual(len(get_messages(self.db_path, self.user_id)), 1)
     
     def test_get_messages_respects_limit(self):
         for i in range(15):

@@ -6,7 +6,7 @@ import threading
 import time
 
 from core import memory_manager, providers
-from core.db import create_link_code, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
+from core.db import create_link_code, deactivate_message, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import extract_location, is_timezone_ambiguous, resolve_timezone
 from core.prompt import build_system_prompt, fence_user_input
 from core.search import web_fetch, web_search
@@ -259,8 +259,10 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         session.conversation_history.pop()
         raise
     session.conversation_history.append({"role": "assistant", "content": reply})
-    save_message(db_path, session.user_id, "user", user_input)
-    save_message(db_path, session.user_id, "assistant", reply)
+    session.last_turn_message_ids = [
+        save_message(db_path, session.user_id, "user", user_input),
+        save_message(db_path, session.user_id, "assistant", reply),
+    ]
     
     session.exchange_count += 1
     if should_trigger_memory(session.exchange_count, session.last_trigger_time):
@@ -290,8 +292,21 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         run_in_background(distill)
     return reply
 
+def undo_last_turn(session, db_path):
+    """Retire the last turn from the database and the session, leaving no trace of a reply the user never read."""
+    if not session.last_turn_message_ids:
+        return
+    for message_id in session.last_turn_message_ids:
+        deactivate_message(db_path, session.user_id, message_id)
+    session.last_turn_message_ids = []
+    del session.conversation_history[-2:]
+    session.last_analyzed_index = min(session.last_analyzed_index, len(session.conversation_history))
+
+
 def safe_handle_turn(session, user_input, role, db_path, persona=None):
     """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
+    # only a turn that reaches the database refills this, so an undo can never reach an older turn
+    session.last_turn_message_ids = []
     if len(user_input) > config.MESSAGE_MAX_CHARS:
         return msg("message_too_long", session.language, limit=config.MESSAGE_MAX_CHARS)
     # token-bucket rate limit: refill by elapsed time (capped), then spend one token
