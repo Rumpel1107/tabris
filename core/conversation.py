@@ -6,10 +6,11 @@ import threading
 import time
 
 from core import memory_manager, providers
-from core.db import create_link_code, get_facts, get_user, get_user_channels, save_fact, save_message
+from core.db import create_link_code, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
+from core.onboarding import extract_location, is_timezone_ambiguous, resolve_timezone
 from core.prompt import build_system_prompt, fence_user_input
 from core.search import web_fetch, web_search
-from core.strings import msg
+from core.strings import MESSAGES, msg
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,51 @@ def _run_remember_fact(db_path, user_id, content):
         return f"Already known, nothing to add: {content}"
     return f"Remembered fact [{fact_id}]: {content}"
 
+UPDATE_PROFILE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "update_profile",
+        "description": (
+            "Correct the user's own profile: the name you call them by, the city they live in, "
+            "or the language you speak to them in. Use it ONLY after the user asked to change "
+            "their own profile AND approved the exact change you proposed — never from a name, "
+            "city or language that merely came up in conversation. Send only the fields that change."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "The name to call the user by"},
+                "city": {"type": "string", "description": "The city the user lives in, with its country if the city name exists in several places"},
+                "language": {"type": "string", "description": f"Language code, one of: {', '.join(MESSAGES)}"},
+            },
+            "required": [],
+        },
+    },
+}
+
+def _run_update_profile(db_path, user_id, name=None, city=None, language=None):
+    if language is not None and language not in MESSAGES:
+        # A language outside MESSAGES would break every later msg() lookup for this user.
+        return f"Unsupported language '{language}'. Supported codes: {', '.join(MESSAGES)}."
+
+    timezone = None
+    if city is not None:
+        if is_timezone_ambiguous(city):
+            return f"The city '{city}' is ambiguous — ask the user which country it is in, then call this tool again."
+        timezone = resolve_timezone(city)
+        city = extract_location(city)
+
+    before = get_user(db_path, user_id)
+    update_user_profile(db_path, user_id, name=name, language=language, location=city, timezone=timezone)
+    changes = [
+        f"{field}: {before[column]} -> {value}"
+        for field, column, value in (("name", "name", name), ("city", "location", city), ("language", "language", language))
+        if value is not None
+    ]
+    if not changes:
+        return "Nothing to update: no field was given."
+    return "Profile updated — " + "; ".join(changes)
+
 def _run_forget_fact(db_path, user_id, fact_id):
     forgotten = memory_manager.forget_fact(db_path, user_id, fact_id)
     if forgotten is None:
@@ -180,6 +226,8 @@ def run_with_tools(role, messages, tools, extra_executors=None):
 def handle_turn(session, user_input, role, db_path, persona=None):
     if persona is not None:
         user_row = get_user(db_path, session.user_id)
+        # The stored profile is the record; the session only caches it, so it refreshes here.
+        session.language = user_row["language"]
         facts = get_facts(db_path, session.user_id)
         system_message = {
             "role": "system",
@@ -199,11 +247,12 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         reply = run_with_tools(
             role,
             build_messages(session.conversation_history),
-            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL],
+            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
             extra_executors={
                 "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
                 "remember_fact": lambda content: _run_remember_fact(db_path, session.user_id, content),
                 "request_link_code": lambda: _run_request_link_code(db_path, session.user_id),
+                "update_profile": lambda **fields: _run_update_profile(db_path, session.user_id, **fields),
             },
         )
     except Exception:

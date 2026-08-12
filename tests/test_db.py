@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_language, _connect
+from core.db import deactivate_fact, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -259,24 +259,45 @@ class TestForeignKeyEnforcement(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             save_fact(self.db_path, 999, "Hecho huérfano")
 
-class TestUpdateUserLanguage(unittest.TestCase):
-    def test_updates_language(self):
+class TestUpdateUserProfile(unittest.TestCase):
+    def test_updates_only_the_given_field(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "test.db")
             init_db(db)
-            user_id = create_user(db, "Rumpel", "en")
-            update_user_language(db, user_id, "es")
+            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
+            update_user_profile(db, user_id, name="Mauricio")
             user = get_user(db, user_id)
+            self.assertEqual(user["name"], "Mauricio")
+            self.assertEqual(user["language"], "en")
+            self.assertEqual(user["location"], "Bogotá")
+            self.assertEqual(user["timezone"], "America/Bogota")
+
+    def test_updates_several_fields_at_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
+            update_user_profile(db, user_id, location="Cali", timezone="America/Bogota", language="es")
+            user = get_user(db, user_id)
+            self.assertEqual(user["location"], "Cali")
             self.assertEqual(user["language"], "es")
-    
+
     def test_does_not_affect_other_users(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "test.db")
             init_db(db)
             id1 = create_user(db, "Rumpel", "en")
             id2 = create_user(db, "Ana", "en")
-            update_user_language(db, id1, "es")
+            update_user_profile(db, id1, language="es")
             self.assertEqual(get_user(db, id2)["language"], "en")
+
+    def test_no_fields_leaves_the_row_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
+            update_user_profile(db, user_id)
+            self.assertEqual(get_user(db, user_id)["name"], "Rumpel")
 
 class TestUserChannels(unittest.TestCase):
 

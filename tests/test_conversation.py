@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, find_link_code, get_facts, get_messages, init_db, redeem_link_code, register_user_channel, save_fact
+from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, update_user_profile
 from core.memory_manager import MemoryChanges
 from core.session import Session
 from core.strings import msg
@@ -180,7 +180,7 @@ class TestHandleTurn(unittest.TestCase):
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL])
 
 
 @patch("core.conversation.providers.chat")
@@ -204,6 +204,25 @@ def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
 
         assert "Vive en Panama" in session.conversation_history[0]["content"]
         assert "You talk to them over cli." in session.conversation_history[0]["content"]
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_refreshes_session_language_from_the_stored_profile(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="ok", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "language.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        update_user_profile(db_path, user_id, language="en")
+        handle_turn(session, "hola", "general", db_path, persona="PERSONA")
+
+        assert session.language == "en"
 
 
 @patch("core.conversation.memory_manager.analyze_memory")
@@ -414,6 +433,78 @@ def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
 
         assert reply == "Listo, olvidado"
         assert get_facts(db_path, user_id) == []
+
+
+def _profile_session_and_tool_call(db_path, arguments):
+    user_id = create_user(db_path, "Rumpel", "es", "Bogotá", "America/Bogota")
+    session = Session(
+        user_id=user_id,
+        language="es",
+        conversation_history=[{"role": "system", "content": "sys"}],
+    )
+    tool_call = SimpleNamespace(
+        id="call_p1",
+        function=SimpleNamespace(name="update_profile", arguments=arguments),
+    )
+    return user_id, session, tool_call
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "profile.db")
+        init_db(db_path)
+        user_id, session, tool_call = _profile_session_and_tool_call(db_path, '{"city": "Cali"}')
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="Listo, ahora estás en Cali", tool_calls=None),
+        ]
+
+        with patch("core.conversation.is_timezone_ambiguous", return_value=False), \
+             patch("core.conversation.resolve_timezone", return_value="America/Bogota"), \
+             patch("core.conversation.extract_location", return_value="Cali"):
+            handle_turn(session, "me mudé a Cali", "general", db_path)
+
+        user = get_user(db_path, user_id)
+        assert user["location"] == "Cali"
+        assert user["timezone"] == "America/Bogota"
+        tool_message = mock_chat.call_args_list[1][0][1][-1]
+        assert "Bogotá" in tool_message["content"]
+        assert "Cali" in tool_message["content"]
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "profile.db")
+        init_db(db_path)
+        user_id, session, tool_call = _profile_session_and_tool_call(db_path, '{"city": "Córdoba"}')
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="¿En qué país?", tool_calls=None),
+        ]
+
+        with patch("core.conversation.is_timezone_ambiguous", return_value=True):
+            handle_turn(session, "me mudé a Córdoba", "general", db_path)
+
+        assert get_user(db_path, user_id)["location"] == "Bogotá"
+        assert "ambiguous" in mock_chat.call_args_list[1][0][1][-1]["content"].lower()
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_update_profile_tool_rejects_an_unsupported_language(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "profile.db")
+        init_db(db_path)
+        user_id, session, tool_call = _profile_session_and_tool_call(db_path, '{"language": "spanish"}')
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[tool_call]),
+            providers.ChatResponse(content="No pude cambiarlo", tool_calls=None),
+        ]
+
+        handle_turn(session, "hablemos en spanish", "general", db_path)
+
+        assert get_user(db_path, user_id)["language"] == "es"
 
 
 @patch("core.conversation.providers.chat", side_effect=Exception("all providers down"))

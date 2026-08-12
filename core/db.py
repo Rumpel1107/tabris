@@ -126,11 +126,22 @@ def get_messages(db_path, user_id, limit=20):
         ).fetchall()
         return list(reversed([dict(row) for row in rows]))
 
-def update_user_language(db_path, user_id, language):
+def update_user_profile(db_path, user_id, name=None, language=None, location=None, timezone=None):
+    """Update only the fields given; anything left as None keeps its stored value."""
+    updates = {
+        column: value
+        for column, value in (("name", name), ("language", language),
+                              ("location", location), ("timezone", timezone))
+        if value is not None
+    }
+    if not updates:
+        return
+    # Column names come from the tuple above, never from a caller's string.
+    assignments = ", ".join(f"{column} = ?" for column in updates)
     with contextlib.closing(_connect(db_path)) as conn:
         conn.execute(
-            "UPDATE users SET language = ? WHERE id = ?",
-            (language, user_id)
+            f"UPDATE users SET {assignments} WHERE id = ?",
+            (*updates.values(), user_id)
         )
         conn.commit()
 

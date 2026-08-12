@@ -23,12 +23,14 @@ Under the hood, each kind of request runs on a model chosen for that job rather 
 
 ## ✨ Features
 
-- **Persistent memory** — facts about each user are distilled from conversation into SQLite and injected into later sessions. Memory is append-only and reversible: facts are retired, never deleted, and users can ask what is stored and have it forgotten.
+- **Persistent memory** — facts about each user are distilled from conversation into SQLite and injected into later sessions. Memory is append-only and reversible: facts are retired, never deleted. Users stay in control of it from the conversation itself: ask what is stored, have something forgotten or remembered, and correct their own profile.
 - **Multi-user by design** — identity is `(channel, key)`, never a name. Each user gets their own memory, language, location and timezone.
+- **One profile across channels** — a short-lived code issued on one channel and pasted on another links both to the same profile, so the memory follows the person rather than the account.
 - **Web access** — the assistant searches the web and reads pages when a question needs current information.
 - **A model per task** — each request is routed to a role, and every role runs on the model picked for that job: a small fast one classifies intent, a code-strong one answers programming questions, a dedicated one distills memory in the background, and general chat gets its own. Roles and their models are plain data in `config.py`.
 - **Automatic fallback** — each role carries an ordered list of providers. On error or exhausted quota the next one takes over, ending with a local model as the last resort.
-- **Channel-agnostic core** — channels are thin adapters over shared logic, so a new one is an adapter rather than a rewrite.
+- **Channel-agnostic core** — channels are thin adapters over shared logic, so a new one is an adapter rather than a rewrite. Onboarding, abuse limits and memory are written once and inherited by every channel.
+- **Guarded by default** — every incoming message passes a length cap and a per-user rate limit before it reaches a model, on any channel.
 
 ---
 
@@ -61,18 +63,17 @@ Then run it:
 |---|---|---|
 | **Start** | `python main.py` | `python discord_ch.py` |
 | **Identity** | local id file (`tabris_client_id`) | Discord user id |
-| **Onboarding** | asks for name, language and city | taken from the Discord profile |
 | **Ending a session** | say that you want to exit | the bot stays online |
 | **Extra setup** | none | bot token + **Message Content Intent** enabled in the Discord Developer Portal |
 
-Each channel is a separate profile today, with its own memory. Linking several channels to one profile is on the roadmap.
+Both channels run the same onboarding — language, name and city, asked in conversation — and a channel starts as its own profile. To join them, ask Tabris on a channel it already knows you for a link code and paste it as the first message on the new one: from then on both share one profile and one memory.
 
 ---
 
 ## 🧩 Project layout
 
 ```
-core/           channel-agnostic logic: conversation, memory, providers, search, prompts, database
+core/           channel-agnostic logic: conversation, onboarding, memory, providers, search, prompts, database
 main.py         command-line adapter
 discord_ch.py   Discord adapter
 config.py       structure and non-secret configuration (roles, providers, limits)
