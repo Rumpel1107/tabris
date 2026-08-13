@@ -56,6 +56,7 @@ class TestGetClient(unittest.TestCase):
             base_url=providers.PROVIDER_CONFIG["groq"]["base_url"],
             api_key=providers.PROVIDER_CONFIG["groq"]["api_key"],
             timeout=config.PROVIDER_TIMEOUT,
+            max_retries=0,
         )
     
     @patch("core.providers.OpenAI")

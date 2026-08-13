@@ -60,7 +60,8 @@ fi
 
 # Permissions are OS-level and never survive a copy, so reapply them every run.
 chmod 600 .env
-chmod 600 ./*.db* ./*_client_id 2>/dev/null || true
+mkdir -p data
+chmod 600 data/*.db* data/*_client_id 2>/dev/null || true
 
 # --- Verify ---
 "$VENV/bin/python" -m pytest -q

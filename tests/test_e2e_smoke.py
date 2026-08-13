@@ -1,5 +1,4 @@
 import config
-import main
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -8,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from channels import cli
 from core import providers
 from core.db import register_user_channel, get_messages
 from core.strings import msg
@@ -24,7 +24,7 @@ class TestChatE2ESmoke(unittest.TestCase):
     
     @patch("core.providers.chat")
     @patch("builtins.input")
-    @patch("main.get_client_key", return_value="test-key-123")
+    @patch("channels.cli.get_client_key", return_value="test-key-123")
     def test_conversation_persists_to_db(self, mock_key, mock_input, mock_chat):
         mock_input.side_effect = ["Hola", msg("exit_command", "es")]
         mock_chat.side_effect = [
@@ -40,7 +40,7 @@ class TestChatE2ESmoke(unittest.TestCase):
         register_user_channel(self.db_path, user_id, "cli", "test-key-123")
         
         with patch.object(config, "DB_PATH", self.db_path):
-            main.chat()
+            cli.chat()
         
         contents = [m["content"] for m in get_messages(self.db_path, user_id)]
         self.assertIn("Hola", contents)
@@ -79,7 +79,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
     
     @patch("core.providers.chat")
     @patch("builtins.input")
-    @patch("main.get_client_key", return_value="new-user-key")
+    @patch("channels.cli.get_client_key", return_value="new-user-key")
     def test_new_spanish_user_full_flow(self, mock_key, mock_input, mock_chat):
         mock_input.side_effect = [
             "Hola, como estas",  # first message (triggers language detection)
@@ -108,7 +108,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
         init_db(self.db_path)
         
         with patch.object(config, "DB_PATH", self.db_path):
-            main.chat()
+            cli.chat()
         
         user = find_user_by_key(self.db_path, "cli", "new-user-key")
         self.assertEqual(user["name"], "Carlos")
@@ -119,10 +119,10 @@ class TestNewUserLanguageE2E(unittest.TestCase):
         self.assertIn("Cuentame algo", contents)
         self.assertIn("Respuesta de Tabris", contents)
 
-@patch("main.memory_manager.analyze_memory")
+@patch("channels.cli.memory_manager.analyze_memory")
 @patch("core.providers.chat")
 @patch("builtins.input")
-@patch("main.get_client_key", return_value="test-key-123")
+@patch("channels.cli.get_client_key", return_value="test-key-123")
 def test_exit_without_new_turns_skips_distillation(mock_key, mock_input, mock_chat, mock_analyze):
     from core.db import init_db, create_user
 
@@ -136,6 +136,6 @@ def test_exit_without_new_turns_skips_distillation(mock_key, mock_input, mock_ch
         mock_chat.side_effect = [providers.ChatResponse(content="exit", tool_calls=None)]
 
         with patch.object(config, "DB_PATH", db_path):
-            main.chat()
+            cli.chat()
 
         mock_analyze.assert_not_called()

@@ -49,8 +49,8 @@ On its first run it creates `.env` from `.env.example`. Add your API keys there 
 Then run it:
 
 ```bash
-~/.venvs/tabris/bin/python main.py          # command line
-~/.venvs/tabris/bin/python discord_ch.py    # Discord bot
+~/.venvs/tabris/bin/python -m channels.cli          # command line
+~/.venvs/tabris/bin/python -m channels.discord_ch   # Discord bot
 ```
 
 > **Requirements:** Python 3.13+ and at least one model provider API key.
@@ -61,8 +61,8 @@ Then run it:
 
 | | Command line | Discord |
 |---|---|---|
-| **Start** | `python main.py` | `python discord_ch.py` |
-| **Identity** | local id file (`tabris_client_id`) | Discord user id |
+| **Start** | `python -m channels.cli` | `python -m channels.discord_ch` |
+| **Identity** | local id file (`data/tabris_client_id`) | Discord user id |
 | **Ending a session** | say that you want to exit | the bot stays online |
 | **Extra setup** | none | bot token + **Message Content Intent** enabled in the Discord Developer Portal |
 
@@ -74,10 +74,10 @@ Both channels run the same onboarding — language, name and city, asked in conv
 
 ```
 core/           channel-agnostic logic: conversation, onboarding, memory, providers, search, prompts, database
-main.py         command-line adapter
-discord_ch.py   Discord adapter
+channels/       thin adapters, one per channel: cli.py, discord_ch.py
 config.py       structure and non-secret configuration (roles, providers, limits)
-persona.md      the assistant's identity, loaded into the system prompt
+prompts/        persona.md — the assistant's identity, loaded into the system prompt
+data/           SQLite database and local identity file — gitignored, created on first run
 .env            API keys — gitignored, created from .env.example
 ```
 

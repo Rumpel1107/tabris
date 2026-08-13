@@ -5,11 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from main import get_client_key
-from config import MAX_HISTORY
-from core import providers
+from channels.cli import get_client_key
 from core.prompt import build_system_prompt, fence_user_input, format_datetime, load_persona
-from unittest.mock import patch
 
 
 class TestBuildSystemPrompt(unittest.TestCase):

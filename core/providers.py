@@ -40,6 +40,7 @@ def _get_client(provider):
             base_url=settings["base_url"],
             api_key=settings["api_key"],
             timeout=config.PROVIDER_TIMEOUT,
+            max_retries=0,  # our own fallback chain already handles a failed provider
         )
     return _clients[provider]
 

@@ -1,3 +1,4 @@
+import asyncio
 import config
 import discord
 import logging
@@ -18,6 +19,16 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 
+_locks = {}
+
+
+async def _run_locked(key, func, *args):
+    """Run a blocking call in a worker thread, serialized per key so the same person's turns never overlap."""
+    if key not in _locks:
+        _locks[key] = asyncio.Lock()
+    async with _locks[key]:
+        return await asyncio.to_thread(func, *args)
+
 
 @client.event
 async def on_ready():
@@ -29,7 +40,7 @@ async def on_message(message):
     if message.author == client.user:
         return
     key = str(message.author.id)
-    reply = handle_message(db_path, sessions, key, message.content, persona)
+    reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
     session = sessions[("discord", key)]
     if not await send_reply(message.channel, reply, session):
         undo_last_turn(session, db_path)

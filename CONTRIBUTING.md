@@ -5,7 +5,7 @@ How this project is built and how to keep building it — for any collaborator, 
 ## Development workflow
 
 - **TDD.** Write the failing test first (red), then the implementation (green), then refactor. Never write implementation before a failing test exists.
-- **End-to-end at every step.** An item is done only when the real app (`main.py`) exercises the new code path and the path it replaces is retired — not when a module exists with green unit tests. No deferred integration.
+- **End-to-end at every step.** An item is done only when the real app (`channels/cli.py`) exercises the new code path and the path it replaces is retired — not when a module exists with green unit tests. No deferred integration.
 - **Vibe-coding boundary.** Scaffolding (UI, framework, deploy, boilerplate) may be generated fast. Domain logic (e.g. tax/payroll calculations) must be fully understood, owned, and tested — it is the product. Vibe-code how it looks; understand how it calculates.
 - **Memory writes auto-apply; other destructive actions stay human-confirmed.** Memory distillation applies automatically — soft-delete + `retired_at` keep every change reversible, and the user prunes via the forget flow. File changes and any non-reversible action are still confirmed by the user before being applied.
 

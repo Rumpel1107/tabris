@@ -1,4 +1,4 @@
-from core.session import Session, get_or_create_session
+from core.session import get_or_create_session
 
 def test_creates_new_session_with_defaults():
     sessions = {}

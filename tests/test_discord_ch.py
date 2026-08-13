@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import asyncio
 import tempfile
+import threading
 from unittest.mock import patch
 
 import config
@@ -11,7 +12,7 @@ from core.db import create_user, find_user_by_key, get_messages, init_db, regist
 from core.providers import ChatResponse
 from core.session import Session
 from core.strings import msg
-import discord_ch
+from channels import discord_ch
 
 
 @patch("core.onboarding.detect_language", return_value="es")
@@ -27,7 +28,7 @@ def test_handle_message_onboards_an_unknown_person_instead_of_creating_a_user(mo
         assert reply == msg("language_detected", "es", agent=config.AGENT_NAME)
 
 
-@patch("discord_ch.route_message", return_value="general")
+@patch("channels.discord_ch.route_message", return_value="general")
 @patch("core.conversation.providers.chat", return_value=ChatResponse(content="Hola, soy Tabris"))
 def test_handle_message_replies_to_a_known_person(mock_chat, mock_route):
     with tempfile.TemporaryDirectory() as tmp:
@@ -54,6 +55,51 @@ class FakeChannel:
         if self.attempts == self.fail_on:
             raise RuntimeError("send failed")
         self.sent.append(content)
+
+
+def test_run_locked_offloads_the_call_to_a_thread():
+    calls = []
+
+    def work(a, b):
+        calls.append((a, b))
+        return "done"
+
+    result = asyncio.run(discord_ch._run_locked("some-key", work, "x", "y"))
+
+    assert result == "done"
+    assert calls == [("x", "y")]
+
+
+def test_run_locked_serializes_calls_for_the_same_key_but_not_across_keys():
+    order = []
+    release_first = threading.Event()
+
+    def first(key):
+        order.append(f"{key}-start")
+        release_first.wait(timeout=1)
+        order.append(f"{key}-end")
+
+    def other(key):
+        order.append(f"{key}-start")
+        order.append(f"{key}-end")
+
+    async def scenario():
+        blocked = asyncio.create_task(discord_ch._run_locked("alice", first, "alice"))
+        await asyncio.sleep(0.05)  # let it acquire the lock and start blocking
+
+        same_key = asyncio.create_task(discord_ch._run_locked("alice", other, "alice-2"))
+        different_key = asyncio.create_task(discord_ch._run_locked("bob", other, "bob"))
+        await asyncio.sleep(0.05)
+
+        # bob doesn't wait on alice's lock; alice-2 does
+        assert order == ["alice-start", "bob-start", "bob-end"]
+
+        release_first.set()
+        await asyncio.gather(blocked, same_key, different_key)
+
+    asyncio.run(scenario())
+
+    assert order == ["alice-start", "bob-start", "bob-end", "alice-end", "alice-2-start", "alice-2-end"]
 
 
 def test_a_short_reply_is_sent_as_one_message():
