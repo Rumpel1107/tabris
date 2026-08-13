@@ -2,7 +2,7 @@ from zoneinfo import ZoneInfo
 
 import config
 from core import providers
-from core.db import create_user, find_link_code, get_user, redeem_link_code, register_user_channel
+from core.db import create_user_with_channel, find_link_code, get_user, redeem_link_code
 from core.prompt import fence_user_input
 from core.strings import msg
 
@@ -77,9 +77,10 @@ def advance_onboarding(session, user_input: str, db_path: str) -> str:
         if not interpret_yes_no(user_input):
             session.onboarding_step = "link_or_name"
             return msg("ask_name", session.language, agent=config.AGENT_NAME)
-        user_id = create_user(db_path, session.pending_name, session.language, session.pending_city, session.pending_timezone)
-        register_user_channel(db_path, user_id, session.channel, session.key)
-        session.user_id = user_id
+        session.user_id = create_user_with_channel(
+            db_path, session.pending_name, session.channel, session.key,
+            language=session.language, location=session.pending_city, timezone=session.pending_timezone,
+        )
         session.onboarding_step = None
         return msg("onboarding_done", session.language, agent=config.AGENT_NAME, name=session.pending_name)
 

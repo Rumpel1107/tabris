@@ -240,7 +240,9 @@ def handle_turn(session, user_input, role, db_path, persona=None):
         if session.conversation_history and session.conversation_history[0]["role"] == "system":
             session.conversation_history[0] = system_message
         else:
+            # inserting shifts every position, and the watermark is one of them
             session.conversation_history.insert(0, system_message)
+            session.last_analyzed_index += 1
 
     session.conversation_history.append({"role": "user", "content": user_input})
     try:

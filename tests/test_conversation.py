@@ -129,6 +129,17 @@ class TestHandleTurn(unittest.TestCase):
         self.assertEqual(self.session.last_turn_message_ids, [m["id"] for m in stored])
 
     @patch("core.conversation.providers.chat")
+    def test_inserting_the_system_prompt_keeps_the_distillation_watermark_aligned(self, mock_chat):
+        mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+        self.session.conversation_history = [{"role": "user", "content": "conversación previa"}]
+        self.session.last_analyzed_index = 1
+
+        handle_turn(self.session, "Hola", "general", self.db_path, persona="PERSONA")
+
+        analyzed = self.session.conversation_history[:self.session.last_analyzed_index]
+        self.assertEqual(analyzed[-1], {"role": "user", "content": "conversación previa"})
+
+    @patch("core.conversation.providers.chat")
     def test_undo_last_turn_removes_it_from_the_database_and_the_history(self, mock_chat):
         mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
         handle_turn(self.session, "Hola", "general", self.db_path)

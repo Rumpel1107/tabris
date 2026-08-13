@@ -83,6 +83,21 @@ def create_user(db_path, name, language="en", location="", timezone="UTC"):
         conn.commit()
         return user_id
 
+def create_user_with_channel(db_path: str, name: str, channel: str, key: str, language: str = "en", location: str = "", timezone: str = "UTC") -> int:
+    """Create a user and the channel that reaches them in one transaction: a user without a channel is unreachable."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        with conn:
+            cursor = conn.execute(
+                "INSERT INTO users (name, language, location, timezone) VALUES (?, ?, ?, ?)",
+                (name, language, location, timezone)
+            )
+            user_id = cursor.lastrowid
+            conn.execute(
+                "INSERT INTO user_channels (user_id, channel, key) VALUES (?, ?, ?)",
+                (user_id, channel, key)
+            )
+        return user_id
+
 def get_user(db_path, user_id):
     with contextlib.closing(_connect(db_path)) as conn:
         row = conn.execute(

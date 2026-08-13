@@ -3,9 +3,9 @@ import discord
 import logging
 
 from core.conversation import route_message, safe_handle_turn, undo_last_turn
-from core.db import find_user_by_key, get_facts, get_messages, get_user, init_db
+from core.db import find_user_by_key, get_messages, init_db
 from core.onboarding import advance_onboarding
-from core.prompt import build_system_prompt, load_persona
+from core.prompt import load_persona
 from core.session import get_or_create_session
 from core.strings import msg
 from core.text import split_message
@@ -64,15 +64,8 @@ def handle_message(db_path, sessions, key, user_input, persona):
         return advance_onboarding(session, user_input, db_path)
 
     if not session.conversation_history:
-        user_row = get_user(db_path, session.user_id)
-        facts = get_facts(db_path, session.user_id)
-        system_prompt = build_system_prompt(
-            persona, facts, language=session.language,
-            name=user_row["name"], location=user_row["location"], timezone=user_row["timezone"],
-        )
-        session.conversation_history = [{"role": "system", "content": system_prompt}]
         past_messages = get_messages(db_path, session.user_id, limit=config.MAX_HISTORY * 2)
-        session.conversation_history += [
+        session.conversation_history = [
             {"role": message["role"], "content": message["content"]}
             for message in past_messages
         ]

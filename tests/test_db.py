@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -332,6 +332,28 @@ class TestUserChannels(unittest.TestCase):
             user = find_user_by_key(db, "cli", "abc-123")
             self.assertEqual(user["id"], user_id)
             self.assertEqual(user["language"], "es")
+
+    def test_create_user_with_channel_links_it_in_one_step(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            user_id = create_user_with_channel(db, "Rumpel", "discord", "42", language="es")
+            user = find_user_by_key(db, "discord", "42")
+            self.assertEqual(user["id"], user_id)
+            self.assertEqual(user["language"], "es")
+
+    def test_create_user_with_channel_leaves_no_user_when_the_channel_is_taken(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "test.db")
+            init_db(db)
+            create_user_with_channel(db, "Ana", "discord", "42")
+
+            with self.assertRaises(sqlite3.IntegrityError):
+                create_user_with_channel(db, "Rumpel", "discord", "42")
+
+            with contextlib.closing(_connect(db)) as conn:
+                names = [row[0] for row in conn.execute("SELECT name FROM users")]
+            self.assertEqual(names, ["Ana"])
 
     def test_same_key_different_channel_is_independent(self):
         with tempfile.TemporaryDirectory() as tmp:
