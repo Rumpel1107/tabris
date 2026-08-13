@@ -65,15 +65,33 @@ to clone the repo, add their own API keys, and run their own Tabris.
 
 ## 4. Target Architecture
 
-### 4.1 Current state (v0 — local CLI)
+### 4.1 Current state (updated 2026-08-12)
 ```
-tabris.py (input() loop)
-  ├── route_message()      → keyword router → llama3.1:8b | qwen2.5-coder:7b (Ollama)
-  ├── memory.md            → single markdown file, injected as system prompt
-  └── memory_manager.py    → LLM proposes section updates, human confirms, file overwritten
+channels/        thin adapters, one per channel — cli.py, discord_ch.py
+                 started with `python -m channels.<name>`
+core/            channel-agnostic — conversation, onboarding, memory_manager, db,
+                 providers, search, prompt, session, strings, text
+config.py        roles, providers, limits (committed)  ·  .env — secrets (gitignored)
+prompts/         persona.md, loaded into the system prompt
+data/            tabris.db + the CLI identity file (gitignored, chmod 600)
+tests/           mirrors the modules one to one
+```
+Per-turn flow, identical on every channel:
+```
+incoming message
+  └── adapter: resolve (channel, key) → Session
+        ├── no user yet → advance_onboarding()          (shared state machine)
+        └── route_message() → safe_handle_turn()
+              └── handle_turn(): rebuild system prompt (persona + facts + profile + now)
+                    └── run_with_tools() ⇄ providers.chat() → ordered fallback chain
+                          └── after replying: distillation runs in a background thread
 ```
 
-### 4.2 Target state (v1 — cloud, API-based)
+### 4.2 Target state (v1 — cloud, API-based) — reached, with deviations
+The original sketch below was met. Names landed differently and are worth knowing when
+reading older entries: `core/agent.py` became `core/conversation.py`; `core/router.py`
+never became a module (`route_message` lives in `core/conversation.py`); `core/memory.py`
+split into `core/memory_manager.py` (distillation) and `core/db.py` (storage).
 ```
 [Telegram adapter]──┐
 [CLI adapter]───────┤
@@ -93,29 +111,19 @@ tabris.py (input() loop)
 near-identical), and falls back to the next provider on error. Future specialized agents
 (research, documents, images) are added as new roles in the same map.
 
-**Config shape (sketch):**
-```python
-# config.py — structure, committed to git
-AGENT_ROLES = {
-    "general":  {"provider": "deepseek", "model": "deepseek-chat",   "fallback": "groq"},
-    "code":     {"provider": "deepseek", "model": "deepseek-chat",   "fallback": "groq"},
-    "router":   {"provider": "groq",     "model": "llama-3.1-8b-instant"},  # cheap/free, fast
-    # future: "research", "documents", "images" — added by strength, not all at once
-}
-# .env — secrets, NEVER committed          # .env.example — template, committed
-DEEPSEEK_API_KEY=sk-...                    DEEPSEEK_API_KEY=
-GROQ_API_KEY=gsk_...                       GROQ_API_KEY=
-GEMINI_API_KEY=...                         GEMINI_API_KEY=
-TELEGRAM_BOT_TOKEN=...                     TELEGRAM_BOT_TOKEN=
-```
+**Config shape:** `config.py` is the source of truth — read it there, not here. Its shape
+outgrew the original sketch: each role carries a `description` (the router builds its prompt
+from these, so a new role only touches `config.py`), a `temperature`, and an **ordered list**
+of `{provider, model}` tried in turn, ending in a local model. Secrets stay in `.env`,
+documented by `.env.example`.
 
 ### 4.3 Memory re-architecture
 Evolution path — build the step you need, not the whole ladder:
 
 | Stage | Storage | When |
 |---|---|---|
-| M0 (now) | `memory.md`, single user, whole file as system prompt | Keep during Phase 1–2 |
-| M1 | SQLite: `users`, `facts` (persistent profile/preferences), `messages` (recent history). System prompt assembled from facts + last N messages. | Phase 3 — when Telegram lands (Telegram gives you user IDs for free) |
+| M0 (retired) | `memory.md`, single user, whole file as system prompt | Phase 1–2; removed in item 28c |
+| M1 (now) | SQLite: `users`, `facts` (persistent profile/preferences), `messages` (recent history). System prompt assembled from facts + last N messages. | ✅ Phase 3 |
 | M2 | Per-user profiles + per-project context; summarization of old history | When a second real user exists. **Do not build before.** |
 | M3 (candidate) | Graph / GraphRAG memory: facts stored as entities + relations, retrieval by traversing connections (or plain embeddings-RAG as the cheaper precursor). | **Only if M1/M2 prove insufficient.** Entry criteria for the full graph, ALL must hold: (1) plain embeddings-RAG over `facts` returns disconnected fragments the model can't relate on its own; (2) more than one real user with richly interrelated facts; (3) a need to explain *why* a memory was recalled. Until then this is over-engineering — see §9 scope-creep risk. Cheaper middle ground reachable from M1: a `fact_links(fact_id, related_fact_id, relation)` table = navigable relations on SQLite, no graph DB. **Separate, lower-bar trigger for the embeddings-RAG precursor alone (identified 2026-07-08):** `get_facts()`/`build_system_prompt()` inject every active fact into the system prompt with no cap, unlike conversation history (§4.4). If facts volume alone risks overflowing the context window — regardless of any relational need — that alone justifies moving to embeddings-RAG top-K retrieval, without waiting on the 3 criteria above (those gate the full graph, not this precursor). |
 
@@ -227,7 +235,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - ❌ Learning transparency (evaluated + dropped 2026-07-28): in-line "here's what I learned" notices after each auto-applied pass break conversational flow (contradict item 30c's concise persona) for low security value — distillation reads only user turns (no external-content vector), facts are user-scoped (self-harm only), and mass injection is already caught by the anomaly guard. Visibility kept via server-side log + on-demand audit (list facts + forget).
    - ✅ (2026-07-23, validated with real runs on CLI + Discord) Memory HITL redesigned as auto-apply: `update_memory` split into pure `analyze_memory` + `apply_memory_changes` (no `print`/`input` in core); `handle_turn` auto-applies and logs. `facts.retired_at` column (idempotent migration) makes `facts` the full ledger — no separate audit table. `forget_fact` core function + conversation tool (model supplies only `fact_id`; `db_path`/`user_id` session-bound in `handle_turn` — security boundary). System prompt lists facts with `[id]`; `persona.md` teaches the flow: numbered list on request, forget only on explicit ask, confirm + reversibility note, correction = forget + re-learn (no edit action).
    - ✅ (2026-07-23) Generic error message to the user on failure, centralized in the core (not per-channel): new `safe_handle_turn` in `core/conversation.py` wraps `handle_turn`, logs the full exception server-side (`logger.exception`) and returns the generic `model_error` message (now stripped of the `{error}` interpolation that leaked the raw exception). `main.py` and `discord_ch.py` both call `safe_handle_turn` instead of `handle_turn` directly — channels no longer duplicate error-handling logic (D5). Found and fixed along the way: `discord_ch.py` had **no** error handling at all around `handle_turn`, so a model failure crashed silently with zero reply to the Discord user — worse than the CLI leak the bullet was originally about. 151 tests passing (1 new for `safe_handle_turn`, plus the discord_ch wiring test).
-   - ✅ (2026-07-30, validated on the real DB: reply saved at 02:14:18, distilled fact written at 02:14:20) **Background distillation** — implemented as designed below, with one deviation: launched with a plain non-daemon `threading.Thread` (`run_in_background` in `core/conversation.py`, catch-all `logger.exception` inside), NOT `asyncio.to_thread`. Reason: the split point lives in sync channel-agnostic core, and the CLI has no event loop at all — an asyncio launcher would force the whole chain async and drag asyncio into `main.py` for nothing (`to_thread` runs the work on an executor thread anyway). Non-daemon is Rumpel's explicit choice: the CLI waits for an in-flight pass instead of killing it on exit. Composes with the still-pending `asyncio.to_thread` around `on_message` (a worker thread can spawn a thread). Concurrent DB writes are safe because `_connect` opens a fresh connection per call (never shared across threads) plus WAL + `busy_timeout` from the bullet below. Tests: launcher (runs the work / logs exceptions) and, critically, a non-executing launcher proving the three state lines run in the *foreground* — the sync-runner test alone would still pass if they moved inside the task, which is the anti-stampede guarantee. Design as settled 2026-07-29:
+   - ✅ (2026-07-30, validated on the real DB: reply saved at 02:14:18, distilled fact written at 02:14:20) **Background distillation** — implemented as designed below, with one deviation: launched with a plain non-daemon `threading.Thread` (`run_in_background` in `core/conversation.py`, catch-all `logger.exception` inside), NOT `asyncio.to_thread`. Reason: the split point lives in sync channel-agnostic core, and the CLI has no event loop at all — an asyncio launcher would force the whole chain async and drag asyncio into `main.py` for nothing (`to_thread` runs the work on an executor thread anyway). Non-daemon is Rumpel's explicit choice: the CLI waits for an in-flight pass instead of killing it on exit. Composes with the `asyncio.to_thread` around `on_message`, done 2026-08-12 (a worker thread can spawn a thread). Concurrent DB writes are safe because `_connect` opens a fresh connection per call (never shared across threads) plus WAL + `busy_timeout` from the bullet below. Tests: launcher (runs the work / logs exceptions) and, critically, a non-executing launcher proving the three state lines run in the *foreground* — the sync-runner test alone would still pass if they moved inside the task, which is the anti-stampede guarantee. Design as settled 2026-07-29:
      - **Split point:** the reply returns after the assistant turn is appended and both messages are saved. The DB write and the counter are sub-millisecond — backgrounding them buys no perceptible time and costs out-of-order writes (SQLite orders by completion, not by send) plus loss on crash. Only the distillation LLM call moves.
      - **The background task never touches `Session`.** `analyze_memory`/`apply_memory_changes` already don't; the only shared-state mutations are the three lines closing the trigger block. Those run in the foreground *before* launching: snapshot the pending slice (a copy), advance `last_analyzed_index`, reset `exchange_count`/`last_trigger_time`, then launch with the frozen copy.
      - **Resetting the counter in the foreground is what prevents a stampede.** If it were reset in the background, every turn arriving during the pass would still see the threshold met and launch its own distillation — overlapping LLM calls analyzing the same window, duplicate facts, wasted spend.
@@ -239,6 +247,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - ✅ (2026-07-30, e2e-tested) Exit flush skipped when nothing is unanalyzed: `main.py`'s exit branch distills only when `last_analyzed_index < len(conversation_history)`. Found while validating the background pass — Rumpel force-quit a CLI session that would not close, and the culprit was this foreground LLM call analyzing an empty window right after a background pass had just covered everything. Opening the CLI and typing `salir` immediately used to burn a model call too.
    - ✅ (2026-07-29, verified on the real DB after a long CLI session: `tabris.db` went from `delete` to `wal`, 72 messages persisted, 156 tests green) **SQLite concurrency — reprioritized here from item 38**: `PRAGMA journal_mode=WAL` + `PRAGMA busy_timeout` (`config.py`, `DB_BUSY_TIMEOUT_MS = 5000`) in `_connect`, adopted together. Item 38 filed these as "hundreds of concurrent users" work; backgrounding the distillation makes write-vs-write contention reachable with **one** user (background fact writes against the next turn's `save_message`), and by the bullet above a lost pass is permanent. `busy_timeout` is the essential half (turns a hard `database is locked` into a millisecond wait); WAL reduces how often that wait happens at all. Both live in `_connect` even though WAL persists on the file — splitting pragmas across `init_db`/`_connect` is exactly the item 28b trap. Test asserts the pragma values on a connection: a threaded contention test would be slow and flaky, so this is weaker than 28b's `IntegrityError` proof, accepted knowingly.
    - ✅ (2026-07-28, verified in code) Rebuild the system prompt per turn (not just once at session start): when `handle_turn` receives `persona`, it regenerates the whole system message — fresh facts + fresh `now` (via `build_system_prompt`'s default `datetime.now(utc)`) — and replaces `conversation_history[0]`. Both CLI and Discord pass `persona`, so the `## Current context` datetime refreshes every turn. Broader than the original bullet (rebuilds facts too, not just the datetime block).
+   - ✅ (2026-08-12, diagnosed from a live gateway log) **A slow model call no longer freezes the bot.** Two causes, both fixed: the OpenAI client retried three times on its own before our fallback chain could act, tripling every timeout (`max_retries=0` — our ordered provider list already covers a failed provider); and `on_message` ran the blocking call on the event loop, so Discord's heartbeat stalled — the log escalated to "blocked for more than 50 seconds", which risks the gateway dropping the connection. `_run_locked` now offloads the call with `asyncio.to_thread`, guarded by a per-user `asyncio.Lock` so one person's turns stay ordered while other users run in parallel. The lock replaces the accidental serialization the event-loop block used to provide.
 34a. ⬜ Audio input (voice messages): transcribe incoming Discord voice messages to text via speech-to-text (Groq Whisper — cheap/fast), then feed the transcript into the normal text flow. Depends on item 34 (the messaging channel carries media; the CLI can't send audio). Read-only preprocessing step → no HITL confirmation.
 34b. ⬜ Image input (vision): accept photos sent via Discord and route them to a vision-capable model (Gemini, natively multimodal) so Tabris can "see" and reason about the image. Depends on item 34; add a vision-capable model to the `tools`/multimodal role. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
 
