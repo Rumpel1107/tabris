@@ -1,6 +1,5 @@
 import config
 import logging
-import ollama
 from dataclasses import dataclass
 from openai import OpenAI
 
@@ -47,14 +46,6 @@ def _get_client(provider):
 def _call_provider(provider, model, messages, tools=None, temperature=None):
     # Omitted rather than sent as null, so a caller without a temperature keeps the provider default.
     sampling = {} if temperature is None else {"temperature": temperature}
-    if provider == "ollama":
-        response = ollama.chat(
-            model=model,
-            messages=messages,
-            options={"num_ctx": config.NUM_CTX, **sampling},
-        )
-        return ChatResponse(content=response.message.content, tool_calls=None)
-
     client = _get_client(provider)
     response = client.chat.completions.create(model=model, messages=messages, tools=tools, **sampling)
     message = response.choices[0].message

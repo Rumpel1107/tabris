@@ -13,10 +13,9 @@ AGENT_ROLES = {
         "description": "general questions, conversation, explanations, anything not code",
         "temperature": 0.7,
         "providers": [
-            {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
             {"provider": "deepseek", "model": "deepseek-chat"},
-            {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
-            {"provider": "ollama", "model": "llama3.1:8b"},
+            {"provider": "gemini",   "model": "gemini-3.5-flash-lite"},
+            {"provider": "groq",     "model": "openai/gpt-oss-120b"},
         ],
     },
     "code": {
@@ -26,7 +25,6 @@ AGENT_ROLES = {
             {"provider": "deepseek",   "model": "deepseek-chat"},
             {"provider": "openrouter", "model": "z-ai/glm-5.2"},
             {"provider": "groq",       "model": "moonshotai/kimi-k2-instruct"},
-            {"provider": "ollama",     "model": "llama3.1:8b"},
         ],
     },
     "memory": {
@@ -34,17 +32,17 @@ AGENT_ROLES = {
         "temperature": 0.0,
         "providers": [
             {"provider": "deepseek", "model": "deepseek-chat"},
-            {"provider": "gemini",   "model": "gemini-3.1-flash-lite"},
-            {"provider": "ollama",   "model": "llama3.1:8b"},
+            {"provider": "gemini",   "model": "gemini-3.5-flash-lite"},
+            {"provider": "groq",     "model": "openai/gpt-oss-120b"},
         ],
     },
     "router": {
         "description": "classifies user intent into one of the available roles",
         "temperature": 0.0,
         "providers": [
-            {"provider": "groq",   "model": "llama-3.1-8b-instant"},
-            {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
-            {"provider": "ollama", "model": "llama3.1:8b"},
+            {"provider": "groq",     "model": "openai/gpt-oss-20b"},
+            {"provider": "gemini",   "model": "gemini-3.5-flash-lite"},
+            {"provider": "deepseek", "model": "deepseek-chat"},
         ],
     },
 }
@@ -67,7 +65,6 @@ LINK_CODE_TTL_SECONDS = 300   # how long a channel-linking code stays valid befo
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
-NUM_CTX = 8192      # token context window Ollama should use (overrides its small default)
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
 MESSAGE_RATE_MAX = 10       # token-bucket capacity: max messages a user can burst
