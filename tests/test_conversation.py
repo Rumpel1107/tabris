@@ -1,19 +1,23 @@
 import config
+import contextlib
 import logging
 import os
+import pytest
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import tempfile
 import time
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, update_user_profile
+from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
+from core.prompt import format_date
 from core.session import Session
 from core.strings import msg
 from types import SimpleNamespace
@@ -307,6 +311,22 @@ class TestRunWithTools(unittest.TestCase):
         self.assertEqual(second_call_messages[-1]["tool_call_id"], "call_1")
 
 
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_gives_up_when_a_turn_never_settles(mock_chat, mock_search):
+    tool_call = SimpleNamespace(
+        id="call_loop",
+        function=SimpleNamespace(name="web_search", arguments='{"query": "trm"}'),
+    )
+    mock_chat.return_value = providers.ChatResponse(content=None, tool_calls=[tool_call])
+    mock_search.return_value = "resultados"
+
+    with pytest.raises(RuntimeError):
+        run_with_tools("general", [{"role": "user", "content": "hola"}], tools=[WEB_SEARCH_TOOL])
+
+    assert mock_chat.call_count == config.MAX_TOOL_ROUNDS
+
+
 @patch("core.conversation.web_fetch")
 @patch("core.conversation.providers.chat")
 def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
@@ -572,6 +592,52 @@ def test_safe_handle_turn_rejects_oversized_message(mock_chat):
         reply = safe_handle_turn(session, oversized, "general", db_path)
 
         assert reply == msg("message_too_long", "es", limit=config.MESSAGE_MAX_CHARS)
+        mock_chat.assert_not_called()
+        assert session.conversation_history == [{"role": "system", "content": "sys"}]
+        assert get_messages(db_path, user_id) == []
+
+
+@patch("core.conversation.providers.chat")
+def test_no_chat_tool_can_deactivate_or_delete_an_account(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "tools.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+        mock_chat.return_value = providers.ChatResponse(content="ok", tool_calls=None)
+
+        handle_turn(session, "hola", "general", db_path)
+
+        offered = {tool["function"]["name"] for tool in mock_chat.call_args.kwargs["tools"]}
+        assert offered == {
+            "web_search", "web_fetch", "forget_fact",
+            "remember_fact", "request_link_code", "update_profile",
+        }
+
+
+@patch("core.conversation.providers.chat")
+def test_safe_handle_turn_refuses_a_deactivated_account(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "deactivated.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        with contextlib.closing(_connect(db_path)) as conn:
+            conn.execute("UPDATE users SET deactivated_at=? WHERE id=?", ("2026-08-01 10:00:00", user_id))
+            conn.commit()
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        reply = safe_handle_turn(session, "Hola", "general", db_path)
+
+        deadline = format_date(datetime(2026, 8, 15, tzinfo=timezone.utc), "es")
+        assert reply == msg("account_deactivated", "es", deadline=deadline, agent=config.AGENT_NAME)
         mock_chat.assert_not_called()
         assert session.conversation_history == [{"role": "system", "content": "sys"}]
         assert get_messages(db_path, user_id) == []

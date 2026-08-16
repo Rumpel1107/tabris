@@ -33,6 +33,6 @@ Item descriptions stay **one line**. Reasoning, alternatives, and session narrat
 
 ## Dev setup
 
-- **First run, and every new environment:** `./setup.sh`. Requires Python 3.13+. It checks the preconditions, builds the virtualenv, installs `requirements.txt`, locks down file permissions, and verifies by running the suite. Safe to re-run — it never overwrites an existing `.env`.
+- **First run, and every new environment:** `./tools/setup.sh`. Requires Python 3.13+. It checks the preconditions, builds the virtualenv, installs `requirements.txt`, locks down file permissions, and verifies by running the suite. Safe to re-run — it never overwrites an existing `.env`.
 - **Run tests:** `~/.venvs/tabris/bin/python -m pytest` (pytest is the official runner — it sees both test styles; plain `unittest discover` silently skips function-style tests).
 - **Virtualenv:** lives at `~/.venvs/tabris`, deliberately **outside** the repo. A venv hardcodes absolute paths, so one created inside a project directory breaks for any environment that did not create it — and a project directory is easily shared (mounts, sync, multiple checkouts) while `$HOME` is not. Keeping it under `$HOME` means the same command resolves to the right venv everywhere. Never create one inside the project. Override with `TABRIS_VENV=...` (location) or `PYTHON=...` (interpreter).

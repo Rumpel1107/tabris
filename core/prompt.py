@@ -12,13 +12,17 @@ def load_persona(path=config.PERSONA_PATH):
     return content.replace("{{AGENT_NAME}}", config.AGENT_NAME)
 
 
-def format_datetime(dt, language):
+def format_date(dt, language):
     lang = language if language in WEEKDAYS else "en"
     day = WEEKDAYS[lang][dt.weekday()]
     month = MONTHS[lang][dt.month - 1]
     if lang == "es":
-        return f"{day}, {dt.day} de {month} de {dt.year} — {dt.strftime('%H:%M')}"
-    return f"{day}, {month} {dt.day}, {dt.year} — {dt.strftime('%H:%M')}"
+        return f"{day}, {dt.day} de {month} de {dt.year}"
+    return f"{day}, {month} {dt.day}, {dt.year}"
+
+
+def format_datetime(dt, language):
+    return f"{format_date(dt, language)} — {dt.strftime('%H:%M')}"
 
 
 def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None):

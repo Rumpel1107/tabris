@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -80,6 +80,52 @@ def test_create_user_stores_location_and_timezone():
         user = get_user(db_path, user_id)
         assert user["location"] == "Panama"
         assert user["timezone"] == "America/Panama"
+
+
+def test_users_has_deactivated_at_column():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        with contextlib.closing(_connect(db_path)) as conn:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(users)")]
+        assert "deactivated_at" in cols
+
+
+def test_init_db_adds_deactivated_at_to_an_older_database():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, name="Ana")
+        with contextlib.closing(_connect(db_path)) as conn:
+            conn.execute("ALTER TABLE users DROP COLUMN deactivated_at")
+            conn.commit()
+
+        init_db(db_path)
+
+        with contextlib.closing(_connect(db_path)) as conn:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(users)")]
+        assert "deactivated_at" in cols
+        assert get_user(db_path, user_id)["name"] == "Ana"
+
+
+def test_get_user_records_returns_everything_stored():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user_with_channel(db_path, "Ana", "discord", "key-123")
+        retired_id = save_fact(db_path, user_id, "likes tea")
+        deactivate_fact(db_path, user_id, retired_id)
+        save_fact(db_path, user_id, "lives in Panama")
+        undone_id = save_message(db_path, user_id, "assistant", "a reply never read")
+        deactivate_message(db_path, user_id, undone_id)
+        save_message(db_path, user_id, "user", "hola")
+
+        records = get_user_records(db_path, user_id)
+
+        assert records["user"]["name"] == "Ana"
+        assert {fact["content"] for fact in records["facts"]} == {"likes tea", "lives in Panama"}
+        assert {message["content"] for message in records["messages"]} == {"a reply never read", "hola"}
+        assert records["channels"] == ["discord"]
 
 
 def test_create_user_defaults_location_and_timezone():

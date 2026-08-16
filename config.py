@@ -52,6 +52,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONA_PATH = os.path.join(BASE_DIR, "prompts", "persona.md")
 DB_PATH = os.path.join(BASE_DIR, "data", f"{AGENT_NAME.lower()}.db")
 CLIENT_ID_PATH = os.path.join(BASE_DIR, "data", f"{AGENT_NAME.lower()}_client_id")
+EXPORTS_DIR = os.path.join(BASE_DIR, "data", "exports")
 MEMORY_TRIGGER_EXCHANGES = 15
 MEMORY_TRIGGER_SECONDS = 1200
 MEMORY_MAX_NEW_FACTS = 5
@@ -62,10 +63,12 @@ DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before faili
 
 # --- Account Linking Configuration ---
 LINK_CODE_TTL_SECONDS = 300   # how long a channel-linking code stays valid before expiring (5 min)
+ACCOUNT_GRACE_DAYS = 14       # days between deactivating an account and deleting its data for good
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
+MAX_TOOL_ROUNDS = 10       # safety net: give up if a turn keeps asking for tools instead of answering
 MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
 MESSAGE_RATE_MAX = 10       # token-bucket capacity: max messages a user can burst
 MESSAGE_RATE_SECONDS = 60   # window the bucket refills over (MAX tokens per this many seconds)

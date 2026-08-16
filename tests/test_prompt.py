@@ -5,7 +5,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from core.prompt import build_system_prompt, fence_user_input, format_datetime, load_persona
+from datetime import datetime
+from core.prompt import build_system_prompt, fence_user_input, format_date, format_datetime, load_persona
+
+
+@pytest.mark.parametrize("language, expected", [
+    ("es", "miércoles, 1 de julio de 2026"),
+    ("en", "Wednesday, July 1, 2026"),
+])
+def test_format_date_omits_the_time(language, expected):
+    assert format_date(datetime(2026, 7, 1, 10, 35), language) == expected
 
 
 class TestBuildSystemPrompt(unittest.TestCase):

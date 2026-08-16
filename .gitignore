@@ -1,8 +1,10 @@
-venv/
+data/
+docs/34c/notes.md
 ollama.log
+venv/
 __pycache__/
-*.pyc
 *.db*
 *.env
-.env
+*.pyc
 *_client_id
+.env

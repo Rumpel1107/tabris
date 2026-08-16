@@ -5,7 +5,7 @@ set -euo pipefail
 # created inside a shared project directory breaks for every other environment.
 VENV="${TABRIS_VENV:-$HOME/.venvs/tabris}"
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # --- Preconditions: fail before creating anything ---
 # First candidate that both exists and meets the minimum version wins, so an

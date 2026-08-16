@@ -317,12 +317,11 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 39. ⬜ Employment contract liquidator (Colombia): validate logic with Excel prototype first (willingness-to-pay before any code); then CLI + SQLite; then minimal web UI (FastAPI + React). Becomes Tabris's first external tool once the Phase 3 tool layer is in place.
 
 ### Phase 6 — Portfolio (starts after first product ships)
-40. ⬜ Write a serious `README.md` for Tabris: what/why, architecture diagram, decisions (link this plan), setup guide ("clone → .env → run"), screenshots/GIF of the Discord bot. Also make `start_tabris.sh` portable (code review 2026-06-24): it hardcodes `~/Projects/tabris` and `cd ~/Projects/tabris` (breaks "clone → run" for any other path/user) and runs `sudo systemctl start ollama` (not portable — cloud/VPS without systemd, may prompt for a password). Fix: derive the dir from the script itself (`SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`); drop the sudo/ollama line and document the Ollama-as-fallback requirement in the README instead. Code-quality nits folded in from the code review 2026-07-02 (small, pre-publish polish, bundle in the same pass):
-   - Split `requirements.txt` into runtime (`openai`, `ollama`, `python-dotenv`, `pydantic`, ...) and `requirements-dev.txt` (`-r requirements.txt` + `pytest`); add `pip-audit` as a periodic habit for dependency CVEs.
-   - Add `.pytest_cache/` to `.gitignore`; always run pytest from the project root.
-   - `.env.example`: stray `)` in a comment, missing trailing newline.
-   - `core/memory_manager.py`: list-comprehension closing `]` misaligned (valid but confusing); `"HAS_CHANGES: yes" not in raw_response` string match is fragile against model formatting variance (`HAS_CHANGES:yes`, casing) — normalize before comparing.
-   - `main.py`: `from datetime import datetime as _datetime` is imported inside a function — move to the top-level imports.
+40. 🔶 Portfolio polish. ✅ `README.md` + `LICENSE` written (2026-07-31). `start_tabris.sh` no longer exists (Rumpel deleted it, hardcoded a stale path) and Ollama was fully retired as a provider (2026-08-13, item above) — the portability/Ollama-fallback sub-tasks are obsolete. Remaining code-quality nits from the 2026-07-02 review, still open:
+   - Split `requirements.txt` into runtime and `requirements-dev.txt` (`-r requirements.txt` + `pytest`); add `pip-audit` as a periodic habit for dependency CVEs.
+   - Add `.pytest_cache/` to `.gitignore`.
+   - `.env.example`: missing trailing newline.
+   - `core/memory_manager.py`: `"HAS_CHANGES: yes" not in raw_response` string match is fragile against model formatting variance (`HAS_CHANGES:yes`, casing) — normalize before comparing.
 41. ⬜ Security pass: confirm no secrets in git history (if any were ever committed, rotate keys).
    - **Checked 2026-08-11 — no secrets, but personal data is in the history.** `.env` and the client-id file were never tracked, so no key was ever exposed. Two early commits did add `memory.md` and `tabris.db`, and both carry the maintainer's own profile; neither is tracked today, but removing a file does not remove it from history. Purging them means rewriting history, which changes every commit hash — so it belongs before item 42, not after.
 42. ⬜ Make repo public **only after passing the Publishable Checklist (§7)**.

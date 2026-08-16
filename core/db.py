@@ -22,6 +22,7 @@ def init_db(db_path):
                 language   TEXT NOT NULL DEFAULT 'en',
                 location   TEXT NOT NULL DEFAULT '',
                 timezone   TEXT NOT NULL DEFAULT 'UTC',
+                deactivated_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             
@@ -68,6 +69,8 @@ def init_db(db_path):
             conn.execute("ALTER TABLE users ADD COLUMN location TEXT NOT NULL DEFAULT ''")
         if "timezone" not in existing:
             conn.execute("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
+        if "deactivated_at" not in existing:
+            conn.execute("ALTER TABLE users ADD COLUMN deactivated_at TEXT")
         conn.commit()
         facts_cols = {row[1] for row in conn.execute("PRAGMA table_info(facts)")}
         if "retired_at" not in facts_cols:
@@ -243,6 +246,30 @@ def get_user_channels(db_path: str, user_id: int) -> list[str]:
             (user_id,)
         ).fetchall()
         return [row["channel"] for row in rows]
+
+def get_user_records(db_path: str, user_id: int) -> dict:
+    """Return everything stored about one user, retired facts and inactive messages included.
+
+    Unlike get_facts/get_messages, which answer what the assistant should see, this answers
+    what the database actually holds. Channel keys are deliberately left out.
+    """
+    with contextlib.closing(_connect(db_path)) as conn:
+        user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        channels = conn.execute(
+            "SELECT channel FROM user_channels WHERE user_id=? ORDER BY id", (user_id,)
+        ).fetchall()
+        facts = conn.execute(
+            "SELECT * FROM facts WHERE user_id=? ORDER BY id", (user_id,)
+        ).fetchall()
+        messages = conn.execute(
+            "SELECT * FROM messages WHERE user_id=? ORDER BY id", (user_id,)
+        ).fetchall()
+        return {
+            "user": dict(user) if user else None,
+            "channels": [row["channel"] for row in channels],
+            "facts": [dict(row) for row in facts],
+            "messages": [dict(row) for row in messages],
+        }
 
 def find_user_by_key(db_path, channel, key):
     with contextlib.closing(_connect(db_path)) as conn:

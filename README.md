@@ -39,10 +39,10 @@ Under the hood, each kind of request runs on a model chosen for that job rather 
 ```bash
 git clone https://github.com/Rumpel1107/tabris.git
 cd tabris
-./setup.sh
+./tools/setup.sh
 ```
 
-`setup.sh` finds a suitable Python, creates the virtualenv outside the repo, installs dependencies, locks down file permissions, and verifies the install by running the test suite. It is safe to re-run and never overwrites an existing `.env`.
+`tools/setup.sh` finds a suitable Python, creates the virtualenv outside the repo, installs dependencies, locks down file permissions, and verifies the install by running the test suite. It is safe to re-run and never overwrites an existing `.env`.
 
 On its first run it creates `.env` from `.env.example`. Add your API keys there — **one model provider is enough to start**; search and Discord keys are optional.
 

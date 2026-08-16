@@ -5,10 +5,13 @@ import sqlite3
 import threading
 import time
 
+from zoneinfo import ZoneInfo
+
 from core import memory_manager, providers
+from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import extract_location, is_timezone_ambiguous, resolve_timezone
-from core.prompt import build_system_prompt, fence_user_input
+from core.prompt import build_system_prompt, fence_user_input, format_date
 from core.search import web_fetch, web_search
 from core.strings import MESSAGES, msg
 
@@ -209,7 +212,7 @@ def run_with_tools(role, messages, tools, extra_executors=None):
     executors = {"web_search": web_search, "web_fetch": web_fetch}
     if extra_executors:
         executors.update(extra_executors)
-    while True:
+    for _ in range(config.MAX_TOOL_ROUNDS):
         response = providers.chat(role, messages, tools=tools)
         if not response.tool_calls:
             return response.content
@@ -222,6 +225,7 @@ def run_with_tools(role, messages, tools, extra_executors=None):
             messages.append(_execute_tool_call(tool_call, executors))
         # The only trace a tool ran: tool messages stay inside the turn and are never persisted.
         logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
+    raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
 
 def handle_turn(session, user_input, role, db_path, persona=None):
     if persona is not None:
@@ -309,6 +313,15 @@ def safe_handle_turn(session, user_input, role, db_path, persona=None):
     """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
     # only a turn that reaches the database refills this, so an undo can never reach an older turn
     session.last_turn_message_ids = []
+    user_row = get_user(db_path, session.user_id)
+    if user_row["deactivated_at"]:
+        deadline = deletion_deadline(user_row["deactivated_at"]).astimezone(ZoneInfo(user_row["timezone"]))
+        return msg(
+            "account_deactivated",
+            session.language,
+            deadline=format_date(deadline, session.language),
+            agent=config.AGENT_NAME,
+        )
     if len(user_input) > config.MESSAGE_MAX_CHARS:
         return msg("message_too_long", session.language, limit=config.MESSAGE_MAX_CHARS)
     # token-bucket rate limit: refill by elapsed time (capped), then spend one token
