@@ -3,11 +3,12 @@ import os
 import pytest
 import sys
 import tempfile
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.account import deactivate_account, export_user, reactivate_account
+from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, reactivate_account
 from core.db import create_user, create_user_with_channel, deactivate_fact, deactivate_message, get_user, init_db, save_fact, save_message, update_user_profile
 
 
@@ -144,3 +145,67 @@ def test_reactivate_account_keeps_the_account_deactivated_when_the_export_cannot
                     reactivate_account(db_path, user_id)
 
         assert get_user(db_path, user_id)["deactivated_at"] is not None
+
+
+def test_purge_due_accounts_erases_an_expired_account_and_its_export():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            path = deactivate_account(db_path, user_id)
+            purged = purge_due_accounts(db_path, now=datetime(2100, 1, 1, tzinfo=timezone.utc))
+
+        assert purged == [user_id]
+        assert get_user(db_path, user_id) is None
+        assert not os.path.exists(path)
+
+
+def test_purge_due_accounts_leaves_the_still_deactivated_and_the_active_untouched():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        staying = create_user(db_path, "Ana", "es")
+        leaving = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            path = deactivate_account(db_path, leaving)
+            purged = purge_due_accounts(db_path)
+
+        assert purged == []
+        assert get_user(db_path, leaving) is not None
+        assert get_user(db_path, staying) is not None
+        assert os.path.exists(path)
+
+
+def test_purge_account_refuses_an_account_that_was_never_deactivated():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with pytest.raises(ValueError):
+            purge_account(db_path, user_id)
+
+        assert get_user(db_path, user_id) is not None
+
+
+def test_purge_account_respects_the_window_unless_it_is_explicitly_skipped():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            deactivate_account(db_path, user_id)
+            with pytest.raises(ValueError):
+                purge_account(db_path, user_id)
+            assert get_user(db_path, user_id) is not None
+
+            purge_account(db_path, user_id, ignore_deadline=True)
+
+        assert get_user(db_path, user_id) is None

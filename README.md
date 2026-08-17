@@ -70,14 +70,31 @@ Both channels run the same onboarding — language, name and city, asked in conv
 
 ---
 
+## 🔐 Leaving, and taking your data with you
+
+Any account can be exported, suspended, restored and erased. None of it is reachable from a chat — whoever runs the server does it from the operator tool:
+
+```bash
+python -m tools.admin export 3        # write everything stored about user 3 to a JSON file
+python -m tools.admin deactivate 3    # export first, then stop the account from conversing
+python -m tools.admin reactivate 3    # bring the account back and destroy the export
+python -m tools.admin purge-auto      # erase every account whose grace window has ended
+python -m tools.admin purge-force 3   # erase one account now (--skip-grace to not wait out the window)
+```
+
+A suspended account stops conversing immediately and keeps everything for a grace window (14 days, `ACCOUNT_GRACE_DAYS`), so it can still be restored intact. When the window ends the account is erased for good, and the export file lives exactly as long as the window does.
+
+---
+
 ## 🧩 Project layout
 
 ```
 core/           channel-agnostic logic: conversation, onboarding, memory, providers, search, prompts, database
 channels/       thin adapters, one per channel: cli.py, discord_ch.py
+tools/          operator scripts: setup.sh and admin.py (export, suspend, restore, erase)
 config.py       structure and non-secret configuration (roles, providers, limits)
 prompts/        persona.md — the assistant's identity, loaded into the system prompt
-data/           SQLite database and local identity file — gitignored, created on first run
+data/           SQLite database, local identity file and data exports — gitignored, created on first run
 .env            API keys — gitignored, created from .env.example
 ```
 

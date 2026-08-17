@@ -1,5 +1,6 @@
 import config
 import os
+import pytest
 import sys
 from unittest.mock import patch
 
@@ -76,3 +77,45 @@ def test_reactivate_command_aborts_on_mismatched_confirmation(capsys):
         main(["reactivate", "3"])
 
     reactivate.assert_not_called()
+
+
+def test_purge_auto_erases_the_due_accounts_without_asking(capsys):
+    with patch("tools.admin.purge_due_accounts", return_value=[3, 5]) as purge, \
+         patch("builtins.input") as ask:
+        main(["purge-auto"])
+
+    purge.assert_called_once_with(config.DB_PATH)
+    ask.assert_not_called()
+    assert "3" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv, skipped", [
+    (["purge-force", "3"], False),
+    (["purge-force", "3", "--skip-grace"], True),
+])
+def test_purge_force_confirms_and_erases_one_account(argv, skipped):
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="Ana"), \
+         patch("tools.admin.purge_account") as purge:
+        main(argv)
+
+    purge.assert_called_once_with(config.DB_PATH, 3, ignore_deadline=skipped)
+
+
+def test_purge_force_aborts_on_mismatched_confirmation():
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="wrong name"), \
+         patch("tools.admin.purge_account") as purge:
+        main(["purge-force", "3"])
+
+    purge.assert_not_called()
+
+
+def test_purge_force_reports_a_refusal_instead_of_crashing(capsys):
+    refusal = ValueError("User 3 is still inside their grace window, until 2026-09-01")
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="Ana"), \
+         patch("tools.admin.purge_account", side_effect=refusal):
+        main(["purge-force", "3"])
+
+    assert "grace window" in capsys.readouterr().out

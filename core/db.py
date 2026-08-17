@@ -204,6 +204,31 @@ def reactivate_user(db_path: str, user_id: int) -> None:
             )
 
 
+def get_deactivated_users(db_path: str) -> list[dict]:
+    """Return the id and deactivation date of every deactivated account, oldest request first."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT id, deactivated_at FROM users WHERE deactivated_at IS NOT NULL ORDER BY deactivated_at, id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def delete_user_completely(db_path: str, user_id: int) -> None:
+    """Erase every row belonging to one user, all of it or none of it.
+
+    The only hard delete in the project (see CONTRIBUTING.md): a privacy deletion that
+    only marked rows inactive would leave the data exactly where it was. Children go
+    before the user row because the foreign keys point that way.
+    """
+    with contextlib.closing(_connect(db_path)) as conn:
+        with conn:
+            conn.execute("DELETE FROM link_codes WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM user_channels WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM messages WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM facts WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+
+
 def find_link_code(text: str) -> str | None:
     """Return the link code contained in the text, or None if no word in it is shaped like one."""
     for word in text.split():

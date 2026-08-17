@@ -2,7 +2,7 @@ import argparse
 import config
 import logging
 
-from core.account import deactivate_account, export_user, reactivate_account
+from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, reactivate_account
 from core.db import get_user_records
 
 
@@ -21,6 +21,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     reactivate_command = commands.add_parser("reactivate", help="Destroy a deactivated user's export and let their account converse again.")
     reactivate_command.add_argument("user_id", type=int, help="Numeric id of the user")
+
+    commands.add_parser("purge-auto", help="Erase every deactivated account whose grace window has ended. This is the scheduled pass: it asks nothing.")
+
+    purge_force_command = commands.add_parser("purge-force", help="Erase one deactivated account by hand. Irreversible.")
+    purge_force_command.add_argument("user_id", type=int, help="Numeric id of the user")
+    purge_force_command.add_argument("--skip-grace", action="store_true", help="Erase now instead of waiting for the grace window to end")
 
     return parser
 
@@ -54,6 +60,25 @@ def main(argv=None) -> None:
         removed = reactivate_account(config.DB_PATH, args.user_id)
         destroyed = ", ".join(removed) if removed else "no export file was left to destroy"
         print(f"Reactivated. Export: {destroyed}")
+    elif args.command == "purge-auto":
+        purged = purge_due_accounts(config.DB_PATH)
+        erased = ", ".join(str(user_id) for user_id in purged) if purged else "none were due"
+        print(f"Erased {len(purged)} account(s): {erased}")
+    elif args.command == "purge-force":
+        user = get_user_records(config.DB_PATH, args.user_id)["user"]
+        print(f"About to erase user {args.user_id}: {user['name']}")
+        print(f"  Location: {user['location'] or '(none)'}")
+        print("  This erases every trace of them and cannot be undone.")
+        confirmation = input(f"Type the name exactly ({user['name']}) to confirm: ")
+        if confirmation != user["name"]:
+            print("Confirmation did not match. Nothing was changed.")
+            return
+        try:
+            purge_account(config.DB_PATH, args.user_id, ignore_deadline=args.skip_grace)
+        except ValueError as refusal:
+            print(f"Refused: {refusal}")
+            return
+        print(f"Erased user {args.user_id}. Nothing of theirs is left.")
 
 
 if __name__ == "__main__":

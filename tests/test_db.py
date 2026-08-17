@@ -6,10 +6,11 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -535,6 +536,92 @@ def test_reactivate_user_clears_the_deactivation_mark(tmp_path):
     reactivate_user(db_path, user_id)
 
     assert get_user(db_path, user_id)["deactivated_at"] is None
+
+
+def test_get_deactivated_users_returns_only_those_marked_with_their_date(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    create_user(db_path, "Ana", "es")
+    leaving = create_user(db_path, "Rumpel", "es")
+    deactivate_user(db_path, leaving)
+
+    deactivated = get_deactivated_users(db_path)
+
+    assert [row["id"] for row in deactivated] == [leaving]
+    assert deactivated[0]["deactivated_at"] is not None
+
+
+def _rows_of_user(db_path, user_id):
+    with contextlib.closing(_connect(db_path)) as conn:
+        return {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {column}=?", (user_id,)).fetchone()[0]
+            for table, column in (("users", "id"), ("facts", "user_id"), ("messages", "user_id"),
+                                  ("user_channels", "user_id"), ("link_codes", "user_id"))
+        }
+
+
+def test_delete_user_completely_leaves_no_row_in_any_table(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user_with_channel(db_path, "Ana", "discord", "key-1")
+    save_fact(db_path, user_id, "likes tea")
+    save_message(db_path, user_id, "user", "hola")
+    create_link_code(db_path, user_id)
+
+    delete_user_completely(db_path, user_id)
+
+    assert set(_rows_of_user(db_path, user_id).values()) == {0}
+
+
+def test_delete_user_completely_touches_nobody_else(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    leaving = create_user_with_channel(db_path, "Ana", "discord", "key-1")
+    staying = create_user_with_channel(db_path, "Rumpel", "cli", "key-2")
+    save_fact(db_path, leaving, "likes tea")
+    save_fact(db_path, staying, "likes coffee")
+    save_message(db_path, staying, "user", "hola")
+
+    delete_user_completely(db_path, leaving)
+
+    assert _rows_of_user(db_path, staying) == {"users": 1, "facts": 1, "messages": 1, "user_channels": 1, "link_codes": 0}
+
+
+class _ConnectionFailingOnTheUserRow:
+    """A real connection that refuses the last statement, standing in for a crash mid-delete."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, *args):
+        if sql.strip().upper().startswith("DELETE FROM USERS"):
+            raise sqlite3.OperationalError("interrupted halfway")
+        return self._conn.execute(sql, *args)
+
+    def commit(self):
+        self._conn.commit()
+
+    def __enter__(self):
+        return self._conn.__enter__()
+
+    def __exit__(self, *exc_info):
+        return self._conn.__exit__(*exc_info)
+
+    def close(self):
+        self._conn.close()
+
+
+def test_delete_user_completely_is_all_or_nothing(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user_with_channel(db_path, "Ana", "discord", "key-1")
+    save_fact(db_path, user_id, "likes tea")
+
+    with patch("core.db._connect", lambda path: _ConnectionFailingOnTheUserRow(_connect(path))):
+        with pytest.raises(sqlite3.OperationalError):
+            delete_user_completely(db_path, user_id)
+
+    assert _rows_of_user(db_path, user_id) == {"users": 1, "facts": 1, "messages": 0, "user_channels": 1, "link_codes": 0}
 
 
 def test_redeem_rejects_deactivated_account_even_with_a_valid_code(tmp_path):

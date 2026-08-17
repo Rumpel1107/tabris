@@ -4,7 +4,7 @@ import json
 import logging
 import os
 
-from core.db import deactivate_user, get_user_records, reactivate_user
+from core.db import deactivate_user, delete_user_completely, get_deactivated_users, get_user, get_user_records, reactivate_user
 from datetime import datetime, time, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -86,3 +86,51 @@ def reactivate_account(db_path: str, user_id: int) -> list[str]:
     reactivate_user(db_path, user_id)
     logger.info(f"reactivate: user {user_id} restored, {len(removed)} export file(s) destroyed")
     return removed
+
+
+def _erase(db_path: str, user_id: int) -> None:
+    """Destroy a user's export files and then their rows, in that order.
+
+    Same order as reactivate_account and for the same reason: a failed file delete leaves the
+    account deactivated and retryable, instead of erasing the rows and orphaning the copy.
+    """
+    for path in _export_paths(user_id):
+        os.remove(path)
+    delete_user_completely(db_path, user_id)
+
+
+def purge_due_accounts(db_path: str, now: datetime | None = None) -> list[int]:
+    """Erase every deactivated account whose grace window has ended and return the ids erased.
+
+    Meant to run unattended, so it asks nothing and touches nothing still inside its window.
+    `now` is injectable to keep the rule testable; when the window ends is deletion_deadline's
+    call alone, so the policy has one owner.
+    """
+    moment = now or datetime.now(timezone.utc)
+    purged = []
+    for account in get_deactivated_users(db_path):
+        if deletion_deadline(account["deactivated_at"]) > moment:
+            continue
+        _erase(db_path, account["id"])
+        purged.append(account["id"])
+    logger.info(f"purge: {len(purged)} account(s) erased")
+    return purged
+
+
+def purge_account(db_path: str, user_id: int, ignore_deadline: bool = False) -> None:
+    """Erase one account by hand, refusing anything the automatic pass would not have taken.
+
+    An account that is not deactivated is never erased. One still inside its window is erased
+    only when the operator says so explicitly — the window is a courtesy to the person, and
+    they are the ones who can waive it.
+    """
+    user = get_user(db_path, user_id)
+    if user is None:
+        raise ValueError(f"No user with id {user_id}")
+    if user["deactivated_at"] is None:
+        raise ValueError(f"User {user_id} is not deactivated: deactivate the account first")
+    deadline = deletion_deadline(user["deactivated_at"])
+    if deadline > datetime.now(timezone.utc) and not ignore_deadline:
+        raise ValueError(f"User {user_id} is still inside their grace window, until {deadline:%Y-%m-%d}")
+    _erase(db_path, user_id)
+    logger.info(f"purge: user {user_id} erased by hand")
