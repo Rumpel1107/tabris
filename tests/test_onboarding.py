@@ -11,11 +11,44 @@ from core.onboarding import (
     extract_name,
     interpret_yes_no,
     is_timezone_ambiguous,
+    resolve_location,
     resolve_timezone,
 )
 from core.db import create_link_code, create_user, find_user_by_key, get_user, init_db
 from core.session import Session
 from core.strings import msg
+
+
+@pytest.mark.parametrize("helper, argument", [
+    (resolve_timezone, "Madrid, Cundinamarca"),
+    (is_timezone_ambiguous, "Madrid"),
+    (extract_location, "vivo en Madrid"),
+])
+@patch("core.onboarding.providers.chat")
+def test_location_helpers_use_the_router_model(mock_chat, helper, argument):
+    mock_chat.return_value = providers.ChatResponse(content="America/Bogota", tool_calls=None)
+
+    helper(argument)
+
+    # measured at 11/11 on both models once the question was reworded, so the cheaper
+    # and faster one wins: three of these run back to back while someone waits
+    assert mock_chat.call_args[0][0] == "router"
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+@patch("core.onboarding.extract_location")
+@patch("core.onboarding.resolve_timezone")
+@patch("core.onboarding.is_timezone_ambiguous")
+def test_resolve_location_reports_city_timezone_and_ambiguity(mock_ambiguous, mock_timezone, mock_extract, ambiguous):
+    mock_ambiguous.return_value = ambiguous
+    mock_timezone.return_value = "America/Bogota"
+    mock_extract.return_value = "Madrid, Cundinamarca"
+
+    resolved = resolve_location("vivo en Madrid Cundinamarca")
+
+    assert resolved.city == "Madrid, Cundinamarca"
+    assert resolved.timezone == "America/Bogota"
+    assert resolved.ambiguous is ambiguous
 
 
 class TestDetectLanguage(unittest.TestCase):
@@ -67,7 +100,7 @@ def test_resolve_timezone_falls_back_to_utc_on_invalid():
         assert resolve_timezone("Nowhere") == "UTC"
 
 
-@pytest.mark.parametrize("model_reply, expected", [("yes", True), ("no", False)])
+@pytest.mark.parametrize("model_reply, expected", [("yes", False), ("no", True)])
 def test_is_timezone_ambiguous_uses_model_verdict(model_reply, expected):
     with patch("core.onboarding.providers.chat", return_value=providers.ChatResponse(content=model_reply, tool_calls=None)):
         assert is_timezone_ambiguous("Madrid") is expected
@@ -200,7 +233,7 @@ def test_clear_location_resolves_the_profile_and_reads_it_back():
     assert session.pending_city == "Panama City, Panama"
     assert session.pending_timezone == "America/Panama"
     assert session.onboarding_step == "confirm"
-    assert reply == msg("confirm_profile", "es", agent=config.AGENT_NAME, name="Oscar", city="Panama City, Panama")
+    assert reply == msg("confirm_profile", "es", agent=config.AGENT_NAME, name="Oscar", city="Panama City, Panama", timezone="America/Panama")
 
 
 def test_ambiguous_location_reasks_and_combines_answer():

@@ -29,6 +29,7 @@ AGENT_ROLES = {
     },
     "memory": {
         "description": "background memory distillation, not user-facing",
+        "internal": True,   # the system calls this role directly; a user message is never routed to it
         "temperature": 0.0,
         "providers": [
             {"provider": "deepseek", "model": "deepseek-chat"},

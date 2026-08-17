@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from core import memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
-from core.onboarding import extract_location, is_timezone_ambiguous, resolve_timezone
+from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_user_input, format_date
 from core.search import web_fetch, web_search
 from core.strings import MESSAGES, msg
@@ -21,11 +21,17 @@ logger = logging.getLogger(__name__)
 def build_messages(conversation_history):
     return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
 
+def _routable_roles():
+    """Roles a user message can be classified into: not the router itself, not internal work."""
+    return [
+        role for role, cfg in config.AGENT_ROLES.items()
+        if role != "router" and not cfg.get("internal")
+    ]
+
 def route_message(user_input):
     roles_list = "\n".join(
-        f"- {role}: {cfg['description']}"
-        for role, cfg in config.AGENT_ROLES.items()
-        if role != "router"
+        f"- {role}: {config.AGENT_ROLES[role]['description']}"
+        for role in _routable_roles()
     )
     prompt = [{
         "role": "user",
@@ -46,7 +52,7 @@ Reply with only one word."""
     except Exception as e:
         logger.warning(f"route_message failed ({e}); falling back to 'general'") # TODO(item 38): audit broad except-Exception handling project-wide
         return "general"
-    valid = [r for r in config.AGENT_ROLES if r != "router"] + ["exit"]
+    valid = _routable_roles() + ["exit"]
     return response if response in valid else "general"
 
 def should_trigger_memory(exchange_count, last_trigger_time):
@@ -181,10 +187,15 @@ def _run_update_profile(db_path, user_id, name=None, city=None, language=None):
 
     timezone = None
     if city is not None:
-        if is_timezone_ambiguous(city):
-            return f"The city '{city}' is ambiguous — ask the user which country it is in, then call this tool again."
-        timezone = resolve_timezone(city)
-        city = extract_location(city)
+        resolved = resolve_location(city)
+        if resolved.ambiguous:
+            return (
+                f"'{city}' could name places in different time zones, so nothing was changed. "
+                "Ask the user which country or region it is in and wait for their answer "
+                "before calling this tool again."
+            )
+        timezone = resolved.timezone
+        city = resolved.city
 
     before = get_user(db_path, user_id)
     update_user_profile(db_path, user_id, name=name, language=language, location=city, timezone=timezone)
@@ -193,6 +204,9 @@ def _run_update_profile(db_path, user_id, name=None, city=None, language=None):
         for field, column, value in (("name", "name", name), ("city", "location", city), ("language", "language", language))
         if value is not None
     ]
+    if timezone is not None:
+        # stated back so the model repeats it: a wrong zone is only catchable if the user sees it
+        changes.append(f"timezone: {before['timezone']} -> {timezone}")
     if not changes:
         return "Nothing to update: no field was given."
     return "Profile updated — " + "; ".join(changes)

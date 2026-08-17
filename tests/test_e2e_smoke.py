@@ -94,7 +94,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
             providers.ChatResponse(content="es", tool_calls=None),                   # detect_language
             providers.ChatResponse(content="yes", tool_calls=None),                  # interpret_yes_no confirms language
             providers.ChatResponse(content="Carlos", tool_calls=None),             # extract_name
-            providers.ChatResponse(content="no", tool_calls=None),                   # is_timezone_ambiguous (clear, no reask)
+            providers.ChatResponse(content="yes", tool_calls=None),                  # is_timezone_ambiguous: enough info, no reask
             providers.ChatResponse(content="America/Panama", tool_calls=None),       # resolve_timezone
             providers.ChatResponse(content="Panama", tool_calls=None),               # extract_location
             providers.ChatResponse(content="yes", tool_calls=None),                  # interpret_yes_no confirms the read-back
