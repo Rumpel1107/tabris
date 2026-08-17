@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -524,6 +524,17 @@ def test_deactivate_user_expires_active_link_codes(tmp_path):
     deactivate_user(db_path, user_id)
 
     assert redeem_link_code(db_path, code, "discord", "disc-key-1") is None
+
+
+def test_reactivate_user_clears_the_deactivation_mark(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    deactivate_user(db_path, user_id)
+
+    reactivate_user(db_path, user_id)
+
+    assert get_user(db_path, user_id)["deactivated_at"] is None
 
 
 def test_redeem_rejects_deactivated_account_even_with_a_valid_code(tmp_path):

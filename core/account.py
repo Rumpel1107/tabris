@@ -1,9 +1,10 @@
 import config
+import glob
 import json
 import logging
 import os
 
-from core.db import deactivate_user, get_user_records
+from core.db import deactivate_user, get_user_records, reactivate_user
 from datetime import datetime, time, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,18 @@ def export_user(db_path: str, user_id: int) -> str:
     return path
 
 
+def _export_paths(user_id: int) -> list[str]:
+    """Return every export file belonging to one user, found by the id leading the name.
+
+    Matching on the id rather than rebuilding the file name keeps the file findable after
+    a profile rename, which is what that name format is for.
+    """
+    return sorted(
+        glob.glob(os.path.join(config.EXPORTS_DIR, f"user-{user_id}.json"))
+        + glob.glob(os.path.join(config.EXPORTS_DIR, f"user-{user_id}-*.json"))
+    )
+
+
 def deactivate_account(db_path: str, user_id: int) -> str:
     """Deactivate a user, but only after their data export succeeds.
 
@@ -58,3 +71,18 @@ def deactivate_account(db_path: str, user_id: int) -> str:
     deactivate_user(db_path, user_id)
     logger.info(f"deactivate: user {user_id} marked deactivated")
     return path
+
+
+def reactivate_account(db_path: str, user_id: int) -> list[str]:
+    """Destroy a user's export files and clear their deactivation mark, returning the files removed.
+
+    The export dies with the grace window, so it is destroyed first: a failed delete leaves the
+    account deactivated instead of active with its personal data still on disk — the mirror of
+    deactivate_account's order. A missing file is not a failure; it is already the wanted state.
+    """
+    removed = _export_paths(user_id)
+    for path in removed:
+        os.remove(path)
+    reactivate_user(db_path, user_id)
+    logger.info(f"reactivate: user {user_id} restored, {len(removed)} export file(s) destroyed")
+    return removed

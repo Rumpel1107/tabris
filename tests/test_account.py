@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.account import deactivate_account, export_user
-from core.db import create_user, create_user_with_channel, deactivate_fact, deactivate_message, get_user, init_db, save_fact, save_message
+from core.account import deactivate_account, export_user, reactivate_account
+from core.db import create_user, create_user_with_channel, deactivate_fact, deactivate_message, get_user, init_db, save_fact, save_message, update_user_profile
 
 
 @pytest.mark.parametrize("name, expected", [
@@ -82,3 +82,65 @@ def test_deactivate_account_leaves_the_account_active_when_export_fails():
                 deactivate_account(db_path, user_id)
 
         assert get_user(db_path, user_id)["deactivated_at"] is None
+
+
+def test_reactivate_account_clears_the_mark_and_destroys_the_export():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            path = deactivate_account(db_path, user_id)
+            removed = reactivate_account(db_path, user_id)
+
+        assert removed == [path]
+        assert not os.path.exists(path)
+        assert get_user(db_path, user_id)["deactivated_at"] is None
+
+
+def test_reactivate_account_finds_the_export_after_a_profile_rename():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            path = deactivate_account(db_path, user_id)
+            update_user_profile(db_path, user_id, name="Mauricio")
+            reactivate_account(db_path, user_id)
+
+        assert not os.path.exists(path)
+
+
+def test_reactivate_account_restores_even_when_the_export_is_already_gone():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            os.remove(deactivate_account(db_path, user_id))
+            removed = reactivate_account(db_path, user_id)
+
+        assert removed == []
+        assert get_user(db_path, user_id)["deactivated_at"] is None
+
+
+def test_reactivate_account_keeps_the_account_deactivated_when_the_export_cannot_be_destroyed():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        exports_dir = os.path.join(tmp, "exports")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+
+        with patch("core.account.config.EXPORTS_DIR", exports_dir):
+            deactivate_account(db_path, user_id)
+            with patch("core.account.os.remove", side_effect=OSError("read-only file system")):
+                with pytest.raises(OSError):
+                    reactivate_account(db_path, user_id)
+
+        assert get_user(db_path, user_id)["deactivated_at"] is not None

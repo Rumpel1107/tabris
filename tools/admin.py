@@ -2,7 +2,7 @@ import argparse
 import config
 import logging
 
-from core.account import deactivate_account, export_user
+from core.account import deactivate_account, export_user, reactivate_account
 from core.db import get_user_records
 
 
@@ -18,6 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     deactivate_command = commands.add_parser("deactivate", help="Export a user's data, then stop their account from conversing.")
     deactivate_command.add_argument("user_id", type=int, help="Numeric id of the user")
+
+    reactivate_command = commands.add_parser("reactivate", help="Destroy a deactivated user's export and let their account converse again.")
+    reactivate_command.add_argument("user_id", type=int, help="Numeric id of the user")
 
     return parser
 
@@ -40,6 +43,17 @@ def main(argv=None) -> None:
             return
         path = deactivate_account(config.DB_PATH, args.user_id)
         print(f"Deactivated. Export written to {path}")
+    elif args.command == "reactivate":
+        user = get_user_records(config.DB_PATH, args.user_id)["user"]
+        print(f"About to reactivate user {args.user_id}: {user['name']}")
+        print(f"  Location: {user['location'] or '(none)'}")
+        confirmation = input(f"Type the name exactly ({user['name']}) to confirm: ")
+        if confirmation != user["name"]:
+            print("Confirmation did not match. Nothing was changed.")
+            return
+        removed = reactivate_account(config.DB_PATH, args.user_id)
+        destroyed = ", ".join(removed) if removed else "no export file was left to destroy"
+        print(f"Reactivated. Export: {destroyed}")
 
 
 if __name__ == "__main__":

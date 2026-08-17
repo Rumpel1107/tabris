@@ -44,3 +44,35 @@ def test_deactivate_command_aborts_on_mismatched_confirmation(capsys):
         main(["deactivate", "3"])
 
     deactivate.assert_not_called()
+
+
+def test_reactivate_command_shows_who_it_targets_and_restores(capsys):
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="Ana"), \
+         patch("tools.admin.reactivate_account", return_value=["/somewhere/user-3-Ana.json"]) as reactivate:
+        main(["reactivate", "3"])
+
+    reactivate.assert_called_once_with(config.DB_PATH, 3)
+    out = capsys.readouterr().out
+    assert "3" in out
+    assert "Ana" in out
+    assert "Panama" in out
+    assert "user-3-Ana.json" in out
+
+
+def test_reactivate_command_reports_when_there_was_no_export_left(capsys):
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="Ana"), \
+         patch("tools.admin.reactivate_account", return_value=[]):
+        main(["reactivate", "3"])
+
+    assert "no export" in capsys.readouterr().out.lower()
+
+
+def test_reactivate_command_aborts_on_mismatched_confirmation(capsys):
+    with patch("tools.admin.get_user_records", return_value=_sample_records()), \
+         patch("builtins.input", return_value="wrong name"), \
+         patch("tools.admin.reactivate_account") as reactivate:
+        main(["reactivate", "3"])
+
+    reactivate.assert_not_called()

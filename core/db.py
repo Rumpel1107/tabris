@@ -194,6 +194,16 @@ def deactivate_user(db_path: str, user_id: int) -> None:
                 (user_id,)
             )
 
+def reactivate_user(db_path: str, user_id: int) -> None:
+    """Clear a user's deactivation mark so the account is served again."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        with conn:
+            conn.execute(
+                "UPDATE users SET deactivated_at = NULL WHERE id=?",
+                (user_id,)
+            )
+
+
 def find_link_code(text: str) -> str | None:
     """Return the link code contained in the text, or None if no word in it is shaped like one."""
     for word in text.split():
