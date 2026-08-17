@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, find_link_code, find_user_by_key, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -503,6 +503,44 @@ def test_redeem_link_code_links_new_channel(tmp_path):
 
     assert result == user_id
     assert linked is not None and linked["id"] == user_id
+
+
+def test_deactivate_user_sets_deactivated_at(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+
+    deactivate_user(db_path, user_id)
+
+    assert get_user(db_path, user_id)["deactivated_at"] is not None
+
+
+def test_deactivate_user_expires_active_link_codes(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    code = create_link_code(db_path, user_id)
+
+    deactivate_user(db_path, user_id)
+
+    assert redeem_link_code(db_path, code, "discord", "disc-key-1") is None
+
+
+def test_redeem_rejects_deactivated_account_even_with_a_valid_code(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO link_codes (code, user_id, expires_at) VALUES (?, ?, datetime('now', '+5 minutes'))",
+            ("TESTCOD3", user_id),
+        )
+        conn.execute("UPDATE users SET deactivated_at = datetime('now') WHERE id=?", (user_id,))
+        conn.commit()
+
+    result = redeem_link_code(db_path, "TESTCOD3", "discord", "disc-key-1")
+
+    assert result is None
 
 
 def test_redeem_rejects_expired_code(tmp_path, monkeypatch):

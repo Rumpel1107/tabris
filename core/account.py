@@ -3,9 +3,8 @@ import json
 import logging
 import os
 
+from core.db import deactivate_user, get_user_records
 from datetime import datetime, time, timedelta, timezone
-
-from core.db import get_user_records
 
 logger = logging.getLogger(__name__)
 
@@ -46,4 +45,16 @@ def export_user(db_path: str, user_id: int) -> str:
     # personal data in plain text: readable by its owner only, like the database and .env
     os.chmod(path, 0o600)
     logger.info(f"export: user {user_id} written to {path}")
+    return path
+
+
+def deactivate_account(db_path: str, user_id: int) -> str:
+    """Deactivate a user, but only after their data export succeeds.
+
+    Export runs first on purpose: if it raises, deactivate_user never runs and the
+    account stays active — nobody is deactivated without leaving with their copy (AC4).
+    """
+    path = export_user(db_path, user_id)
+    deactivate_user(db_path, user_id)
+    logger.info(f"deactivate: user {user_id} marked deactivated")
     return path

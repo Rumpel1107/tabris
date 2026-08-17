@@ -1,18 +1,18 @@
+import asyncio
+import config
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import asyncio
 import tempfile
 import threading
-from unittest.mock import patch
 
-import config
+from channels import discord_ch
 from core.db import create_user, find_user_by_key, get_messages, init_db, register_user_channel
 from core.providers import ChatResponse
 from core.session import Session
 from core.strings import msg
-from channels import discord_ch
+from unittest.mock import patch
 
 
 @patch("core.onboarding.detect_language", return_value="es")

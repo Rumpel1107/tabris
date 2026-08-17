@@ -1,9 +1,9 @@
+import config
 import pytest
 import unittest
-from unittest.mock import patch
 
-import config
 from core import providers
+from core.db import create_link_code, create_user, find_user_by_key, get_user, init_db
 from core.onboarding import (
     advance_onboarding,
     detect_language,
@@ -14,9 +14,9 @@ from core.onboarding import (
     resolve_location,
     resolve_timezone,
 )
-from core.db import create_link_code, create_user, find_user_by_key, get_user, init_db
 from core.session import Session
 from core.strings import msg
+from unittest.mock import patch
 
 
 @pytest.mark.parametrize("helper, argument", [

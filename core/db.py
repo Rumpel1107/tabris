@@ -181,6 +181,19 @@ def deactivate_fact(db_path, user_id, fact_id):
         )
         conn.commit()
 
+def deactivate_user(db_path: str, user_id: int) -> None:
+    """Mark a user as deactivated and expire any unused link code of theirs, atomically."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        with conn:
+            conn.execute(
+                "UPDATE users SET deactivated_at = datetime('now') WHERE id=?",
+                (user_id,)
+            )
+            conn.execute(
+                "UPDATE link_codes SET expires_at = datetime('now') WHERE user_id=? AND used=0",
+                (user_id,)
+            )
+
 def find_link_code(text: str) -> str | None:
     """Return the link code contained in the text, or None if no word in it is shaped like one."""
     for word in text.split():
@@ -213,10 +226,14 @@ def create_link_code(db_path: str, user_id: int) -> str:
     return code
 
 def redeem_link_code(db_path: str, code: str, channel: str, key: str) -> int | None:
-    """Redeem a link code: point (channel, key) to the code's user. Returns the user_id, or None if the code is invalid."""
+    """Redeem a link code: point (channel, key) to the code's user. Returns the user_id, or None if the code is invalid or the account is deactivated."""
     with contextlib.closing(_connect(db_path)) as conn:
         row = conn.execute(
-            "SELECT user_id FROM link_codes WHERE code=? AND used=0 AND expires_at > datetime('now')",
+            """SELECT link_codes.user_id FROM link_codes
+            JOIN users ON users.id = link_codes.user_id
+            WHERE link_codes.code=? AND link_codes.used=0
+            AND link_codes.expires_at > datetime('now')
+            AND users.deactivated_at IS NULL""",
             (code,),
         ).fetchone()
         if row is None:

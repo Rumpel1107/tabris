@@ -22,9 +22,9 @@ AGENT_ROLES = {
         "description": "programming, debugging, scripts, technical code, functions",
         "temperature": 0.2,
         "providers": [
+            {"provider": "openrouter", "model": "z-ai/glm-5.2:free"},
             {"provider": "deepseek",   "model": "deepseek-chat"},
-            {"provider": "openrouter", "model": "z-ai/glm-5.2"},
-            {"provider": "groq",       "model": "moonshotai/kimi-k2-instruct"},
+            {"provider": "groq",       "model": "openai/gpt-oss-120b"},
         ],
     },
     "memory": {

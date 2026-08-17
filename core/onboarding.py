@@ -1,12 +1,10 @@
-from dataclasses import dataclass
-from zoneinfo import ZoneInfo
-
 import config
 from core import providers
 from core.db import create_user_with_channel, find_link_code, get_user, redeem_link_code
 from core.prompt import fence_user_input
 from core.strings import msg
-
+from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 def _confirm_language_and_ask_name(session) -> str:
     return (

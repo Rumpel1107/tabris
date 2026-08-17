@@ -3,9 +3,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import unittest
-from unittest.mock import patch
-
 from core.search import search, web_fetch, web_search, _search_ddg, _search_tavily
+from unittest.mock import patch
 
 
 class TestWebSearch(unittest.TestCase):

@@ -5,12 +5,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from channels import cli
 from core import providers
 from core.db import register_user_channel, get_messages
 from core.strings import msg
+from unittest.mock import patch
 
 
 class TestChatE2ESmoke(unittest.TestCase):
