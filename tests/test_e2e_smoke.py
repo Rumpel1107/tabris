@@ -96,7 +96,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
             providers.ChatResponse(content="Carlos", tool_calls=None),             # extract_name
             providers.ChatResponse(content="City: Panama City, Panama\nTimezone: America/Panama",
                                    tool_calls=None),                                 # resolve_location, one call for both
-            providers.ChatResponse(content="yes", tool_calls=None),                  # interpret_yes_no confirms the read-back
+            providers.ChatResponse(content="ok", tool_calls=None),                   # interpret_confirmation accepts the read-back
             providers.ChatResponse(content="general", tool_calls=None),              # route_message for the real request
             providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None),  # model reply
             providers.ChatResponse(content="exit", tool_calls=None),                 # route_message for "salir"
