@@ -25,6 +25,12 @@ class TestGetClientKey(unittest.TestCase):
             second = get_client_key(path)
             self.assertEqual(first, second)
 
+    def test_creates_the_identity_file_owner_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, ".tabris_client_id")
+            get_client_key(path)
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+
 
 if __name__ == "__main__":
     unittest.main()

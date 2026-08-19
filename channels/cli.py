@@ -21,6 +21,7 @@ def get_client_key(path=config.CLIENT_ID_PATH):
     key = str(uuid.uuid4())
     with open(path, "w") as key_file:
         key_file.write(key)
+    os.chmod(path, 0o600)
     return key
 
 # --- Main conversation loop ---

@@ -51,9 +51,10 @@ AGENT_ROLES = {
 # --- Memory Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONA_PATH = os.path.join(BASE_DIR, "prompts", "persona.md")
-DB_PATH = os.path.join(BASE_DIR, "data", f"{AGENT_NAME.lower()}.db")
-CLIENT_ID_PATH = os.path.join(BASE_DIR, "data", f"{AGENT_NAME.lower()}_client_id")
-EXPORTS_DIR = os.path.join(BASE_DIR, "data", "exports")
+DATA_DIR = os.getenv("TABRIS_DATA_DIR", os.path.join(BASE_DIR, "data"))
+DB_PATH = os.path.join(DATA_DIR, f"{AGENT_NAME.lower()}.db")
+CLIENT_ID_PATH = os.path.join(DATA_DIR, f"{AGENT_NAME.lower()}_client_id")
+EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
 MEMORY_TRIGGER_EXCHANGES = 15
 MEMORY_TRIGGER_SECONDS = 1200
 MEMORY_MAX_NEW_FACTS = 5

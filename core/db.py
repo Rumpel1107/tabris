@@ -1,5 +1,6 @@
 import config
 import contextlib
+import os
 import secrets
 import sqlite3
 
@@ -14,6 +15,10 @@ def _connect(db_path):
     return conn
 
 def init_db(db_path):
+    directory = os.path.dirname(db_path)
+    if directory:
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        os.chmod(directory, 0o700)  # makedirs' mode only applies on creation; an existing directory keeps its own
     with contextlib.closing(_connect(db_path)) as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -75,6 +80,7 @@ def init_db(db_path):
         facts_cols = {row[1] for row in conn.execute("PRAGMA table_info(facts)")}
         if "retired_at" not in facts_cols:
             conn.execute("ALTER TABLE facts ADD COLUMN retired_at TEXT")
+    os.chmod(db_path, 0o600)  # sqlite creates the file with the process umask, which is not restrictive enough for personal data
 
 def create_user(db_path, name, language="en", location="", timezone="UTC"):
     with contextlib.closing(_connect(db_path)) as conn:

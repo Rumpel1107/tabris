@@ -47,6 +47,26 @@ class TestInitDb(unittest.TestCase):
             conn.close()
             self.assertIn("is_active", cols)
 
+    def test_creates_the_data_directory_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = os.path.join(tmp, "data")
+            init_db(os.path.join(data_dir, "test.db"))
+            self.assertTrue(os.path.isdir(data_dir))
+            self.assertEqual(os.stat(data_dir).st_mode & 0o777, 0o700)
+
+    def test_creates_the_database_owner_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            init_db(db_path)
+            self.assertEqual(os.stat(db_path).st_mode & 0o777, 0o600)
+
+    def test_locks_down_a_data_directory_that_already_existed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = os.path.join(tmp, "data")
+            os.makedirs(data_dir, mode=0o755)
+            init_db(os.path.join(data_dir, "test.db"))
+            self.assertEqual(os.stat(data_dir).st_mode & 0o777, 0o700)
+
 class TestCreateUser(unittest.TestCase):
     
     def test_creates_user_and_returns_id(self):
