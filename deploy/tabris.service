@@ -1,0 +1,22 @@
+[Unit]
+Description=Tabris personal assistant (Discord channel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tabris
+Group=tabris
+WorkingDirectory=/opt/tabris/repo
+EnvironmentFile=/opt/tabris/tabris.env
+Environment=TABRIS_DATA_DIR=/opt/tabris/data
+ExecStart=/opt/tabris/.venvs/tabris/bin/python -m channels.discord_ch
+
+Restart=always
+RestartSec=1
+RestartSteps=6
+RestartMaxDelaySec=60
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

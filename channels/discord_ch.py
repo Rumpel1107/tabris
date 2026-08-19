@@ -97,4 +97,4 @@ if __name__ == "__main__":
     sessions = {}
     persona = load_persona()
     init_db(db_path)
-    client.run(config.DISCORD_BOT_TOKEN)
+    client.run(config.DISCORD_BOT_TOKEN, log_handler=None)  # logging is configured above; without this discord.py adds a second handler and every line is logged twice
