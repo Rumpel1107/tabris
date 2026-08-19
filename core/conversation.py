@@ -188,6 +188,8 @@ def _run_update_profile(db_path, user_id, name=None, city=None, language=None):
     timezone = None
     if city is not None:
         resolved = resolve_location(city)
+        if resolved is None:
+            return "The service that resolves a city is unavailable right now, so nothing was changed. Tell the user to try again in about 5 minutes."
         if resolved.ambiguous:
             return (
                 f"'{city}' could name places in different time zones, so nothing was changed. "
