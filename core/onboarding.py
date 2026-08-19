@@ -98,19 +98,31 @@ def _read_back(session, resolved: ResolvedLocation) -> str:
 def advance_onboarding(session, user_input: str, db_path: str) -> str:
     """Consume one message, move the session to the next onboarding step and return what to say."""
     if session.onboarding_step is None:
-        session.language = detect_language(user_input)
+        language = detect_language(user_input)
+        if language is None:
+            # the language is what could not be read, so the notice cannot be written in one
+            return "\n\n".join(
+                msg("service_unavailable", code, agent=config.AGENT_NAME) for code in ("es", "en")
+            )
+        session.language = language
         session.onboarding_step = "language"
         return msg("language_detected", session.language, agent=config.AGENT_NAME)
 
     if session.onboarding_step == "language":
-        if not interpret_yes_no(user_input):
+        confirmed = interpret_yes_no(user_input)
+        if confirmed is None:
+            return msg("service_unavailable", session.language, agent=config.AGENT_NAME)
+        if not confirmed:
             session.onboarding_step = "language_ask"
             return msg("language_ask", session.language, agent=config.AGENT_NAME)
         session.onboarding_step = "link_or_name"
         return _confirm_language_and_ask_name(session)
 
     if session.onboarding_step == "language_ask":
-        session.language = detect_language(user_input)
+        language = detect_language(user_input)
+        if language is None:
+            return msg("service_unavailable", session.language, agent=config.AGENT_NAME)
+        session.language = language
         session.onboarding_step = "link_or_name"
         return _confirm_language_and_ask_name(session)
 
@@ -178,7 +190,12 @@ def advance_onboarding(session, user_input: str, db_path: str) -> str:
         return msg("onboarding_done", session.language, agent=config.AGENT_NAME, name=session.pending_name)
 
 
-def detect_language(text):
+def detect_language(text: str) -> str | None:
+    """Return 'es' or 'en', or None when no provider could answer.
+
+    An unsupported language still resolves to 'en': the person is asked to confirm it
+    right after, which is not true of a provider outage.
+    """
     prompt = [{
         "role": "user",
         "content": f"""Detect the language of this message. Reply with only 'es' for Spanish or 'en' for English.
@@ -192,7 +209,7 @@ Reply with only one word: 'es' or 'en'."""
     try:
         response = providers.chat("router", prompt).content.strip().lower()
     except Exception:
-        return "en"
+        return None
     return response if response in ("es", "en") else "en"
 
 
@@ -270,7 +287,8 @@ Verdict:"""
     return response if response in ("ok", "name", "location") else "unclear"
 
 
-def interpret_yes_no(text):
+def interpret_yes_no(text: str) -> bool | None:
+    """Return whether the reply means yes, or None when no provider could answer."""
     prompt = [{
         "role": "user",
         "content": f"""Does the following reply mean yes? Answer with only 'yes' or 'no'.
@@ -284,5 +302,5 @@ Answer with only one word: 'yes' or 'no'."""
     try:
         response = providers.chat("router", prompt).content.strip().lower()
     except Exception:
-        return False
+        return None
     return response.startswith("yes")

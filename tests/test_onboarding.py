@@ -66,9 +66,9 @@ class TestDetectLanguage(unittest.TestCase):
         assert result == "en"
 
 
-def test_detect_language_falls_back_to_en_on_error():
+def test_detect_language_returns_none_when_every_provider_fails():
     with patch("core.onboarding.providers.chat", side_effect=Exception("boom")):
-        assert detect_language("Hola, ¿cómo estás?") == "en"
+        assert detect_language("Hola, ¿cómo estás?") is None
 
 
 @pytest.mark.parametrize("model_reply, expected", [("yes", True), ("no", False)])
@@ -77,9 +77,9 @@ def test_interpret_yes_no_uses_model_verdict(model_reply, expected):
         assert interpret_yes_no("cualquier frase") is expected
 
 
-def test_interpret_yes_no_falls_back_to_false_on_error():
+def test_interpret_yes_no_returns_none_when_every_provider_fails():
     with patch("core.onboarding.providers.chat", side_effect=Exception("boom")):
-        assert interpret_yes_no("lo que sea") is False
+        assert interpret_yes_no("lo que sea") is None
 
 
 @pytest.mark.parametrize("model_reply, expected", [
@@ -140,6 +140,28 @@ def test_first_contact_detects_language_and_asks_to_confirm():
     assert session.language == "es"
     assert session.onboarding_step == "language"
     assert reply == msg("language_detected", "es", agent=config.AGENT_NAME)
+
+
+def test_first_contact_with_no_provider_answers_in_both_languages():
+    session = Session()
+
+    with patch("core.onboarding.detect_language", return_value=None):
+        reply = advance_onboarding(session, "Hola, ¿cómo estás?", None)
+
+    # the language is exactly what could not be read, so the notice cannot pick one
+    assert session.onboarding_step is None
+    assert msg("service_unavailable", "es", agent=config.AGENT_NAME) in reply
+    assert msg("service_unavailable", "en", agent=config.AGENT_NAME) in reply
+
+
+def test_unreadable_language_confirmation_keeps_the_step_and_asks_to_retry_later():
+    session = Session(language="es", onboarding_step="language")
+
+    with patch("core.onboarding.interpret_yes_no", return_value=None):
+        reply = advance_onboarding(session, "sí, está bien", None)
+
+    assert session.onboarding_step == "language"
+    assert reply == msg("service_unavailable", "es", agent=config.AGENT_NAME)
 
 
 def test_confirmed_language_asks_for_name_or_link_code():
