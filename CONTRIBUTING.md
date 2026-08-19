@@ -24,6 +24,7 @@ How this project is built and how to keep building it — for any collaborator, 
 - **No explanations or narration inside files.** Explanations belong in the pull request / conversation, not in code, tests, or docs.
 - **Public functions carry type hints + a short docstring** (e.g. `def save_fact(db_path: str, user_id: int, content: str) -> int:`) — beginner-honest, enough to run `mypy`, not exhaustive.
 - **User-facing text goes through `msg(key, language)`** (`core/strings.py`) — never hardcode user-facing text in any language.
+- **Examples come in both languages.** Every example written into a model instruction or a test — a few-shot case, a sample message, a fixture — carries a Spanish and an English version. Tabris runs in both (English default, Spanish supported), so a set of examples in one language teaches that language's shape and leaves the other unexercised.
 
 ## Architecture patterns
 
