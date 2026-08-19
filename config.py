@@ -62,6 +62,7 @@ MEMORY_MAX_RETIRE_IDS = 5
 
 # --- Database Configuration ---
 DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before failing (0 = fail instantly)
+BACKUPS_KEPT = 7            # how many dated copies the backup script keeps before deleting the oldest
 
 # --- Account Linking Configuration ---
 LINK_CODE_TTL_SECONDS = 300   # how long a channel-linking code stays valid before expiring (5 min)
