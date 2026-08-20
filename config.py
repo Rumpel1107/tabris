@@ -58,7 +58,7 @@ EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
 MEMORY_TRIGGER_EXCHANGES = 15
 MEMORY_TRIGGER_SECONDS = 1200
 MEMORY_MAX_NEW_FACTS = 5
-MEMORY_MAX_RETIRE_IDS = 5
+MEMORY_MAX_RETIRE_IDS = 15  # retiring is reversible and bounded to facts already shown to the model; adding is the injection-relevant half
 
 # --- Database Configuration ---
 DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before failing (0 = fail instantly)

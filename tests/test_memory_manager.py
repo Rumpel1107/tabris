@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from core import providers
-from core.db import init_db, create_user, get_facts, save_fact
+from core.db import init_db, create_user, get_facts, save_fact, update_user_profile
 from core.memory_manager import analyze_memory, apply_memory_changes, filter_valid_retire_ids, forget_fact, MemoryChanges, parse_facts_response
 from unittest.mock import patch
 
@@ -189,6 +189,32 @@ def test_analyze_accepts_pass_at_exact_limit(mock_chat, db):
     changes = analyze_memory([], db_path, user_id, language="es")
     assert changes.rejected is False
     assert len(changes.new_facts) == config.MEMORY_MAX_NEW_FACTS
+
+
+@patch("core.providers.chat")
+def test_analyze_accepts_a_real_consolidation(mock_chat, db):
+    db_path, user_id = db
+    for i in range(8):
+        save_fact(db_path, user_id, f"hecho {i}")
+    ids = [f["id"] for f in get_facts(db_path, user_id)]
+    mock_chat.return_value = _resp(
+        "HAS_CHANGES: yes\nNEW_FACTS:\n- hecho fundido\n- merged fact\n"
+        f"RETIRE_IDS: {', '.join(map(str, ids))}"
+    )
+    changes = analyze_memory([], db_path, user_id, language="es")
+    assert changes.rejected is False
+    assert len(changes.retire_ids) == 8
+
+
+@patch("core.providers.chat")
+def test_prompt_carries_the_profile_so_it_is_not_relearned(mock_chat, db):
+    db_path, user_id = db
+    update_user_profile(db_path, user_id, location="Bogotá", timezone="America/Bogota")
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    analyze_memory([], db_path, user_id, language="es")
+    prompt_sent = mock_chat.call_args[0][1][0]["content"]
+    assert "Bogotá" in prompt_sent
+    assert "America/Bogota" in prompt_sent
 
 
 # --- apply_memory_changes: writes only ---
