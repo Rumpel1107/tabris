@@ -1,0 +1,10 @@
+[Unit]
+Description=Tabris scheduled erasure of accounts past their grace window
+
+[Service]
+Type=oneshot
+User=tabris
+Group=tabris
+WorkingDirectory=/opt/tabris/repo
+Environment=TABRIS_DATA_DIR=/opt/tabris/data
+ExecStart=/opt/tabris/.venvs/tabris/bin/python -m tools.admin purge-auto
