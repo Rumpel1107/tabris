@@ -1,0 +1,9 @@
+[Unit]
+Description=Tabris connectivity probe
+
+[Service]
+Type=oneshot
+User=tabris
+Group=tabris
+WorkingDirectory=/opt/tabris/repo
+ExecStart=/opt/tabris/.venvs/tabris/bin/python -m tools.probe

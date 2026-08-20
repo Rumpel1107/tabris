@@ -63,6 +63,8 @@ MEMORY_MAX_RETIRE_IDS = 15  # retiring is reversible and bounded to facts alread
 # --- Database Configuration ---
 DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before failing (0 = fail instantly)
 BACKUPS_KEPT = 7            # how many dated copies the backup script keeps before deleting the oldest
+PROBE_URL = os.getenv("TABRIS_PROBE_URL", "https://discord.com/api/v10/gateway")  # needs no credentials, and measures the dependency Tabris actually has; overridable so a failure can be forced without editing config
+PROBE_TIMEOUT = 10          # seconds the connectivity probe waits before calling the outside unreachable
 
 # --- Account Linking Configuration ---
 LINK_CODE_TTL_SECONDS = 300   # how long a channel-linking code stays valid before expiring (5 min)
