@@ -39,4 +39,5 @@ if __name__ == "__main__":
         level=config.LOG_LEVEL,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # its per-request line repeats what this probe already reports
     sys.exit(main())
