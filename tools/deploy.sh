@@ -75,4 +75,8 @@ if ! systemctl is-active --quiet "$SERVICE"; then
     exit 1
 fi
 
+# Renaming over the copy leaves this running process on its own open file, so a script can refresh itself.
+as_service_user install -m 755 "$REPO/tools/deploy.sh" "$DEPLOY_DIR/deploy.sh.new"
+as_service_user mv -f "$DEPLOY_DIR/deploy.sh.new" "$DEPLOY_DIR/deploy.sh"
+
 echo "in service: $TARGET"

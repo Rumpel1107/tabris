@@ -40,7 +40,8 @@ async def on_message(message):
     if message.author == client.user:
         return
     key = str(message.author.id)
-    reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
+    async with message.channel.typing():  # a turn with a web search takes long enough that silence reads as being ignored
+        reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
     session = sessions[("discord", key)]
     if not await send_reply(message.channel, reply, session):
         undo_last_turn(session, db_path)

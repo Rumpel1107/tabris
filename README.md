@@ -86,15 +86,58 @@ A suspended account stops conversing immediately and keeps everything for a grac
 
 ---
 
+## 🛰️ Running it always-on
+
+A deployment keeps data and keys **outside** the checkout, so an update can never touch them:
+
+```
+/opt/tabris/
+  repo/         the checkout, parked on a tag
+  data/         database and exports
+  .venvs/       the virtualenv
+  tabris.env    the keys, as KEY=value — no quotes, no spaces
+  deploy.sh     the deploy script, kept outside the checkout it rewrites
+```
+
+The keys file is read by the service manager, which does **not** apply dotenv rules: a quoted value arrives with its quotes attached and fails as if the key were wrong.
+
+Four units live in `deploy/`, installed into the system and enabled:
+
+| Unit | What it does |
+|---|---|
+| `tabris.service` | the Discord channel, restarted on failure and started with the machine |
+| `tabris-purge.timer` | erases accounts whose grace window has ended, daily |
+| `tabris-backup.timer` | a dated copy of the database into `/var/backups/tabris`, keeping the last seven |
+| `tabris-probe.timer` | every five minutes, records whether the outside was reachable |
+
+The erasure runs an hour before the backup, so the day's copy is taken without what was just erased.
+
+Putting a version in service, and going back, are the same command:
+
+```bash
+sudo /opt/tabris/deploy.sh v0.2.0    # put this tag in service
+sudo /opt/tabris/deploy.sh v0.1.9    # go back to the previous one
+git -C /opt/tabris/repo describe --tags   # what is running right now
+```
+
+It records what is in service, checks out the tag, installs dependencies only if they changed, verifies the keys file declares every variable `.env.example` does, runs the whole suite **inside the deployment**, and only then restarts. If any step fails it returns the checkout to the tag that was running and leaves it serving. A tag already fetched deploys and rolls back with no internet at all.
+
+> Run it from `tools/deploy.sh` in a checkout the first time; each successful deploy refreshes the copy at `/opt/tabris/deploy.sh`, which is the one to use from then on.
+
+---
+
 ## 🧩 Project layout
 
 ```
 core/           channel-agnostic logic: conversation, onboarding, memory, providers, search, prompts, database
 channels/       thin adapters, one per channel: cli.py, discord_ch.py
-tools/          operator scripts: setup.sh and admin.py (export, suspend, restore, erase)
+tools/          operator scripts: setup.sh, admin.py (export, suspend, restore, erase),
+                backup.py, probe.py and deploy.sh
+deploy/         the service and timer definitions for an always-on host
 config.py       structure and non-secret configuration (roles, providers, limits)
 prompts/        persona.md — the assistant's identity, loaded into the system prompt
-data/           SQLite database, local identity file and data exports — gitignored, created on first run
+data/           SQLite database, local identity file and data exports — gitignored, created on
+                first run; override its location with TABRIS_DATA_DIR
 .env            API keys — gitignored, created from .env.example
 ```
 

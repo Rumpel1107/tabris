@@ -51,6 +51,16 @@ class TestParseFactsResponse(unittest.TestCase):
         self.assertIsNotNone(error)
 
 
+@pytest.mark.parametrize("header", ["HAS_CHANGES:yes", "has_changes: yes", "HAS_CHANGES :  YES"])
+def test_the_header_survives_spacing_and_casing(header):
+    has_changes, new_facts, _, error = parse_facts_response(
+        f"{header}\nNEW_FACTS:\n- Prefiere respuestas cortas\n- Works on TaxL"
+    )
+    assert has_changes is True
+    assert new_facts == ["Prefiere respuestas cortas", "Works on TaxL"]
+    assert error is None
+
+
 @pytest.fixture
 def db(tmp_path):
     db_path = str(tmp_path / "test.db")

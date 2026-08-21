@@ -1,5 +1,6 @@
 import config
 import logging
+import re
 import sqlite3
 
 from core import providers
@@ -23,7 +24,7 @@ class MemoryChanges:
 
 
 def parse_facts_response(raw_response):
-    if "HAS_CHANGES: yes" not in raw_response:
+    if not re.search(r"HAS_CHANGES\s*:\s*yes", raw_response, re.IGNORECASE):
         return False, [], [], None
     
     new_facts = []

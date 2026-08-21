@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import tempfile
 import threading
+from types import SimpleNamespace
 
 from channels import discord_ch
 from core.db import create_user, find_user_by_key, get_messages, init_db, register_user_channel
@@ -49,12 +50,25 @@ class FakeChannel:
         self.sent = []
         self.attempts = 0
         self.fail_on = fail_on
+        self.typing_entered = False
 
     async def send(self, content):
         self.attempts += 1
         if self.attempts == self.fail_on:
             raise RuntimeError("send failed")
         self.sent.append(content)
+
+    def typing(self):
+        channel = self
+
+        class Typing:
+            async def __aenter__(self):
+                channel.typing_entered = True
+
+            async def __aexit__(self, *details):
+                return False
+
+        return Typing()
 
 
 def test_run_locked_offloads_the_call_to_a_thread():
@@ -100,6 +114,18 @@ def test_run_locked_serializes_calls_for_the_same_key_but_not_across_keys():
     asyncio.run(scenario())
 
     assert order == ["alice-start", "bob-start", "bob-end", "alice-end", "alice-2-start", "alice-2-end"]
+
+
+def test_a_turn_shows_typing_while_the_work_happens():
+    channel = FakeChannel()
+    message = SimpleNamespace(author=SimpleNamespace(id=42), content="hola", channel=channel)
+    discord_ch.db_path = ":memory:"
+    discord_ch.persona = "persona"
+    discord_ch.sessions = {("discord", "42"): Session(language="es")}
+    with patch("channels.discord_ch.handle_message", return_value="lista"):
+        asyncio.run(discord_ch.on_message(message))
+    assert channel.typing_entered is True
+    assert channel.sent == ["lista"]
 
 
 def test_a_short_reply_is_sent_as_one_message():

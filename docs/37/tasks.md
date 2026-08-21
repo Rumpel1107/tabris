@@ -12,7 +12,7 @@ Fase 4 del método. Orden de ejecución, no de tema: el número es el orden en q
 | 4 | **El servicio** — definición, reinicio siempre con espera creciente acotada y sin límite de intentos, arranque junto con el equipo, ejecutando solo el canal de Discord | AC1, AC2, AC3, AC5, AC6, AC17, D1 | Tabris responde en Discord desde el despliegue; matar el proceso y verlo volver; **reiniciar el equipo de verdad** y comprobar que vuelve solo; leer los registros y confirmar que no llevan texto de conversaciones | ✅ |
 | 5 | **Temporizadores diarios** — respaldo y purgado, separados, con recuperación de la ejecución pendiente | AC9, D5, D6 | Dispararlos a mano y comprobar la copia y la rotación; comprobar que una ejecución no realizada se recupera al arrancar | 🔶 |
 | 6 | **Sonda de conexión** — comprobación periódica que registra si el exterior era alcanzable | AC18 | Correrla y leer lo que dejó en el registro; provocar un fallo y ver que queda anotado | ✅ |
-| 7 | **Guion de despliegue** — etiqueta, código, dependencias, pruebas, reinicio; vuelta atrás; verificación de las variables que declara `.env.example`. Incluye el `README.md` | AC10, AC11, AC12, D8, D10, D11 | Liberar una versión nueva de verdad con el guion, y volver a la anterior con el mismo guion | ⬜ |
+| 7 | **Guion de despliegue** — etiqueta, código, dependencias, pruebas, reinicio; vuelta atrás; verificación de las variables que declara `.env.example`. Incluye el `README.md` | AC10, AC11, AC12, D8, D10, D11 | Liberar una versión nueva de verdad con el guion, y volver a la anterior con el mismo guion | 🔶 |
 
 ## Notas
 
