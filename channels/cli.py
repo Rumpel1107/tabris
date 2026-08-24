@@ -11,6 +11,7 @@ from core.db import find_user_by_key, get_messages, init_db
 from core.onboarding import advance_onboarding
 from core.prompt import load_persona
 from core.session import get_or_create_session
+from core.version import describe
 
 
 # --- Channel identity ---
@@ -82,4 +83,5 @@ if __name__ == "__main__":
         level=config.LOG_LEVEL,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
+    logging.getLogger(__name__).info("starting Tabris %s on the command line", describe(config.BASE_DIR))
     chat()

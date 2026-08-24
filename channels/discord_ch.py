@@ -10,6 +10,7 @@ from core.prompt import load_persona
 from core.session import get_or_create_session
 from core.strings import msg
 from core.text import split_message
+from core.version import describe
 
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,7 @@ if __name__ == "__main__":
         level=config.LOG_LEVEL,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
+    logger.info("starting Tabris %s on discord", describe(config.BASE_DIR))
     db_path = config.DB_PATH
     sessions = {}
     persona = load_persona()

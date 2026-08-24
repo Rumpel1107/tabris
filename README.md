@@ -117,8 +117,14 @@ Putting a version in service, and going back, are the same command:
 ```bash
 sudo /opt/tabris/deploy.sh v0.2.0    # put this tag in service
 sudo /opt/tabris/deploy.sh v0.1.9    # go back to the previous one
-git -C /opt/tabris/repo describe --tags   # what is running right now
+sudo journalctl -u tabris | grep "starting Tabris" | tail -1   # the version now running
 ```
+
+Tabris writes its version into the log as it starts, which is the answer to "what is running" that cannot
+be wrong: it is the process itself reporting what it loaded. Asking the checkout instead
+(`sudo -u tabris git -C /opt/tabris/repo describe --tags`) says what is *on disk*, which is the same
+thing only while nobody has touched the checkout without restarting — editing files never changes a
+running process.
 
 It records what is in service, checks out the tag, installs dependencies only if they changed, verifies the keys file declares every variable `.env.example` does, runs the whole suite **inside the deployment**, and only then restarts. If any step fails it returns the checkout to the tag that was running and leaves it serving. A tag already fetched deploys and rolls back with no internet at all.
 
