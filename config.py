@@ -69,6 +69,7 @@ PROBE_TIMEOUT = 10          # seconds the connectivity probe waits before callin
 # --- Account Linking Configuration ---
 LINK_CODE_TTL_SECONDS = 300   # how long a channel-linking code stays valid before expiring (5 min)
 ACCOUNT_GRACE_DAYS = 14       # days between deactivating an account and deleting its data for good
+MESSAGE_RETENTION_DAYS = 30   # days a message is kept before the daily run erases it for good
 
 # --- Conversation Configuration ---
 MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model

@@ -13,6 +13,8 @@ Fase 4 del método. Orden de ejecución, no de tema: el número es el orden en q
 | 5 | **Restaurar** — `core/account.reactivate_account` + subcomando `reactivate`, que además borra el archivo de export | AC3 | Restaurar la cuenta dada de baja en la rebanada 4 y volver a conversar desde el CLI: responde normal y conserva perfil, hechos e historial. El archivo ya no está | ✅ |
 | 6 | **Borrar de verdad** — `core/db.delete_user_completely` en una transacción, `core/account.purge_due_accounts`, subcomandos `purge-auto` / `purge-force --skip-grace`, y la excepción escrita en `CONTRIBUTING.md` | AC5, AC6, AC7, AC8, AC8b, D5 | Sobre una base de prueba con varias cuentas: purgar y confirmar que la vencida no deja rastro en ninguna tabla y que la no vencida queda intacta. Prueba por mutación sobre la consulta de selección | ✅ código y mutación; verificación en vivo omitida a propósito (2026-08-17) |
 
+| 7 | **Retención de conversación (parte 3)** — `config.MESSAGE_RETENTION_DAYS`, `core.db.delete_messages_before`, `core.account.purge_old_messages`, enganchado al `purge-auto` que ya corre a diario | AC10, AC11, AC12 | Sembrar una base descartable con un mensaje viejo y uno de hoy, correr `python -m tools.admin purge-auto` de verdad y ver que solo sobrevive el de hoy. Prueba por mutación sobre el sentido de la comparación de fechas | ✅ (2026-08-23) |
+
 ## Notas
 
 - **La rebanada 3 va antes que la 4 a propósito.** Primero el sistema aprende a respetar la marca, después aparece la herramienta que la pone. Al revés existiría una ventana donde se puede dar de baja a alguien y el chat le sigue contestando como si nada.

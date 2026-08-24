@@ -57,6 +57,12 @@ Participan dos actores: **la persona** que pide la baja y **el operador** que la
 - **AC8b** — Dado que una cuenta está desactivada pero su plazo no venció, cuando el operador intenta borrarla a mano, entonces se rechaza, salvo que indique explícitamente que quiere saltarse el plazo.
 - **AC9** — Dado cualquier momento y cualquier canal, cuando alguien pide por chat que se borre o desactive una cuenta, entonces no existe ningún camino que lo ejecute.
 
+### Parte 3 — retención de conversación (agregada 2026-08-23)
+
+- **AC10** — Dado un mensaje más viejo que la ventana de retención, cuando corre la tarea diaria, entonces se borra de la base de verdad —no se marca— aunque estuviera retirado por un turno deshecho.
+- **AC11** — Dado un mensaje dentro de la ventana, cuando corre la tarea diaria, entonces no se toca.
+- **AC12** — Dado que la ventana de retención cambia, cuando corre la tarea diaria, entonces la nueva ventana rige sin tocar código: el número vive en la configuración.
+
 ## Preguntas abiertas
 
 | # | Pregunta | Estado | Resolución / por qué se difiere |

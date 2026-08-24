@@ -78,11 +78,13 @@ Any account can be exported, suspended, restored and erased. None of it is reach
 python -m tools.admin export 3        # write everything stored about user 3 to a JSON file
 python -m tools.admin deactivate 3    # export first, then stop the account from conversing
 python -m tools.admin reactivate 3    # bring the account back and destroy the export
-python -m tools.admin purge-auto      # erase every account whose grace window has ended
+python -m tools.admin purge-auto      # the daily pass: accounts past their grace window, conversation past the retention window
 python -m tools.admin purge-force 3   # erase one account now (--skip-grace to not wait out the window)
 ```
 
 A suspended account stops conversing immediately and keeps everything for a grace window (14 days, `ACCOUNT_GRACE_DAYS`), so it can still be restored intact. When the window ends the account is erased for good, and the export file lives exactly as long as the window does.
+
+Conversation is not kept forever either: the same daily pass erases every message older than the retention window (30 days, `MESSAGE_RETENTION_DAYS`). It is a real delete, not a flag, and it takes retired messages with it. What survives is what was distilled into facts, which is the layer meant to last — and the prompt only ever loads the most recent exchanges anyway. One honest caveat, the same one that applies to erasing an account: daily backups rotate over seven days, so a message deleted today can still exist in a copy for up to a week more.
 
 ---
 
@@ -106,7 +108,7 @@ Four units live in `deploy/`, installed into the system and enabled:
 | Unit | What it does |
 |---|---|
 | `tabris.service` | the Discord channel, restarted on failure and started with the machine |
-| `tabris-purge.timer` | erases accounts whose grace window has ended, daily |
+| `tabris-purge.timer` | daily: erases accounts past their grace window, and conversation past the retention window |
 | `tabris-backup.timer` | a dated copy of the database into `/var/backups/tabris`, keeping the last seven |
 | `tabris-probe.timer` | every five minutes, records whether the outside was reachable |
 

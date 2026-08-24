@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_messages_before, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -251,6 +251,46 @@ class TestMessages(unittest.TestCase):
         deactivate_message(self.db_path, self.user_id, message_id)
 
         self.assertEqual(get_messages(self.db_path, self.user_id), [])
+
+    def _age(self, message_id, stamp):
+        with contextlib.closing(_connect(self.db_path)) as conn:
+            conn.execute("UPDATE messages SET created_at=? WHERE id=?", (stamp, message_id))
+            conn.commit()
+
+    def test_erases_only_what_predates_the_cutoff(self):
+        old = save_message(self.db_path, self.user_id, "user", "de hace mucho")
+        self._age(old, "2026-01-01 00:00:00")
+        save_message(self.db_path, self.user_id, "user", "de ahora")
+
+        delete_messages_before(self.db_path, "2026-06-01 00:00:00")
+
+        remaining = [message["content"] for message in get_messages(self.db_path, self.user_id)]
+        self.assertEqual(remaining, ["de ahora"])
+
+    def test_reports_how_many_it_erased(self):
+        for _ in range(3):
+            self._age(save_message(self.db_path, self.user_id, "user", "vieja"), "2026-01-01 00:00:00")
+
+        self.assertEqual(delete_messages_before(self.db_path, "2026-06-01 00:00:00"), 3)
+
+    def test_erases_a_retired_message_too(self):
+        # A turn undone by item 34g stays in the table with is_active=0; its text is still text.
+        retired = save_message(self.db_path, self.user_id, "assistant", "nunca entregada")
+        deactivate_message(self.db_path, self.user_id, retired)
+        self._age(retired, "2026-01-01 00:00:00")
+
+        delete_messages_before(self.db_path, "2026-06-01 00:00:00")
+
+        with contextlib.closing(_connect(self.db_path)) as conn:
+            left = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertEqual(left, 0)
+
+    def test_erases_across_every_user(self):
+        other_id = create_user(self.db_path, name="Ana")
+        self._age(save_message(self.db_path, self.user_id, "user", "vieja"), "2026-01-01 00:00:00")
+        self._age(save_message(self.db_path, other_id, "user", "vieja"), "2026-01-01 00:00:00")
+
+        self.assertEqual(delete_messages_before(self.db_path, "2026-06-01 00:00:00"), 2)
 
     def test_deactivate_message_ignores_another_users_message(self):
         other_id = create_user(self.db_path, name="Ana")

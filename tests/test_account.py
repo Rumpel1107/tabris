@@ -1,15 +1,16 @@
+import contextlib
 import json
 import os
 import pytest
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, reactivate_account
-from core.db import create_user, create_user_with_channel, deactivate_fact, deactivate_message, get_user, init_db, save_fact, save_message, update_user_profile
+from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, purge_old_messages, reactivate_account
+from core.db import _connect, create_user, create_user_with_channel, deactivate_fact, deactivate_message, get_messages, get_user, init_db, save_fact, save_message, update_user_profile
 
 
 @pytest.mark.parametrize("name, expected", [
@@ -209,3 +210,53 @@ def test_purge_account_respects_the_window_unless_it_is_explicitly_skipped():
             purge_account(db_path, user_id, ignore_deadline=True)
 
         assert get_user(db_path, user_id) is None
+
+
+NOW = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
+
+
+@contextlib.contextmanager
+def _database_with_messages(ages_in_days):
+    """Open a throwaway database holding one message per age given, and yield its path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, name="Rumpel")
+        for age in ages_in_days:
+            message_id = save_message(db_path, user_id, "user", f"hace {age} dias")
+            stamp = (NOW - timedelta(days=age)).strftime("%Y-%m-%d %H:%M:%S")
+            with contextlib.closing(_connect(db_path)) as conn:
+                conn.execute("UPDATE messages SET created_at=? WHERE id=?", (stamp, message_id))
+                conn.commit()
+        yield db_path, user_id
+
+
+def test_erases_conversation_past_the_retention_window():
+    with patch("config.MESSAGE_RETENTION_DAYS", 30):
+        with _database_with_messages([40, 5]) as (db_path, user_id):
+            purge_old_messages(db_path, now=NOW)
+
+            kept = [message["content"] for message in get_messages(db_path, user_id)]
+            assert kept == ["hace 5 dias"]
+
+
+def test_reports_how_many_messages_it_erased():
+    with patch("config.MESSAGE_RETENTION_DAYS", 30):
+        with _database_with_messages([40, 40, 5]) as (db_path, _):
+            assert purge_old_messages(db_path, now=NOW) == 2
+
+
+def test_the_retention_window_comes_from_the_setting():
+    # The same message survives a 30-day window and does not survive a 3-day one.
+    with patch("config.MESSAGE_RETENTION_DAYS", 30):
+        with _database_with_messages([10]) as (db_path, _):
+            assert purge_old_messages(db_path, now=NOW) == 0
+    with patch("config.MESSAGE_RETENTION_DAYS", 3):
+        with _database_with_messages([10]) as (db_path, _):
+            assert purge_old_messages(db_path, now=NOW) == 1
+
+
+def test_reads_the_clock_when_no_moment_is_given():
+    with patch("config.MESSAGE_RETENTION_DAYS", 30):
+        with _database_with_messages([40]) as (db_path, _):
+            assert purge_old_messages(db_path) == 1

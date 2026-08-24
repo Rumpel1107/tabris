@@ -2,7 +2,7 @@ import argparse
 import config
 import logging
 
-from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, reactivate_account
+from core.account import deactivate_account, export_user, purge_account, purge_due_accounts, purge_old_messages, reactivate_account
 from core.db import get_user_records
 
 
@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     reactivate_command = commands.add_parser("reactivate", help="Destroy a deactivated user's export and let their account converse again.")
     reactivate_command.add_argument("user_id", type=int, help="Numeric id of the user")
 
-    commands.add_parser("purge-auto", help="Erase every deactivated account whose grace window has ended. This is the scheduled pass: it asks nothing.")
+    commands.add_parser("purge-auto", help="Erase every deactivated account whose grace window has ended, and every message past the retention window. This is the scheduled pass: it asks nothing.")
 
     purge_force_command = commands.add_parser("purge-force", help="Erase one deactivated account by hand. Irreversible.")
     purge_force_command.add_argument("user_id", type=int, help="Numeric id of the user")
@@ -64,6 +64,8 @@ def main(argv=None) -> None:
         purged = purge_due_accounts(config.DB_PATH)
         erased = ", ".join(str(user_id) for user_id in purged) if purged else "none were due"
         print(f"Erased {len(purged)} account(s): {erased}")
+        messages = purge_old_messages(config.DB_PATH)
+        print(f"Erased {messages} message(s) older than {config.MESSAGE_RETENTION_DAYS} days")
     elif args.command == "purge-force":
         user = get_user_records(config.DB_PATH, args.user_id)["user"]
         print(f"About to erase user {args.user_id}: {user['name']}")

@@ -4,7 +4,7 @@ import json
 import logging
 import os
 
-from core.db import deactivate_user, delete_user_completely, get_deactivated_users, get_user, get_user_records, reactivate_user
+from core.db import deactivate_user, delete_messages_before, delete_user_completely, get_deactivated_users, get_user, get_user_records, reactivate_user
 from datetime import datetime, time, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -115,6 +115,19 @@ def purge_due_accounts(db_path: str, now: datetime | None = None) -> list[int]:
         purged.append(account["id"])
     logger.info(f"purge: {len(purged)} account(s) erased")
     return purged
+
+
+def purge_old_messages(db_path: str, now: datetime | None = None) -> int:
+    """Erase conversation past the retention window and return how many messages were erased.
+
+    `now` is injectable for the same reason as in purge_due_accounts: the window is the policy,
+    and it has one owner.
+    """
+    moment = now or datetime.now(timezone.utc)
+    cutoff = moment - timedelta(days=config.MESSAGE_RETENTION_DAYS)
+    erased = delete_messages_before(db_path, cutoff.strftime("%Y-%m-%d %H:%M:%S"))
+    logger.info(f"retention: {erased} message(s) erased")
+    return erased
 
 
 def purge_account(db_path: str, user_id: int, ignore_deadline: bool = False) -> None:

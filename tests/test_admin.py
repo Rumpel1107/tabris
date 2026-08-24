@@ -81,12 +81,22 @@ def test_reactivate_command_aborts_on_mismatched_confirmation(capsys):
 
 def test_purge_auto_erases_the_due_accounts_without_asking(capsys):
     with patch("tools.admin.purge_due_accounts", return_value=[3, 5]) as purge, \
+         patch("tools.admin.purge_old_messages", return_value=0), \
          patch("builtins.input") as ask:
         main(["purge-auto"])
 
     purge.assert_called_once_with(config.DB_PATH)
     ask.assert_not_called()
     assert "3" in capsys.readouterr().out
+
+
+def test_purge_auto_also_erases_conversation_past_the_window(capsys):
+    with patch("tools.admin.purge_due_accounts", return_value=[]), \
+         patch("tools.admin.purge_old_messages", return_value=12) as retention:
+        main(["purge-auto"])
+
+    retention.assert_called_once_with(config.DB_PATH)
+    assert "12" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("argv, skipped", [

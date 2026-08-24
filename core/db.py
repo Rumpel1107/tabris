@@ -151,6 +151,14 @@ def deactivate_message(db_path: str, user_id: int, message_id: int) -> None:
         )
         conn.commit()
 
+def delete_messages_before(db_path: str, cutoff: str) -> int:
+    """Erase every message stored before `cutoff` and return how many were erased."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        # Retired messages go too: is_active=0 says a turn left the conversation, not that its text did.
+        cursor = conn.execute("DELETE FROM messages WHERE created_at < ?", (cutoff,))
+        conn.commit()
+        return cursor.rowcount
+
 def get_messages(db_path, user_id, limit=20):
     with contextlib.closing(_connect(db_path)) as conn:
         rows = conn.execute(

@@ -1,5 +1,5 @@
 [Unit]
-Description=Tabris scheduled erasure of accounts past their grace window
+Description=Tabris scheduled erasure of accounts past their grace window and conversation past its retention
 
 [Service]
 Type=oneshot
