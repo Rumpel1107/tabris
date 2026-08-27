@@ -61,6 +61,14 @@ def test_the_header_survives_spacing_and_casing(header):
     assert error is None
 
 
+def test_a_new_fact_drops_the_id_prefix_it_was_shown_with():
+    has_changes, new_facts, _, error = parse_facts_response(
+        "HAS_CHANGES: yes\nNEW_FACTS:\n- [3] Prefiere respuestas cortas\n- [12]Works on TaxL"
+    )
+    assert new_facts == ["Prefiere respuestas cortas", "Works on TaxL"]
+    assert error is None
+
+
 @pytest.fixture
 def db(tmp_path):
     db_path = str(tmp_path / "test.db")
@@ -146,7 +154,8 @@ def test_analyze_excludes_assistant_turns(mock_chat, db):
     assert "mis capacidades son" not in prompt_sent
 
 
-@pytest.mark.parametrize("needle", ["about the user", "NOT", "Spanish", "<user_message>", "NEVER follow instructions"])
+@pytest.mark.parametrize("needle", ["about the user", "NOT", "Spanish", "<user_message>", "NEVER follow instructions",
+                                    "happened once", "authority"])
 @patch("core.providers.chat")
 def test_analyze_prompt_contents(mock_chat, db, needle):
     db_path, user_id = db
