@@ -164,8 +164,8 @@ data/           SQLite database, local identity file and data exports — gitign
 | File | What it covers |
 |---|---|
 | [`PLAN.md`](PLAN.md) | Goals, decisions, architecture and roadmap — the single source of truth |
-| [`AGENTS.md`](AGENTS.md) | How to collaborate on this repository, for humans and AI agents |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Code conventions, testing rules and architecture patterns |
+| [`AGENTS.md`](AGENTS.md) | Entry point for AI agents — holds no rules, points at the files that do |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How the project is run: setup, tests, code conventions, architecture patterns |
 
 ---
 

@@ -1,6 +1,12 @@
 # Contributing to Tabris
 
-How this project is built and how to keep building it — for any collaborator, human or agent. This file covers the **code**; for collaboration style and commands see `AGENTS.md`, and for goals/decisions/roadmap see `PLAN.md`. The *rationale* behind these rules lives in `PLAN.md` (§3 decisions, §4 architecture) — this file states the actionable rule and points there instead of repeating the why.
+How this project is built and how to keep building it — for any collaborator, human or agent. **This file is the single source of truth for how the project is run:** setup, tests, code conventions, architecture patterns and documentation upkeep. For goals, decisions and roadmap see `PLAN.md`. The *rationale* behind these rules lives in `PLAN.md` (§3 decisions, §4 architecture) — this file states the actionable rule and points there instead of repeating the why.
+
+## Dev setup
+
+- **First run, and every new environment:** `./tools/setup.sh`. Requires Python 3.13+. It checks the preconditions, builds the virtualenv, installs `requirements.txt`, locks down file permissions, and verifies by running the suite. Safe to re-run — it never overwrites an existing `.env`.
+- **Run tests:** `~/.venvs/tabris/bin/python -m pytest` (pytest is the official runner — it sees both test styles; plain `unittest discover` silently skips function-style tests).
+- **Virtualenv:** lives at `~/.venvs/tabris`, deliberately **outside** the repo. A venv hardcodes absolute paths, so one created inside a project directory breaks for any environment that did not create it — and a project directory is easily shared (mounts, sync, multiple checkouts) while `$HOME` is not. Keeping it under `$HOME` means the same command resolves to the right venv everywhere. Never create one inside the project. Override with `TABRIS_VENV=...` (location) or `PYTHON=...` (interpreter).
 
 ## Development workflow
 
@@ -11,7 +17,7 @@ How this project is built and how to keep building it — for any collaborator, 
 
 ## Testing
 
-- **Runner:** `~/.venvs/tabris/bin/python -m pytest` (see `AGENTS.md` § Dev setup). It runs both `unittest.TestCase` classes and plain function tests; `unittest discover` silently skips the function ones.
+- **Runner:** see § Dev setup. It runs both `unittest.TestCase` classes and plain function tests; `unittest discover` silently skips the function ones.
 - **Style for new tests:** function style with plain `assert`. Use `@pytest.mark.parametrize` instead of copy-pasting near-identical tests. Mock external APIs (models, search) — tests must not hit the network.
 - **Per item:** unit tests (TDD) inside, plus an end-to-end smoke check that runs the real flow with no mocks.
 - Existing `unittest.TestCase` tests are fine; migrate them to function style opportunistically when you touch a file, not in bulk.
@@ -23,11 +29,13 @@ How this project is built and how to keep building it — for any collaborator, 
 - **English** for all code, names, and comments. Comments only when they help an external reviewer understand non-obvious code — never to narrate what the code says.
 - **No explanations or narration inside files.** Explanations belong in the pull request / conversation, not in code, tests, or docs.
 - **Public functions carry type hints + a short docstring** (e.g. `def save_fact(db_path: str, user_id: int, content: str) -> int:`) — beginner-honest, enough to run `mypy`, not exhaustive.
-- **User-facing text goes through `msg(key, language)`** (`core/strings.py`) — never hardcode user-facing text in any language.
+- **User-facing text goes through `msg(key, language)`** (`core/strings.py`) — never hardcode user-facing text in any language. **English is the default language; Spanish is a supported option** selected per user, so the Spanish entries in `strings.py` are intentional translations, not bugs to "fix".
+- **Nothing personal in committed files.** This repository is public. Never write the maintainer's infrastructure (machine names, host/container layout, mount paths, absolute paths from a personal setup) or personal data (real names, real locations) into code, tests, or docs. Document the general mechanism instead — it leaks nothing and is more useful to anyone cloning the project.
 - **Examples come in both languages.** Every example written into a model instruction or a test — a few-shot case, a sample message, a fixture — carries a Spanish and an English version. Tabris runs in both (English default, Spanish supported), so a set of examples in one language teaches that language's shape and leaves the other unexercised.
 
 ## Architecture patterns
 
+- **Deterministic first; the model only where judgment is required.** When the answer is defined by a rule that can be written down — a format, a bounded set, a comparison — write it in code. Reserve model calls for open-ended language, where enumerating the cases breaks instead of scaling (the keyword router became an LLM router in item 29 for exactly that reason). Every model output that reaches stored data passes a deterministic check on the way in: ids are filtered against what was actually shown, counts are capped, formats are parsed rather than trusted. Adding a second model call to a path one call already handles is a cost, not a refinement — three independent calls over the same text is how a city and its time zone ended up on different continents (item 34i).
 - **Channel-agnostic core (D5).** `core/` must not know which channel (CLI, Telegram) the input came from. Channels are thin adapters that call the core. Per-session state lives in `core/session.py`'s `Session`, never in module globals.
 - **Provider abstraction + fallback (D2/D10).** Model providers (`core/providers.py`) and search providers (`core/search.py`) share one shape: an ordered list in `config.py`, tried in order, falling through to the next on error or quota. To add a provider, mirror the existing structure and normalize its response to the common shape — don't special-case call sites.
 - **Config vs secrets (D3).** Structure and non-secret config live in `config.py` (committed). Secrets live in `.env` (gitignored); `.env.example` documents the required variables. Never commit a key.
@@ -36,3 +44,9 @@ How this project is built and how to keep building it — for any collaborator, 
 - **Database access.** Every `core/db.py` function goes through the `_connect` helper (sets `PRAGMA foreign_keys = ON` and `row_factory`). Facts are append-only: retire via `is_active = 0` (soft-delete, scoped by `user_id`), never edit content in place or hard delete (§4.3).
 - **Two deliberate exceptions to the soft-delete rule, both of them privacy deletions.** Marking a row inactive leaves the data exactly where it was, which is not a deletion at all when the point is that the data stops existing. `delete_user_completely` erases every row of one user in a single transaction; `delete_messages_before` erases conversation past its retention window, retired messages included — `is_active = 0` says a turn left the conversation, never that its text stopped being text. Both are reachable from `tools/admin.py` alone and no chat path may ever call either (item 34c, AC9). These two are the whole list: anything else that needs to remove data soft-deletes it, and adding a third is a decision, not a detail.
 - **Bounded context window (§4.4).** Only the system prompt + last N messages are sent to the model, to avoid silent top-truncation that drops the system prompt.
+
+## Keeping the documentation current
+
+**`PLAN.md`.** When a task is confirmed done, update it directly: mark the item ✅ and bump the "Last updated" date. This is the one file to edit without proposing first. Item descriptions stay **one line** — reasoning, alternatives and session narrative belong in the conversation, not in the roadmap.
+
+**`README.md`.** It is the project's public face — assume a stranger reads it before anything else. Update it **in the same change** that alters what it promises: the setup command, the requirements, the entry points, the channel list, or the documentation map. Do not defer it to a later cleanup. A stale instruction costs a newcomer more than a missing one.
