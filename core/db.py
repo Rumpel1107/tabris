@@ -168,6 +168,15 @@ def get_messages(db_path, user_id, limit=20):
         ).fetchall()
         return list(reversed([dict(row) for row in rows]))
 
+def get_last_message_time(db_path: str, user_id: int) -> str | None:
+    """Return when this user's newest message was stored (UTC), retired ones included."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        row = conn.execute(
+            "SELECT MAX(created_at) FROM messages WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        return row[0]
+
 def update_user_profile(db_path, user_id, name=None, language=None, location=None, timezone=None):
     """Update only the fields given; anything left as None keeps its stored value."""
     updates = {

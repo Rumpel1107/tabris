@@ -25,7 +25,14 @@ def format_datetime(dt, language):
     return f"{format_date(dt, language)} — {dt.strftime('%H:%M')}"
 
 
-def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None):
+def _starts_a_new_day(last_message_at, local_now, timezone):
+    if not last_message_at:
+        return False
+    last_utc = datetime.fromisoformat(last_message_at).replace(tzinfo=dt_timezone.utc)
+    return last_utc.astimezone(ZoneInfo(timezone)).date() < local_now.date()
+
+
+def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None, last_message_at=None):
     if now is None:
         now = datetime.now(dt_timezone.utc)
     if now.tzinfo is None:
@@ -34,6 +41,8 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
     lang_name = config.LANGUAGE_NAMES.get(language, language)
     directive = f"\nAlways respond in {lang_name}."
     context_block = f"\n\n## Current context\nDate and time: {format_datetime(local_now, language)}"
+    if _starts_a_new_day(last_message_at, local_now, timezone):
+        context_block += "\nThis is the user's first message of the day."
     location_part = f", located in {location}" if location else ""
     channels_part = f" You talk to them over {', '.join(channels)}." if channels else ""
     name_block = f"\n\n## Profile\nYou are talking to {name}{location_part}.{channels_part}"

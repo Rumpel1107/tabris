@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from core import memory_manager, providers
 from core.account import deletion_deadline
-from core.db import create_link_code, deactivate_message, get_facts, get_user, get_user_channels, save_fact, save_message, update_user_profile
+from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_user_input, format_date
 from core.search import web_fetch, web_search
@@ -255,6 +255,7 @@ def handle_turn(session, user_input, role, db_path, persona=None):
                 persona, facts, language=session.language,
                 name=user_row["name"], location=user_row["location"], timezone=user_row["timezone"],
                 channels=get_user_channels(db_path, session.user_id),
+                last_message_at=get_last_message_time(db_path, session.user_id),
             ),
         }
         if session.conversation_history and session.conversation_history[0]["role"] == "system":

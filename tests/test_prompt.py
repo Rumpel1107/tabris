@@ -125,6 +125,20 @@ def test_build_system_prompt_lists_linked_channels(channels, snippet, present):
     assert (snippet in result) is present
 
 
+@pytest.mark.parametrize("last_message_at, present", [
+    ("2026-08-26 20:00:00", True),
+    ("2026-08-27 12:30:00", False),
+    ("2026-08-27 02:00:00", True),
+    (None, False),
+])
+def test_build_system_prompt_flags_the_first_message_of_the_day(last_message_at, present):
+    from datetime import datetime, timezone
+    utc_now = datetime(2026, 8, 27, 13, 0, tzinfo=timezone.utc)
+    result = build_system_prompt("p", [], "en", "Rumpel", timezone="America/Bogota",
+                                 now=utc_now, last_message_at=last_message_at)
+    assert ("first message of the day" in result) is present
+
+
 def test_fence_user_input_wraps_text():
     assert fence_user_input("hola") == "<user_message>\nhola\n</user_message>"
 

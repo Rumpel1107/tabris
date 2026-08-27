@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_messages_before, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_messages_before, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_last_message_time, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -783,6 +783,34 @@ def test_get_user_channels_excludes_other_users(tmp_path):
     register_user_channel(db_path, other_id, "discord", "disc-key-1")
 
     assert get_user_channels(db_path, user_id) == ["cli"]
+
+
+def test_get_last_message_time_returns_the_newest_of_that_user(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    other_id = create_user(db_path, "Ana", "en")
+    older = save_message(db_path, user_id, "user", "ayer")
+    newer = save_message(db_path, user_id, "assistant", "hoy")
+    intruder = save_message(db_path, other_id, "user", "de otra persona")
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.executemany(
+            "UPDATE messages SET created_at=? WHERE id=?",
+            [("2026-01-01 08:00:00", older),
+             ("2026-01-02 08:00:00", newer),
+             ("2026-01-03 08:00:00", intruder)],
+        )
+        conn.commit()
+
+    assert get_last_message_time(db_path, user_id) == "2026-01-02 08:00:00"
+
+
+def test_get_last_message_time_is_none_without_messages(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+
+    assert get_last_message_time(db_path, user_id) is None
 
 
 @pytest.mark.parametrize("pragma, expected", [

@@ -15,7 +15,7 @@ from unittest.mock import patch
 from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, update_user_profile, _connect
+from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
 from core.onboarding import ResolvedLocation
 from core.prompt import format_date
@@ -250,6 +250,31 @@ def test_handle_turn_refreshes_system_prompt_each_turn(mock_chat):
 
         assert "Vive en Panama" in session.conversation_history[0]["content"]
         assert "You talk to them over cli." in session.conversation_history[0]["content"]
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_marks_only_the_first_message_of_the_day(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="ok", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "first.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        update_user_profile(db_path, user_id, timezone="America/Bogota")
+        yesterday = save_message(db_path, user_id, "user", "hola de ayer")
+        with contextlib.closing(_connect(db_path)) as conn:
+            conn.execute("UPDATE messages SET created_at='2020-01-01 00:00:00' WHERE id=?", (yesterday,))
+            conn.commit()
+        session = Session(
+            user_id=user_id,
+            language="es",
+            conversation_history=[{"role": "system", "content": "sys"}],
+        )
+
+        handle_turn(session, "hola", "general", db_path, persona="PERSONA")
+        assert "first message of the day" in session.conversation_history[0]["content"]
+
+        handle_turn(session, "otra", "general", db_path, persona="PERSONA")
+        assert "first message of the day" not in session.conversation_history[0]["content"]
 
 
 @patch("core.conversation.providers.chat")
