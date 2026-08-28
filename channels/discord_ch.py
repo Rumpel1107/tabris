@@ -10,6 +10,7 @@ from core.prompt import load_persona
 from core.session import get_or_create_session
 from core.strings import msg
 from core.text import split_message
+from core.transcribe import transcribe
 from core.version import describe
 
 
@@ -41,8 +42,15 @@ async def on_message(message):
     if message.author == client.user:
         return
     key = str(message.author.id)
+    voice = message.attachments[0] if message.flags.voice and message.attachments else None
+    audio = None
+    if voice is not None and (voice.duration or 0) <= config.AUDIO_MAX_SECONDS:
+        audio = await voice.read()
     async with message.channel.typing():  # a turn with a web search takes long enough that silence reads as being ignored
-        reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
+        if voice is not None:
+            reply = await _run_locked(key, handle_voice, db_path, sessions, key, audio, voice.filename, persona)
+        else:
+            reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
     session = sessions[("discord", key)]
     if not await send_reply(message.channel, reply, session):
         undo_last_turn(session, db_path)
@@ -61,6 +69,28 @@ async def send_reply(channel, reply, session):
                 logger.exception("Failed to deliver the send-failure notice on discord")
             return False
     return True
+
+
+def handle_voice(db_path, sessions, key, audio, filename, persona):
+    """Answer a voice message; `audio` is None when it was refused for being too long."""
+    user = find_user_by_key(db_path, "discord", key)
+    session = get_or_create_session(
+        sessions,
+        "discord",
+        key,
+        user["id"] if user else None,
+        user["language"] if user else "en",
+    )
+
+    if audio is None:
+        return msg("audio_too_long", session.language, minutes=config.AUDIO_MAX_SECONDS // 60)
+
+    text = transcribe(audio, filename, session.language if user else None)
+    if not text:
+        return msg("audio_not_understood", session.language)
+
+    reply = handle_message(db_path, sessions, key, text, persona)
+    return msg("audio_transcript", session.language, text=text) + "\n\n" + reply
 
 
 def handle_message(db_path, sessions, key, user_input, persona):

@@ -20,6 +20,9 @@ MESSAGES = {
         "message_too_long":        "Tu mensaje es demasiado largo (máximo {limit} caracteres). ¿Podrías acortarlo, por favor?",
         "rate_limited":            "Estás enviando mensajes demasiado rápido. Por favor espera un momento antes de continuar.",
         "send_failed":             "Al parecer se presentaron problemas con el envío de mensajes. Si quieres puedes enviar tu mensaje de nuevo.",
+        "audio_transcript":        "🎙️ {text}",
+        "audio_too_long":          "Ese audio es muy largo (máximo {minutes} minutos). ¿Podrías enviarme uno más corto, por favor?",
+        "audio_not_understood":    "No pude entender ese audio. ¿Puedes intentarlo de nuevo o escribírmelo?",
         "account_deactivated":     "Hola. Tu cuenta se encuentra suspendida y por eso no puedo seguir respondiendo tus mensajes. Tu información se borrará de forma definitiva el {deadline}. Si cambiaste de opinión, escribe al administrador de {agent} antes de esa fecha para restaurar tu acceso.",
     },
     "en": {
@@ -43,6 +46,9 @@ MESSAGES = {
         "message_too_long":        "Your message is too long (maximum {limit} characters). Could you please shorten it?",
         "rate_limited":            "You're sending messages too quickly. Please wait a moment before continuing.",
         "send_failed":             "It seems there were problems sending the messages. If you want, you can send your message again.",
+        "audio_transcript":        "🎙️ {text}",
+        "audio_too_long":          "That audio is too long (maximum {minutes} minutes). Could you send me a shorter one, please?",
+        "audio_not_understood":    "I couldn't understand that audio. Can you try again or write it to me?",
         "account_deactivated":     "Hello. Your account is suspended, so I can't keep answering your messages. Your information will be permanently erased on {deadline}. If you changed your mind, write to the administrator of {agent} before that date to restore your access.",
     },
 }

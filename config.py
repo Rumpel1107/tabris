@@ -85,6 +85,11 @@ DISCORD_MESSAGE_LIMIT = 2000   # hard limit Discord enforces per outgoing messag
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
 
+# --- Transcription Configuration ---
+TRANSCRIBE_PROVIDERS = ["groq"]   # ordered; transcribe() tries each in turn, falls through on failure
+TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
+AUDIO_MAX_SECONDS = 240   # reject a voice message longer than this before downloading or transcribing it
+
 # --- API Keys ---
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")

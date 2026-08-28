@@ -118,7 +118,13 @@ def test_run_locked_serializes_calls_for_the_same_key_but_not_across_keys():
 
 def test_a_turn_shows_typing_while_the_work_happens():
     channel = FakeChannel()
-    message = SimpleNamespace(author=SimpleNamespace(id=42), content="hola", channel=channel)
+    message = SimpleNamespace(
+        author=SimpleNamespace(id=42),
+        content="hola",
+        channel=channel,
+        flags=SimpleNamespace(voice=False),
+        attachments=[],
+    )
     discord_ch.db_path = ":memory:"
     discord_ch.persona = "persona"
     discord_ch.sessions = {("discord", "42"): Session(language="es")}
@@ -126,6 +132,89 @@ def test_a_turn_shows_typing_while_the_work_happens():
         asyncio.run(discord_ch.on_message(message))
     assert channel.typing_entered is True
     assert channel.sent == ["lista"]
+
+
+class FakeAttachment:
+    def __init__(self, duration):
+        self.duration = duration
+        self.filename = "voice-message.ogg"
+        self.read_calls = 0
+
+    async def read(self):
+        self.read_calls += 1
+        return b"audio-bytes"
+
+
+def _voice_message(channel, duration=10, is_voice=True, content=""):
+    return SimpleNamespace(
+        author=SimpleNamespace(id=42),
+        content=content,
+        channel=channel,
+        flags=SimpleNamespace(voice=is_voice),
+        attachments=[FakeAttachment(duration)],
+    )
+
+
+def _prepare_adapter():
+    discord_ch.db_path = ":memory:"
+    discord_ch.persona = "persona"
+    discord_ch.sessions = {}
+
+
+@patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es"})
+@patch("channels.discord_ch.handle_message", return_value="Listo, te lo recuerdo")
+@patch("channels.discord_ch.transcribe", return_value="recordame comprar café")
+def test_a_voice_message_is_transcribed_and_answered(mock_transcribe, mock_handle, mock_user):
+    channel = FakeChannel()
+    _prepare_adapter()
+
+    asyncio.run(discord_ch.on_message(_voice_message(channel)))
+
+    assert mock_handle.call_args[0][3] == "recordame comprar café"
+    assert channel.sent == ["🎙️ recordame comprar café\n\nListo, te lo recuerdo"]
+
+
+@patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es"})
+@patch("channels.discord_ch.handle_message")
+@patch("channels.discord_ch.transcribe")
+def test_a_voice_message_over_the_limit_is_refused_before_being_read(mock_transcribe, mock_handle, mock_user):
+    channel = FakeChannel()
+    _prepare_adapter()
+    message = _voice_message(channel, duration=config.AUDIO_MAX_SECONDS + 1)
+
+    asyncio.run(discord_ch.on_message(message))
+
+    assert channel.sent == [msg("audio_too_long", "es", minutes=config.AUDIO_MAX_SECONDS // 60)]
+    assert message.attachments[0].read_calls == 0
+    assert mock_transcribe.called is False
+    assert mock_handle.called is False
+
+
+@patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es"})
+@patch("channels.discord_ch.handle_message")
+@patch("channels.discord_ch.transcribe", return_value=None)
+def test_a_voice_message_that_cannot_be_transcribed_warns_the_user(mock_transcribe, mock_handle, mock_user):
+    channel = FakeChannel()
+    _prepare_adapter()
+
+    asyncio.run(discord_ch.on_message(_voice_message(channel)))
+
+    assert channel.sent == [msg("audio_not_understood", "es")]
+    assert mock_handle.called is False
+
+
+@patch("channels.discord_ch.handle_message", return_value="respuesta")
+@patch("channels.discord_ch.transcribe")
+def test_an_audio_attachment_that_is_not_a_voice_message_takes_the_text_path(mock_transcribe, mock_handle):
+    channel = FakeChannel()
+    _prepare_adapter()
+    discord_ch.sessions = {("discord", "42"): Session(language="es")}
+
+    asyncio.run(discord_ch.on_message(_voice_message(channel, is_voice=False, content="mira esto")))
+
+    assert mock_transcribe.called is False
+    assert mock_handle.call_args[0][3] == "mira esto"
+    assert channel.sent == ["respuesta"]
 
 
 def test_a_short_reply_is_sent_as_one_message():
