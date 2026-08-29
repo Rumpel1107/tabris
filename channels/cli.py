@@ -7,9 +7,9 @@ from core.strings import msg
 
 from core import memory_manager
 from core.conversation import route_message, safe_handle_turn
-from core.db import find_user_by_key, get_messages, init_db
+from core.db import find_user_by_key, get_messages, get_user, init_db
 from core.onboarding import advance_onboarding
-from core.prompt import load_persona
+from core.prompt import history_entry, load_persona
 from core.session import get_or_create_session
 from core.version import describe
 
@@ -52,8 +52,10 @@ def chat():
 
     persona = load_persona()
     past_messages = get_messages(db_path, session.user_id, limit=config.MAX_HISTORY * 2)
+    user_row = get_user(db_path, session.user_id)
+    user_timezone = user_row["timezone"] if user_row else "UTC"
     session.conversation_history = [
-        {"role": message["role"], "content": message["content"]}
+        history_entry(message["role"], message["content"], message["created_at"], user_timezone)
         for message in past_messages
     ]
 

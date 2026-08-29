@@ -6,7 +6,7 @@ import logging
 from core.conversation import route_message, safe_handle_turn, undo_last_turn
 from core.db import find_user_by_key, get_messages, init_db
 from core.onboarding import advance_onboarding
-from core.prompt import load_persona
+from core.prompt import history_entry, load_persona
 from core.session import get_or_create_session
 from core.strings import msg
 from core.text import split_message
@@ -108,8 +108,9 @@ def handle_message(db_path, sessions, key, user_input, persona):
 
     if not session.conversation_history:
         past_messages = get_messages(db_path, session.user_id, limit=config.MAX_HISTORY * 2)
+        user_timezone = user["timezone"] if user else "UTC"
         session.conversation_history = [
-            {"role": message["role"], "content": message["content"]}
+            history_entry(message["role"], message["content"], message["created_at"], user_timezone)
             for message in past_messages
         ]
         session.last_analyzed_index = len(session.conversation_history)

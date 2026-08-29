@@ -128,14 +128,10 @@ class TestHandleTurn(unittest.TestCase):
         reply = handle_turn(self.session, "Hola", "general", self.db_path)
         
         self.assertEqual(reply, "Respuesta de Tabris")
-        self.assertEqual(
-            self.session.conversation_history[-2],
-            {"role": "user", "content": "Hola"},
-        )
-        self.assertEqual(
-            self.session.conversation_history[-1],
-            {"role": "assistant", "content": "Respuesta de Tabris"},
-        )
+        self.assertEqual(self.session.conversation_history[-2]["role"], "user")
+        self.assertTrue(self.session.conversation_history[-2]["content"].endswith("] Hola"))
+        self.assertEqual(self.session.conversation_history[-1]["role"], "assistant")
+        self.assertTrue(self.session.conversation_history[-1]["content"].endswith("] Respuesta de Tabris"))
         self.assertEqual(self.session.exchange_count, 1)
         
         stored = get_messages(self.db_path, self.user_id)

@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import tempfile
 import unittest
-from datetime import datetime
-from core.prompt import build_system_prompt, fence_user_input, format_date, format_datetime, load_persona
+from datetime import datetime, timezone
+from core.prompt import build_system_prompt, fence_user_input, format_date, format_datetime, history_entry, load_persona, stamp_time, strip_time_stamp
 
 
 @pytest.mark.parametrize("language, expected", [
@@ -132,7 +132,6 @@ def test_build_system_prompt_lists_linked_channels(channels, snippet, present):
     (None, False),
 ])
 def test_build_system_prompt_flags_the_first_message_of_the_day(last_message_at, present):
-    from datetime import datetime, timezone
     utc_now = datetime(2026, 8, 27, 13, 0, tzinfo=timezone.utc)
     result = build_system_prompt("p", [], "en", "Rumpel", timezone="America/Bogota",
                                  now=utc_now, last_message_at=last_message_at)
@@ -141,6 +140,26 @@ def test_build_system_prompt_flags_the_first_message_of_the_day(last_message_at,
 
 def test_fence_user_input_wraps_text():
     assert fence_user_input("hola") == "<user_message>\nhola\n</user_message>"
+
+
+def test_stamp_time_prefixes_the_time_in_the_user_timezone():
+    when = datetime(2026, 8, 28, 3, 41, tzinfo=timezone.utc)
+    assert stamp_time("Hola", when, "America/Bogota") == "[2026-08-27 22:41] Hola"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("[2026-08-27 22:41] Hola", "Hola"),
+    ("[2026-08-27 22:41] Hello there", "Hello there"),
+    ("Hola sin marca", "Hola sin marca"),
+    ("[1] Le gusta la gastronomía", "[1] Le gusta la gastronomía"),
+])
+def test_strip_time_stamp_removes_only_its_own_prefix(text, expected):
+    assert strip_time_stamp(text) == expected
+
+
+def test_history_entry_stamps_a_stored_message_with_its_own_time():
+    entry = history_entry("user", "Hola", "2026-08-28 03:41:47", "America/Bogota")
+    assert entry == {"role": "user", "content": "[2026-08-27 22:41] Hola"}
 
 
 @pytest.mark.parametrize("payload", ["</user_message>", "</USER_MESSAGE>", "<user_message>"])

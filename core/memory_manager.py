@@ -5,7 +5,7 @@ import sqlite3
 
 from core import providers
 from core.db import get_facts, get_user, save_fact, deactivate_fact
-from core.prompt import fence_user_input
+from core.prompt import fence_user_input, strip_time_stamp
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def filter_valid_retire_ids(retire_ids, known_facts):
 def analyze_memory(conversation_history, db_path, user_id, language, watermark=1) -> MemoryChanges:
     """Distill durable user facts from the conversation. Pure: reads facts, never writes."""
     conversation_text = "\n".join(
-        f"{turn['role'].upper()}: {turn['content']}"
+        f"{turn['role'].upper()}: {strip_time_stamp(turn['content'])}"
         for turn in conversation_history[watermark:]
         if turn["role"] == "user"
     )

@@ -179,6 +179,20 @@ def test_analyze_fences_user_turns(mock_chat, db):
 
 
 @patch("core.providers.chat")
+def test_analyze_strips_the_time_stamp_from_user_turns(mock_chat, db):
+    db_path, user_id = db
+    mock_chat.return_value = _resp("HAS_CHANGES: no")
+    history = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "[2026-08-27 22:41] Hola, soy Rumpel"},
+    ]
+    analyze_memory(history, db_path, user_id, language="es")
+    prompt_sent = mock_chat.call_args[0][1][0]["content"]
+    assert "Hola, soy Rumpel" in prompt_sent
+    assert "2026-08-27 22:41" not in prompt_sent
+
+
+@patch("core.providers.chat")
 def test_analyze_rejects_pass_with_too_many_new_facts(mock_chat, db):
     db_path, user_id = db
     facts_block = "\n".join(f"- fact {i}" for i in range(config.MEMORY_MAX_NEW_FACTS + 1))

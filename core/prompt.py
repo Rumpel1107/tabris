@@ -51,6 +51,22 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
     facts_block = "\n".join(f"- [{fact['id']}] {fact['content']}" for fact in facts)
     return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
 
+def stamp_time(content: str, when: datetime, timezone: str) -> str:
+    """Prefix a message with when it was said, in the user's own timezone."""
+    return f"[{when.astimezone(ZoneInfo(timezone)).strftime('%Y-%m-%d %H:%M')}] {content}"
+
+
+def strip_time_stamp(text: str) -> str:
+    """Remove a stamp_time prefix, so the mark never reaches stored memory."""
+    return re.sub(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\] ", "", text)
+
+
+def history_entry(role: str, content: str, created_at: str, timezone: str) -> dict:
+    """One history message, stamped with the UTC time it was stored."""
+    when = datetime.fromisoformat(created_at).replace(tzinfo=dt_timezone.utc)
+    return {"role": role, "content": stamp_time(content, when, timezone)}
+
+
 def fence_user_input(text: str) -> str:
     """Wrap untrusted user text so prompts treat it as data, never as instructions."""
     cleaned = re.sub(r"</?user_message>", "[tag removed]", text, flags=re.IGNORECASE)

@@ -9,7 +9,7 @@ import threading
 from types import SimpleNamespace
 
 from channels import discord_ch
-from core.db import create_user, find_user_by_key, get_messages, init_db, register_user_channel
+from core.db import create_user, find_user_by_key, get_messages, init_db, register_user_channel, save_message
 from core.providers import ChatResponse
 from core.session import Session
 from core.strings import msg
@@ -43,6 +43,23 @@ def test_handle_message_replies_to_a_known_person(mock_chat, mock_route):
         )
         assert reply == "Hola, soy Tabris"
         assert len(get_messages(db_path, user_id)) == 2
+
+
+@patch("channels.discord_ch.route_message", return_value="general")
+@patch("core.conversation.providers.chat")
+def test_rehydrated_history_carries_when_each_message_was_said(mock_chat, mock_route):
+    mock_chat.return_value = ChatResponse(content="Hola, soy Tabris", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Carlos", "es")
+        register_user_channel(db_path, user_id, "discord", "42")
+        save_message(db_path, user_id, "user", "mensaje viejo")
+        sessions = {}
+        discord_ch.handle_message(db_path, sessions, key="42", user_input="hola", persona="PERSONA")
+        rehydrated = sessions[("discord", "42")].conversation_history[1]
+        assert rehydrated["content"].startswith("[20")
+        assert rehydrated["content"].endswith("] mensaje viejo")
 
 
 class FakeChannel:

@@ -5,13 +5,14 @@ import sqlite3
 import threading
 import time
 
+from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from core import memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, fence_user_input, format_date
+from core.prompt import build_system_prompt, fence_user_input, format_date, stamp_time
 from core.search import web_fetch, web_search
 from core.strings import MESSAGES, msg
 
@@ -244,8 +245,9 @@ def run_with_tools(role, messages, tools, extra_executors=None):
     raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
 
 def handle_turn(session, user_input, role, db_path, persona=None):
+    user_row = get_user(db_path, session.user_id)
+    user_timezone = user_row["timezone"] if user_row else "UTC"
     if persona is not None:
-        user_row = get_user(db_path, session.user_id)
         # The stored profile is the record; the session only caches it, so it refreshes here.
         session.language = user_row["language"]
         facts = get_facts(db_path, session.user_id)
@@ -265,7 +267,10 @@ def handle_turn(session, user_input, role, db_path, persona=None):
             session.conversation_history.insert(0, system_message)
             session.last_analyzed_index += 1
 
-    session.conversation_history.append({"role": "user", "content": user_input})
+    # The stamp is for the model only: save_message below stores the text as the user wrote it.
+    session.conversation_history.append(
+        {"role": "user", "content": stamp_time(user_input, datetime.now(dt_timezone.utc), user_timezone)}
+    )
     try:
         reply = run_with_tools(
             role,
@@ -281,7 +286,9 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     except Exception:
         session.conversation_history.pop()
         raise
-    session.conversation_history.append({"role": "assistant", "content": reply})
+    session.conversation_history.append(
+        {"role": "assistant", "content": stamp_time(reply, datetime.now(dt_timezone.utc), user_timezone)}
+    )
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input),
         save_message(db_path, session.user_id, "assistant", reply),
