@@ -12,7 +12,7 @@ from core import memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, fence_user_input, format_date, stamp_time
+from core.prompt import build_system_prompt, fence_user_input, format_date, stamp_time, strip_time_stamp
 from core.search import web_fetch, web_search
 from core.strings import MESSAGES, msg
 
@@ -286,9 +286,8 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     except Exception:
         session.conversation_history.pop()
         raise
-    session.conversation_history.append(
-        {"role": "assistant", "content": stamp_time(reply, datetime.now(dt_timezone.utc), user_timezone)}
-    )
+    reply = strip_time_stamp(reply)
+    session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input),
         save_message(db_path, session.user_id, "assistant", reply),

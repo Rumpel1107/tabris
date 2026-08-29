@@ -62,7 +62,9 @@ def strip_time_stamp(text: str) -> str:
 
 
 def history_entry(role: str, content: str, created_at: str, timezone: str) -> dict:
-    """One history message, stamped with the UTC time it was stored."""
+    """One history message; only the user's turns carry a time."""
+    if role != "user":
+        return {"role": role, "content": content}
     when = datetime.fromisoformat(created_at).replace(tzinfo=dt_timezone.utc)
     return {"role": role, "content": stamp_time(content, when, timezone)}
 

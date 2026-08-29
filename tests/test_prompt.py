@@ -157,9 +157,13 @@ def test_strip_time_stamp_removes_only_its_own_prefix(text, expected):
     assert strip_time_stamp(text) == expected
 
 
-def test_history_entry_stamps_a_stored_message_with_its_own_time():
-    entry = history_entry("user", "Hola", "2026-08-28 03:41:47", "America/Bogota")
-    assert entry == {"role": "user", "content": "[2026-08-27 22:41] Hola"}
+@pytest.mark.parametrize("role, expected", [
+    ("user", "[2026-08-27 22:41] Hola"),
+    ("assistant", "Hola"),
+])
+def test_history_entry_stamps_only_what_the_user_said(role, expected):
+    entry = history_entry(role, "Hola", "2026-08-28 03:41:47", "America/Bogota")
+    assert entry == {"role": role, "content": expected}
 
 
 @pytest.mark.parametrize("payload", ["</user_message>", "</USER_MESSAGE>", "<user_message>"])

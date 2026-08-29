@@ -130,8 +130,10 @@ class TestHandleTurn(unittest.TestCase):
         self.assertEqual(reply, "Respuesta de Tabris")
         self.assertEqual(self.session.conversation_history[-2]["role"], "user")
         self.assertTrue(self.session.conversation_history[-2]["content"].endswith("] Hola"))
-        self.assertEqual(self.session.conversation_history[-1]["role"], "assistant")
-        self.assertTrue(self.session.conversation_history[-1]["content"].endswith("] Respuesta de Tabris"))
+        self.assertEqual(
+            self.session.conversation_history[-1],
+            {"role": "assistant", "content": "Respuesta de Tabris"},
+        )
         self.assertEqual(self.session.exchange_count, 1)
         
         stored = get_messages(self.db_path, self.user_id)
@@ -139,6 +141,16 @@ class TestHandleTurn(unittest.TestCase):
         self.assertIn("Hola", contents)
         self.assertIn("Respuesta de Tabris", contents)
         self.assertEqual(self.session.last_turn_message_ids, [m["id"] for m in stored])
+
+    @patch("core.conversation.providers.chat")
+    def test_a_reply_that_copies_the_time_stamp_is_cleaned_before_it_leaves(self, mock_chat):
+        mock_chat.return_value = providers.ChatResponse(content="[2026-08-29 00:15] Correcto", tool_calls=None)
+
+        reply = handle_turn(self.session, "Hola", "general", self.db_path)
+
+        self.assertEqual(reply, "Correcto")
+        self.assertEqual(self.session.conversation_history[-1]["content"], "Correcto")
+        self.assertIn("Correcto", [m["content"] for m in get_messages(self.db_path, self.user_id)])
 
     @patch("core.conversation.providers.chat")
     def test_inserting_the_system_prompt_keeps_the_distillation_watermark_aligned(self, mock_chat):
