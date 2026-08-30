@@ -21,11 +21,12 @@ def _transcribe_groq(audio: bytes, filename: str, language: str | None) -> str:
 
 
 def transcribe(audio: bytes, filename: str, language: str | None = None) -> str | None:
-    """Turn recorded audio into text, or None when no provider could answer."""
+    """Turn recorded audio into text, empty when nothing was said, or None when no provider could answer."""
     adapters = {"groq": _transcribe_groq}
     for name in config.TRANSCRIBE_PROVIDERS:
         try:
-            return adapters[name](audio, filename, language).strip()
+            text = adapters[name](audio, filename, language).strip()
+            return text if any(character.isalpha() for character in text) else ""
         except Exception as e:
             logger.warning(f"transcription provider '{name}' failed ({e}); trying next...")
     return None

@@ -22,7 +22,8 @@ MESSAGES = {
         "send_failed":             "Al parecer se presentaron problemas con el envío de mensajes. Si quieres puedes enviar tu mensaje de nuevo.",
         "audio_transcript":        "🎙️ {text}",
         "audio_too_long":          "Ese audio es muy largo (máximo {minutes} minutos). ¿Podrías enviarme uno más corto, por favor?",
-        "audio_not_understood":    "No pude entender ese audio. ¿Puedes intentarlo de nuevo o escribírmelo?",
+        "audio_failed":            "Tuve un problema técnico y no pude procesar ese audio. ¿Puedes intentarlo de nuevo, por favor?",
+        "audio_no_speech":         "No escuché nada en ese audio. ¿Puedes grabarlo de nuevo o escribírmelo?",
         "account_deactivated":     "Hola. Tu cuenta se encuentra suspendida y por eso no puedo seguir respondiendo tus mensajes. Tu información se borrará de forma definitiva el {deadline}. Si cambiaste de opinión, escribe al administrador de {agent} antes de esa fecha para restaurar tu acceso.",
     },
     "en": {
@@ -48,7 +49,8 @@ MESSAGES = {
         "send_failed":             "It seems there were problems sending the messages. If you want, you can send your message again.",
         "audio_transcript":        "🎙️ {text}",
         "audio_too_long":          "That audio is too long (maximum {minutes} minutes). Could you send me a shorter one, please?",
-        "audio_not_understood":    "I couldn't understand that audio. Can you try again or write it to me?",
+        "audio_failed":            "I had a technical problem and could not process that audio. Could you try again, please?",
+        "audio_no_speech":         "I didn't hear anything in that audio. Can you record it again or write it to me?",
         "account_deactivated":     "Hello. Your account is suspended, so I can't keep answering your messages. Your information will be permanently erased on {deadline}. If you changed your mind, write to the administrator of {agent} before that date to restore your access.",
     },
 }

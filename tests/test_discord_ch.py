@@ -1,6 +1,7 @@
 import asyncio
 import config
 import os
+import pytest
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -207,16 +208,18 @@ def test_a_voice_message_over_the_limit_is_refused_before_being_read(mock_transc
     assert mock_handle.called is False
 
 
+@pytest.mark.parametrize("transcript, notice", [(None, "audio_failed"), ("", "audio_no_speech")])
 @patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es"})
 @patch("channels.discord_ch.handle_message")
-@patch("channels.discord_ch.transcribe", return_value=None)
-def test_a_voice_message_that_cannot_be_transcribed_warns_the_user(mock_transcribe, mock_handle, mock_user):
+@patch("channels.discord_ch.transcribe")
+def test_a_voice_message_that_yields_no_text_warns_the_user(mock_transcribe, mock_handle, mock_user, transcript, notice):
     channel = FakeChannel()
     _prepare_adapter()
+    mock_transcribe.return_value = transcript
 
     asyncio.run(discord_ch.on_message(_voice_message(channel)))
 
-    assert channel.sent == [msg("audio_not_understood", "es")]
+    assert channel.sent == [msg(notice, "es")]
     assert mock_handle.called is False
 
 

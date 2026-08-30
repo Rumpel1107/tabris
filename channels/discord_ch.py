@@ -86,8 +86,10 @@ def handle_voice(db_path, sessions, key, audio, filename, persona):
         return msg("audio_too_long", session.language, minutes=config.AUDIO_MAX_SECONDS // 60)
 
     text = transcribe(audio, filename, session.language if user else None)
+    if text is None:
+        return msg("audio_failed", session.language)
     if not text:
-        return msg("audio_not_understood", session.language)
+        return msg("audio_no_speech", session.language)
 
     reply = handle_message(db_path, sessions, key, text, persona)
     return msg("audio_transcript", session.language, text=text) + "\n\n" + reply

@@ -1,4 +1,5 @@
 import os
+import pytest
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -46,3 +47,11 @@ def test_transcribe_falls_through_to_the_next_provider(mock_post):
 @patch("core.transcribe.httpx.post", side_effect=RuntimeError("provider down"))
 def test_transcribe_returns_none_when_every_provider_fails(mock_post):
     assert transcribe(b"audio-bytes", "voice.ogg", "es") is None
+
+
+@pytest.mark.parametrize("transcript", ["", "   ", ".", "...", "¿? ¡!", "♪♪"])
+@patch("core.transcribe.httpx.post")
+def test_transcribe_returns_empty_text_when_the_transcript_holds_no_letter(mock_post, transcript):
+    mock_post.return_value = FakeResponse(transcript)
+
+    assert transcribe(b"audio-bytes", "voice.ogg", "es") == ""
