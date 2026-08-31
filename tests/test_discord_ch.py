@@ -186,9 +186,10 @@ def test_a_voice_message_is_transcribed_and_answered(mock_transcribe, mock_handl
     channel = FakeChannel()
     _prepare_adapter()
 
-    asyncio.run(discord_ch.on_message(_voice_message(channel)))
+    asyncio.run(discord_ch.on_message(_voice_message(channel, duration=7)))
 
     assert mock_handle.call_args[0][3] == "recordame comprar café"
+    assert mock_transcribe.call_args[0][3] == 7
     assert channel.sent == ["🎙️ recordame comprar café\n\nListo, te lo recuerdo"]
 
 

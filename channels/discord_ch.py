@@ -48,7 +48,7 @@ async def on_message(message):
         audio = await voice.read()
     async with message.channel.typing():  # a turn with a web search takes long enough that silence reads as being ignored
         if voice is not None:
-            reply = await _run_locked(key, handle_voice, db_path, sessions, key, audio, voice.filename, persona)
+            reply = await _run_locked(key, handle_voice, db_path, sessions, key, audio, voice.filename, voice.duration, persona)
         else:
             reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
     session = sessions[("discord", key)]
@@ -71,7 +71,7 @@ async def send_reply(channel, reply, session):
     return True
 
 
-def handle_voice(db_path, sessions, key, audio, filename, persona):
+def handle_voice(db_path, sessions, key, audio, filename, duration, persona):
     """Answer a voice message; `audio` is None when it was refused for being too long."""
     user = find_user_by_key(db_path, "discord", key)
     session = get_or_create_session(
@@ -85,7 +85,7 @@ def handle_voice(db_path, sessions, key, audio, filename, persona):
     if audio is None:
         return msg("audio_too_long", session.language, minutes=config.AUDIO_MAX_SECONDS // 60)
 
-    text = transcribe(audio, filename, session.language if user else None)
+    text = transcribe(audio, filename, session.language if user else None, duration)
     if text is None:
         return msg("audio_failed", session.language)
     if not text:

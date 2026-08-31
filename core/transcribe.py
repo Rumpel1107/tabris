@@ -20,13 +20,25 @@ def _transcribe_groq(audio: bytes, filename: str, language: str | None) -> str:
     return response.json()["text"]
 
 
-def transcribe(audio: bytes, filename: str, language: str | None = None) -> str | None:
+def _is_speech(text: str, duration: float | None) -> bool:
+    if not any(character.isalpha() for character in text):
+        return False
+    if duration and duration >= config.AUDIO_SILENCE_MIN_SECONDS:
+        # over silence the model writes a short stock phrase instead of nothing, so density tells them apart
+        return len(text) >= duration * config.AUDIO_MIN_CHARS_PER_SECOND
+    return True
+
+
+def transcribe(audio: bytes, filename: str, language: str | None = None, duration: float | None = None) -> str | None:
     """Turn recorded audio into text, empty when nothing was said, or None when no provider could answer."""
     adapters = {"groq": _transcribe_groq}
     for name in config.TRANSCRIBE_PROVIDERS:
         try:
             text = adapters[name](audio, filename, language).strip()
-            return text if any(character.isalpha() for character in text) else ""
+            if _is_speech(text, duration):
+                return text
+            logger.info(f"transcript discarded as silence: {len(text)} characters in {duration}s")
+            return ""
         except Exception as e:
             logger.warning(f"transcription provider '{name}' failed ({e}); trying next...")
     return None
