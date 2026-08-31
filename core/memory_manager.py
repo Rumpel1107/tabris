@@ -136,6 +136,14 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
         )
         return MemoryChanges(rejected=True)
 
+    if filtered_retire_ids and not new_facts:
+        # Here a retire is only ever half of a merge; on its own it deletes what nothing replaces.
+        logger.warning(
+            f"analyze_memory: dropped {len(filtered_retire_ids)} retires with no replacement "
+            f"for user {user_id}"
+        )
+        filtered_retire_ids = []
+
     return MemoryChanges(
         new_facts=new_facts,
         retire_ids=filtered_retire_ids,

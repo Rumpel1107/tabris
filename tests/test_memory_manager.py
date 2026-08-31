@@ -118,8 +118,23 @@ def test_analyze_drops_unknown_retire_ids(mock_chat, db):
     db_path, user_id = db
     save_fact(db_path, user_id, "Hecho real")
     real_id = get_facts(db_path, user_id)[0]["id"]
-    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}, {real_id + 999}")
+    mock_chat.return_value = _resp(
+        f"HAS_CHANGES: yes\nNEW_FACTS:\n- Hecho fusionado\nRETIRE_IDS: {real_id}, {real_id + 999}"
+    )
     assert analyze_memory([], db_path, user_id, language="es").retire_ids == [real_id]
+
+
+@patch("core.providers.chat")
+def test_analyze_drops_retires_that_replace_nothing(mock_chat, db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Hecho real")
+    real_id = get_facts(db_path, user_id)[0]["id"]
+    mock_chat.return_value = _resp(f"HAS_CHANGES: yes\nRETIRE_IDS: {real_id}")
+
+    changes = analyze_memory([], db_path, user_id, language="es")
+
+    assert changes.retire_ids == []
+    assert changes.is_empty
 
 
 @patch("core.providers.chat")

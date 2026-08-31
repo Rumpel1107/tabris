@@ -58,11 +58,14 @@ class TestChatE2ESmoke(unittest.TestCase):
         
         fact_id = get_facts(db_path, user_id)[0]["id"]
         
-        mock_chat.return_value = providers.ChatResponse(content=f"HAS_CHANGES: yes\nRETIRE_IDS: {fact_id}", tool_calls=None)
+        mock_chat.return_value = providers.ChatResponse(
+            content=f"HAS_CHANGES: yes\nNEW_FACTS:\n- Trabaja en TaxL como fundador\nRETIRE_IDS: {fact_id}",
+            tool_calls=None,
+        )
         changes = analyze_memory([], db_path, user_id, language="es")
         apply_memory_changes(db_path, user_id, changes)
-        
-        self.assertEqual(get_facts(db_path, user_id), [])
+
+        self.assertEqual([fact["content"] for fact in get_facts(db_path, user_id)], ["Trabaja en TaxL como fundador"])
         
         prompt_sent = mock_chat.call_args[0][1][0]["content"]
         self.assertIn(f"[{fact_id}]", prompt_sent)
