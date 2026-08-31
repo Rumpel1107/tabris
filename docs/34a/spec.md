@@ -30,7 +30,7 @@ A failure in any of the first three states stores nothing: no user message, no r
 ## Acceptance criteria
 
 - **AC1** — Given a voice message under the length limit, when it is sent, then Tabris answers it as if the same words had been typed, and the answer begins by stating what it understood.
-- **AC2** — Given a voice message, when Tabris answers, then the answer quotes that voice message; and given quoting fails, then the answer is delivered anyway as an ordinary message.
+- **AC2** — ~~Given a voice message, when Tabris answers, then the answer quotes that voice message; and given quoting fails, then the answer is delivered anyway as an ordinary message.~~ **Dropped 2026-08-29 after a week of live use.** Quoting earns its place when answers arrive interleaved or out of order, and neither happens here: the typing indicator makes the sender wait for the answer, and a four-minute allowance carries a whole request in one recording instead of several consecutive ones. Reopen if replies ever do interleave — a channel shared with other people, or a turn slow enough that the sender moves on.
 - **AC3** — Given an audio longer than four minutes, when it is sent, then Tabris says so immediately, without transcribing it, and nothing is stored.
 - **AC4** — Given an ordinary audio file attached to a message rather than a voice message recorded in Discord, when it is sent, then it is treated as it is today and no transcription happens.
 - **AC5** — Given the transcription service fails, when the user sends a voice message, then they are told it was a technical problem and invited to retry, and nothing is stored.
