@@ -89,7 +89,7 @@ SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in 
 TRANSCRIBE_PROVIDERS = ["groq"]   # ordered; transcribe() tries each in turn, falls through on failure
 TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
 AUDIO_MAX_SECONDS = 240   # reject a voice message longer than this before downloading or transcribing it
-AUDIO_SILENCE_MIN_SECONDS = 4   # a recording shorter than this carries too little signal to judge its density
+AUDIO_SILENCE_MIN_SECONDS = 2   # a recording shorter than this carries too little signal to judge its density
 AUDIO_MIN_CHARS_PER_SECOND = 3   # from here up, a transcript thinner than this is a stock phrase written over silence
 
 # --- API Keys ---

@@ -57,12 +57,17 @@ def test_transcribe_returns_empty_text_when_the_transcript_holds_no_letter(mock_
     assert transcribe(b"audio-bytes", "voice.ogg", "es") == ""
 
 
-@pytest.mark.parametrize("transcript", ["Gracias", "Gracias por ver el video", "Thanks for watching!"])
+@pytest.mark.parametrize("transcript, duration", [
+    ("Gracias", 3),
+    ("Gracias", 30),
+    ("Gracias por ver el video", 30),
+    ("Thanks for watching!", 30),
+])
 @patch("core.transcribe.httpx.post")
-def test_transcribe_returns_empty_text_when_a_long_recording_yields_too_few_characters(mock_post, transcript):
+def test_transcribe_returns_empty_text_when_a_recording_yields_too_few_characters(mock_post, transcript, duration):
     mock_post.return_value = FakeResponse(transcript)
 
-    assert transcribe(b"audio-bytes", "voice.ogg", "es", duration=30) == ""
+    assert transcribe(b"audio-bytes", "voice.ogg", "es", duration=duration) == ""
 
 
 @pytest.mark.parametrize("transcript", [
@@ -76,7 +81,7 @@ def test_transcribe_keeps_a_transcript_dense_enough_to_be_speech(mock_post, tran
     assert transcribe(b"audio-bytes", "voice.ogg", "es", duration=10) == transcript
 
 
-@pytest.mark.parametrize("duration", [None, 0, 3])
+@pytest.mark.parametrize("duration", [None, 0, 1])
 @patch("core.transcribe.httpx.post", return_value=FakeResponse("Gracias"))
 def test_transcribe_does_not_judge_density_without_enough_recording(mock_post, duration):
     assert transcribe(b"audio-bytes", "voice.ogg", "es", duration=duration) == "Gracias"
