@@ -33,7 +33,7 @@ def parse_facts_response(raw_response):
     if "NEW_FACTS:" in raw_response:
         facts_block = raw_response.split("NEW_FACTS:", 1)[1].split("RETIRE_IDS:")[0]
         new_facts = [
-            re.sub(r"^\[\d+\]\s*", "", line.strip().lstrip("-").strip())
+            re.sub(r"^\[\d+(?:\s*,\s*\d+)*\]\s*", "", line.strip().lstrip("-").strip())
             for line in facts_block.split("\n")
             if line.strip().startswith("-")
         ]

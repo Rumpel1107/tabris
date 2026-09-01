@@ -63,9 +63,19 @@ def test_the_header_survives_spacing_and_casing(header):
 
 def test_a_new_fact_drops_the_id_prefix_it_was_shown_with():
     has_changes, new_facts, _, error = parse_facts_response(
-        "HAS_CHANGES: yes\nNEW_FACTS:\n- [3] Prefiere respuestas cortas\n- [12]Works on TaxL"
+        "HAS_CHANGES: yes\n"
+        "NEW_FACTS:\n"
+        "- [3] Prefiere respuestas cortas\n"
+        "- [12]Works on TaxL\n"
+        "- [15,58] Retomó la actividad física\n"
+        "- [7, 21] Runs three days a week"
     )
-    assert new_facts == ["Prefiere respuestas cortas", "Works on TaxL"]
+    assert new_facts == [
+        "Prefiere respuestas cortas",
+        "Works on TaxL",
+        "Retomó la actividad física",
+        "Runs three days a week",
+    ]
     assert error is None
 
 
