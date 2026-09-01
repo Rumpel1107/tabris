@@ -37,6 +37,17 @@ AGENT_ROLES = {
             {"provider": "groq",     "model": "openai/gpt-oss-120b"},
         ],
     },
+    "vision": {
+        "description": "a turn carrying an image the model has to look at",
+        "internal": True,   # chosen in code when an image is in view; the router only ever sees text
+        "temperature": 0.7,
+        "timeout": 40,      # a real call with images took 26 seconds against the global ceiling of 15
+        "providers": [
+            {"provider": "gemini",     "model": "gemini-3.5-flash-lite"},
+            {"provider": "openrouter", "model": "minimax/minimax-m3:free"},
+            {"provider": "groq",       "model": "qwen/qwen3.8-27b"},
+        ],
+    },
     "router": {
         "description": "classifies user intent into one of the available roles",
         "temperature": 0.0,
@@ -72,7 +83,8 @@ ACCOUNT_GRACE_DAYS = 14       # days between deactivating an account and deletin
 MESSAGE_RETENTION_DAYS = 30   # days a message is kept before the daily run erases it for good
 
 # --- Conversation Configuration ---
-MAX_HISTORY = 10    # number of recent exchanges (user+assistant) sent to the model
+MAX_HISTORY = 30    # number of recent exchanges (user+assistant) sent to the model
+HISTORY_MAX_CHARS = 40000   # combined size of that whole window, not of one message: whichever bound runs out first wins, so one bulky turn cannot crowd out the rest of the call
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 MAX_TOOL_ROUNDS = 10       # safety net: give up if a turn keeps asking for tools instead of answering
 MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
@@ -81,6 +93,10 @@ MESSAGE_RATE_SECONDS = 60   # window the bucket refills over (MAX tokens per thi
 
 # --- Channel Limits ---
 DISCORD_MESSAGE_LIMIT = 2000   # hard limit Discord enforces per outgoing message; longer replies are split
+
+# --- Image Configuration ---
+IMAGE_MAX_COUNT = 3   # the floor of the vision roster, so a fallback can serve whatever the primary accepted
+IMAGE_MAX_BYTES = 5 * 1024 * 1024   # one provider caps a whole request at 20 MB and base64 inflates by a third
 
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure

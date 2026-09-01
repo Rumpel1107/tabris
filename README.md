@@ -27,6 +27,7 @@ Under the hood, each kind of request runs on a model chosen for that job rather 
 - **Multi-user by design** — identity is `(channel, key)`, never a name. Each user gets their own memory, language, location and timezone.
 - **One profile across channels** — a short-lived code issued on one channel and pasted on another links both to the same profile, so the memory follows the person rather than the account.
 - **Web access** — the assistant searches the web and reads pages when a question needs current information.
+- **Voice and images** — a voice message is transcribed and answered like any other message, and a photo or screenshot is looked at and answered. Neither is ever written to disk: what is stored is the text, plus a note that something came with it.
 - **A model per task** — each request is routed to a role, and every role runs on the model picked for that job: a small fast one classifies intent, a code-strong one answers programming questions, a dedicated one distills memory in the background, and general chat gets its own. Roles and their models are plain data in `config.py`.
 - **Automatic fallback** — each role carries an ordered list of providers. On error or exhausted quota the next one takes over, ending with a local model as the last resort.
 - **Channel-agnostic core** — channels are thin adapters over shared logic, so a new one is an adapter rather than a rewrite. Onboarding, abuse limits and memory are written once and inherited by every channel.

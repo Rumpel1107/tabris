@@ -24,6 +24,8 @@ MESSAGES = {
         "audio_too_long":          "Ese audio es muy largo (máximo {minutes} minutos). ¿Podrías enviarme uno más corto, por favor?",
         "audio_failed":            "Tuve un problema técnico y no pude procesar ese audio. ¿Puedes intentarlo de nuevo, por favor?",
         "audio_no_speech":         "No escuché nada en ese audio. ¿Puedes grabarlo de nuevo o escribírmelo?",
+        "image_too_large":         "Esa imagen pesa demasiado (máximo {megabytes} MB). ¿Puedes enviarme una más liviana, por favor?",
+        "images_capped":           "Miré las primeras {shown} imágenes de las {sent} que enviaste.",
         "account_deactivated":     "Hola. Tu cuenta se encuentra suspendida y por eso no puedo seguir respondiendo tus mensajes. Tu información se borrará de forma definitiva el {deadline}. Si cambiaste de opinión, escribe al administrador de {agent} antes de esa fecha para restaurar tu acceso.",
     },
     "en": {
@@ -51,6 +53,8 @@ MESSAGES = {
         "audio_too_long":          "That audio is too long (maximum {minutes} minutes). Could you send me a shorter one, please?",
         "audio_failed":            "I had a technical problem and could not process that audio. Could you try again, please?",
         "audio_no_speech":         "I didn't hear anything in that audio. Can you record it again or write it to me?",
+        "image_too_large":         "That image is too heavy (maximum {megabytes} MB). Could you send me a lighter one, please?",
+        "images_capped":           "I looked at the first {shown} images of the {sent} you sent.",
         "account_deactivated":     "Hello. Your account is suspended, so I can't keep answering your messages. Your information will be permanently erased on {deadline}. If you changed your mind, write to the administrator of {agent} before that date to restore your access.",
     },
 }

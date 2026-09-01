@@ -1,9 +1,10 @@
 import asyncio
+import base64
 import config
 import discord
 import logging
 
-from core.conversation import route_message, safe_handle_turn, undo_last_turn
+from core.conversation import choose_role, safe_handle_turn, undo_last_turn
 from core.db import find_user_by_key, get_messages, init_db
 from core.onboarding import advance_onboarding
 from core.prompt import history_entry, load_persona
@@ -24,12 +25,12 @@ client = discord.Client(intents=intents)
 _locks = {}
 
 
-async def _run_locked(key, func, *args):
+async def _run_locked(key, func, *args, **kwargs):
     """Run a blocking call in a worker thread, serialized per key so the same person's turns never overlap."""
     if key not in _locks:
         _locks[key] = asyncio.Lock()
     async with _locks[key]:
-        return await asyncio.to_thread(func, *args)
+        return await asyncio.to_thread(func, *args, **kwargs)
 
 
 @client.event
@@ -46,11 +47,24 @@ async def on_message(message):
     audio = None
     if voice is not None and (voice.duration or 0) <= config.AUDIO_MAX_SECONDS:
         audio = await voice.read()
+    images, images_seen = [], 0
+    if voice is None:
+        pictures = [a for a in message.attachments if (a.content_type or "").startswith("image/")]
+        images_seen = len(pictures)
+        if any(picture.size > config.IMAGE_MAX_BYTES for picture in pictures):
+            images = None   # the size the platform reports is enough to refuse: nothing is downloaded
+        else:
+            for picture in pictures[:config.IMAGE_MAX_COUNT]:
+                encoded = base64.b64encode(await picture.read()).decode()
+                images.append(f"data:{picture.content_type};base64,{encoded}")
     async with message.channel.typing():  # a turn with a web search takes long enough that silence reads as being ignored
         if voice is not None:
             reply = await _run_locked(key, handle_voice, db_path, sessions, key, audio, voice.filename, voice.duration, persona)
         else:
-            reply = await _run_locked(key, handle_message, db_path, sessions, key, message.content, persona)
+            reply = await _run_locked(
+                key, handle_message, db_path, sessions, key, message.content, persona,
+                images=images, images_seen=images_seen,
+            )
     session = sessions[("discord", key)]
     if not await send_reply(message.channel, reply, session):
         undo_last_turn(session, db_path)
@@ -95,7 +109,8 @@ def handle_voice(db_path, sessions, key, audio, filename, duration, persona):
     return msg("audio_transcript", session.language, text=text) + "\n\n" + reply
 
 
-def handle_message(db_path, sessions, key, user_input, persona):
+def handle_message(db_path, sessions, key, user_input, persona, images=(), images_seen=0):
+    """Answer a typed message; `images` is None when one was refused for being too large."""
     user = find_user_by_key(db_path, "discord", key)
     session = get_or_create_session(
         sessions,
@@ -104,6 +119,9 @@ def handle_message(db_path, sessions, key, user_input, persona):
         user["id"] if user else None,
         user["language"] if user else "en",
     )
+
+    if images is None:
+        return msg("image_too_large", session.language, megabytes=config.IMAGE_MAX_BYTES // (1024 * 1024))
 
     if session.user_id is None:
         return advance_onboarding(session, user_input, db_path)
@@ -117,10 +135,13 @@ def handle_message(db_path, sessions, key, user_input, persona):
         ]
         session.last_analyzed_index = len(session.conversation_history)
 
-    role = route_message(user_input)
+    role = choose_role(session, user_input, images)
     if role == "exit":
         role = "general"
-    return safe_handle_turn(session, user_input, role, db_path, persona)
+    reply = safe_handle_turn(session, user_input, role, db_path, persona, images=images)
+    if images_seen > len(images):
+        return msg("images_capped", session.language, shown=len(images), sent=images_seen) + "\n\n" + reply
+    return reply
 
 
 if __name__ == "__main__":

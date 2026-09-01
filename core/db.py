@@ -45,6 +45,7 @@ def init_db(db_path):
                 user_id    INTEGER NOT NULL REFERENCES users(id),
                 role       TEXT NOT NULL,
                 content    TEXT NOT NULL,
+                attachment TEXT,
                 is_active  INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -80,6 +81,10 @@ def init_db(db_path):
         facts_cols = {row[1] for row in conn.execute("PRAGMA table_info(facts)")}
         if "retired_at" not in facts_cols:
             conn.execute("ALTER TABLE facts ADD COLUMN retired_at TEXT")
+        messages_cols = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
+        if "attachment" not in messages_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN attachment TEXT")
+        conn.commit()
     os.chmod(db_path, 0o600)  # sqlite creates the file with the process umask, which is not restrictive enough for personal data
 
 def create_user(db_path, name, language="en", location="", timezone="UTC"):
@@ -133,11 +138,11 @@ def get_facts(db_path, user_id):
         ).fetchall()
         return [dict(row) for row in rows]
 
-def save_message(db_path, user_id, role, content) -> int:
+def save_message(db_path, user_id, role, content, attachment=None) -> int:
     with contextlib.closing(_connect(db_path)) as conn:
         cursor = conn.execute(
-            "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)",
-            (user_id, role, content)
+            "INSERT INTO messages (user_id, role, content, attachment) VALUES (?, ?, ?, ?)",
+            (user_id, role, content, attachment)
         )
         conn.commit()
         return cursor.lastrowid

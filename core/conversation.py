@@ -20,7 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 def build_messages(conversation_history):
-    return conversation_history[:1] + conversation_history[1:][-config.MAX_HISTORY * 2:]
+    kept, budget = [], config.HISTORY_MAX_CHARS
+    for message in reversed(conversation_history[1:][-config.MAX_HISTORY * 2:]):
+        budget -= len(message.get("content") or "")
+        if budget < 0 and kept:
+            break
+        kept.append(message)
+    kept.reverse()
+    return conversation_history[:1] + kept
 
 def _routable_roles():
     """Roles a user message can be classified into: not the router itself, not internal work."""
@@ -55,6 +62,21 @@ Reply with only one word."""
         return "general"
     valid = _routable_roles() + ["exit"]
     return response if response in valid else "general"
+
+def choose_role(session, user_input, images=()):
+    """Pick who answers the turn: a model that can see whenever an image is in view, the router otherwise."""
+    if images or session.images:
+        return "vision"
+    return route_message(user_input)
+
+def _attach_images(messages, image_urls):
+    """Put the images beside the text of the newest turn, in the shape the chat API expects."""
+    if not image_urls:
+        return messages
+    newest = messages[-1]
+    parts = [{"type": "text", "text": newest["content"]}]
+    parts += [{"type": "image_url", "image_url": {"url": url}} for url in image_urls]
+    return messages[:-1] + [{**newest, "content": parts}]
 
 def should_trigger_memory(exchange_count, last_trigger_time):
     if exchange_count >= config.MEMORY_TRIGGER_EXCHANGES:
@@ -244,7 +266,7 @@ def run_with_tools(role, messages, tools, extra_executors=None):
         logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
     raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
 
-def handle_turn(session, user_input, role, db_path, persona=None):
+def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     user_row = get_user(db_path, session.user_id)
     user_timezone = user_row["timezone"] if user_row else "UTC"
     if persona is not None:
@@ -271,10 +293,13 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     session.conversation_history.append(
         {"role": "user", "content": stamp_time(user_input, datetime.now(dt_timezone.utc), user_timezone)}
     )
+    # The history stays text: the images travel beside it and meet it only when the call is built.
+    position = len(session.conversation_history) - 1
+    session.images = {position: list(images)} if images else {}
     try:
         reply = run_with_tools(
             role,
-            build_messages(session.conversation_history),
+            _attach_images(build_messages(session.conversation_history), session.images.get(position, [])),
             tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
             extra_executors={
                 "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
@@ -289,7 +314,7 @@ def handle_turn(session, user_input, role, db_path, persona=None):
     reply = strip_time_stamp(reply)
     session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
-        save_message(db_path, session.user_id, "user", user_input),
+        save_message(db_path, session.user_id, "user", user_input, attachment="image" if images else None),
         save_message(db_path, session.user_id, "assistant", reply),
     ]
     
@@ -332,7 +357,7 @@ def undo_last_turn(session, db_path):
     session.last_analyzed_index = min(session.last_analyzed_index, len(session.conversation_history))
 
 
-def safe_handle_turn(session, user_input, role, db_path, persona=None):
+def safe_handle_turn(session, user_input, role, db_path, persona=None, images=()):
     """Channel-agnostic entry point: never raises. Returns a generic message on model failure."""
     # only a turn that reaches the database refills this, so an undo can never reach an older turn
     session.last_turn_message_ids = []
@@ -358,7 +383,7 @@ def safe_handle_turn(session, user_input, role, db_path, persona=None):
         return msg("rate_limited", session.language)
     session.rate_tokens -= 1
     try:
-        return handle_turn(session, user_input, role, db_path, persona)
+        return handle_turn(session, user_input, role, db_path, persona, images=images)
     except Exception:
         logger.exception(f"handle_turn failed for user {session.user_id}")
         return msg("model_error", session.language, agent=config.AGENT_NAME)

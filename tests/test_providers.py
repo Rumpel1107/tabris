@@ -104,5 +104,29 @@ class TestCallProvider(unittest.TestCase):
         )
 
 
+@patch("core.providers._call_provider")
+def test_chat_passes_a_roles_own_timeout(mock_call):
+    chat("vision", [{"role": "user", "content": "hola"}])
+    assert mock_call.call_args[1]["timeout"] == config.AGENT_ROLES["vision"]["timeout"]
+
+
+@patch("core.providers._call_provider")
+def test_chat_leaves_the_timeout_unset_for_a_role_that_declares_none(mock_call):
+    chat("router", [{"role": "user", "content": "hola"}])
+    assert mock_call.call_args[1]["timeout"] is None
+
+
+@patch("core.providers._get_client")
+def test_call_provider_omits_the_timeout_rather_than_sending_null(mock_get_client):
+    providers._call_provider("groq", "m", [{"role": "user", "content": "hola"}])
+    assert "timeout" not in mock_get_client.return_value.chat.completions.create.call_args[1]
+
+
+@patch("core.providers._get_client")
+def test_call_provider_sends_the_timeout_it_was_given(mock_get_client):
+    providers._call_provider("groq", "m", [{"role": "user", "content": "hola"}], timeout=40)
+    assert mock_get_client.return_value.chat.completions.create.call_args[1]["timeout"] == 40
+
+
 if __name__ == "__main__":
     unittest.main()

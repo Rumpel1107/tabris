@@ -30,7 +30,7 @@ def test_handle_message_onboards_an_unknown_person_instead_of_creating_a_user(mo
         assert reply == msg("language_detected", "es", agent=config.AGENT_NAME)
 
 
-@patch("channels.discord_ch.route_message", return_value="general")
+@patch("channels.discord_ch.choose_role", return_value="general")
 @patch("core.conversation.providers.chat", return_value=ChatResponse(content="Hola, soy Tabris"))
 def test_handle_message_replies_to_a_known_person(mock_chat, mock_route):
     with tempfile.TemporaryDirectory() as tmp:
@@ -46,7 +46,7 @@ def test_handle_message_replies_to_a_known_person(mock_chat, mock_route):
         assert len(get_messages(db_path, user_id)) == 2
 
 
-@patch("channels.discord_ch.route_message", return_value="general")
+@patch("channels.discord_ch.choose_role", return_value="general")
 @patch("core.conversation.providers.chat")
 def test_rehydrated_history_carries_when_each_message_was_said(mock_chat, mock_route):
     mock_chat.return_value = ChatResponse(content="Hola, soy Tabris", tool_calls=None)
@@ -156,6 +156,8 @@ class FakeAttachment:
     def __init__(self, duration):
         self.duration = duration
         self.filename = "voice-message.ogg"
+        self.content_type = "audio/ogg"
+        self.size = 1024
         self.read_calls = 0
 
     async def read(self):
@@ -259,3 +261,78 @@ def test_a_failed_piece_stops_the_send_and_warns_the_user():
     delivered = asyncio.run(discord_ch.send_reply(channel, reply, Session(language="es")))
     assert channel.sent == ["primera línea", msg("send_failed", "es")]
     assert delivered is False
+
+
+class FakeImage:
+    def __init__(self, size=1024, content_type="image/jpeg"):
+        self.size = size
+        self.content_type = content_type
+        self.filename = "photo.jpg"
+        self.read_calls = 0
+
+    async def read(self):
+        self.read_calls += 1
+        return b"bytes"
+
+
+def _image_message(channel, attachments, content=""):
+    return SimpleNamespace(
+        author=SimpleNamespace(id=42),
+        content=content,
+        channel=channel,
+        flags=SimpleNamespace(voice=False),
+        attachments=list(attachments),
+    )
+
+
+@patch("channels.discord_ch.handle_message", return_value="Veo un gato")
+def test_an_image_reaches_the_core_as_a_data_url(mock_handle):
+    discord_ch.db_path, discord_ch.persona, discord_ch.sessions = ":memory:", "persona", {("discord", "42"): Session(language="es")}
+    asyncio.run(discord_ch.on_message(_image_message(FakeChannel(), [FakeImage()], "¿qué ves?")))
+    images = mock_handle.call_args[1]["images"]
+    assert len(images) == 1
+    assert images[0].startswith("data:image/jpeg;base64,")
+
+
+@patch("channels.discord_ch.handle_message", return_value="ok")
+def test_an_image_over_the_size_limit_is_refused_without_being_downloaded(mock_handle):
+    discord_ch.db_path, discord_ch.persona, discord_ch.sessions = ":memory:", "persona", {("discord", "42"): Session(language="es")}
+    heavy = FakeImage(size=config.IMAGE_MAX_BYTES + 1)
+    asyncio.run(discord_ch.on_message(_image_message(FakeChannel(), [heavy], "¿qué ves?")))
+    assert mock_handle.call_args[1]["images"] is None
+    assert heavy.read_calls == 0
+
+
+@patch("channels.discord_ch.handle_message", return_value="ok")
+def test_only_the_accepted_number_of_images_is_downloaded(mock_handle):
+    discord_ch.db_path, discord_ch.persona, discord_ch.sessions = ":memory:", "persona", {("discord", "42"): Session(language="es")}
+    sent = [FakeImage() for _ in range(config.IMAGE_MAX_COUNT + 2)]
+    asyncio.run(discord_ch.on_message(_image_message(FakeChannel(), sent)))
+    assert len(mock_handle.call_args[1]["images"]) == config.IMAGE_MAX_COUNT
+    assert mock_handle.call_args[1]["images_seen"] == len(sent)
+    assert sum(image.read_calls for image in sent) == config.IMAGE_MAX_COUNT
+
+
+@patch("channels.discord_ch.handle_message", return_value="ok")
+def test_an_attachment_that_is_not_an_image_is_not_treated_as_one(mock_handle):
+    discord_ch.db_path, discord_ch.persona, discord_ch.sessions = ":memory:", "persona", {("discord", "42"): Session(language="es")}
+    asyncio.run(discord_ch.on_message(_image_message(FakeChannel(), [FakeImage(content_type="application/pdf")], "mira")))
+    assert mock_handle.call_args[1]["images"] == []
+
+
+@patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es"})
+def test_handle_message_refuses_an_image_that_was_too_large(mock_user):
+    reply = discord_ch.handle_message(":memory:", {}, "42", "¿qué ves?", "persona", images=None)
+    assert reply == msg("image_too_large", "es", megabytes=config.IMAGE_MAX_BYTES // (1024 * 1024))
+
+
+@patch("channels.discord_ch.find_user_by_key", return_value={"id": 1, "language": "es", "timezone": "UTC"})
+@patch("channels.discord_ch.get_messages", return_value=[])
+@patch("channels.discord_ch.choose_role", return_value="vision")
+@patch("channels.discord_ch.safe_handle_turn", return_value="Veo un gato")
+def test_handle_message_says_how_many_images_it_looked_at(mock_turn, mock_role, mock_messages, mock_user):
+    reply = discord_ch.handle_message(
+        ":memory:", {}, "42", "", "persona", images=["data:image/jpeg;base64,AAAA"], images_seen=5
+    )
+    assert reply.startswith(msg("images_capped", "es", shown=1, sent=5))
+    assert reply.endswith("Veo un gato")

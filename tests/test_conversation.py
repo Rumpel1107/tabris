@@ -12,9 +12,9 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from config import MAX_HISTORY, MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
+from config import MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
 from core.onboarding import ResolvedLocation
@@ -24,22 +24,63 @@ from core.strings import msg
 from types import SimpleNamespace
 
 
-class TestBuildMessages(unittest.TestCase):
-    
-    def test_keeps_all_when_under_limit(self):
-        history = [{"role": "system", "content": "sys"}]
-        history += [{"role": "user", "content": f"m{i}"} for i in range(4)]
-        result = build_messages(history)
-        self.assertEqual(len(result), 5)
-        self.assertEqual(result[0]["role"], "system")
-    
-    def test_truncates_over_limit_keeping_system_first_and_recent_tail(self):
-        history = [{"role": "system", "content": "sys"}]
-        history += [{"role": "user", "content": f"m{i}"} for i in range(50)]
-        result = build_messages(history)
-        self.assertEqual(len(result), MAX_HISTORY * 2 + 1)
-        self.assertEqual(result[0]["content"], "sys")
-        self.assertEqual(result[-1]["content"], "m49")
+def test_build_messages_keeps_everything_under_both_limits():
+    history = [{"role": "system", "content": "sys"}]
+    history += [{"role": "user", "content": f"m{i}"} for i in range(4)]
+    result = build_messages(history)
+    assert len(result) == 5
+    assert result[0]["role"] == "system"
+
+
+def test_build_messages_trims_by_count_keeping_the_system_prompt_and_the_newest():
+    newest = config.MAX_HISTORY * 4 - 1
+    history = [{"role": "system", "content": "sys"}]
+    history += [{"role": "user", "content": f"m{i}"} for i in range(config.MAX_HISTORY * 4)]
+    result = build_messages(history)
+    assert len(result) == config.MAX_HISTORY * 2 + 1
+    assert result[0]["content"] == "sys"
+    assert result[-1]["content"] == f"m{newest}"
+
+
+def test_build_messages_trims_by_size_before_the_count_runs_out(monkeypatch):
+    monkeypatch.setattr(config, "HISTORY_MAX_CHARS", 100)
+    history = [{"role": "system", "content": "sys"}]
+    history += [{"role": "user", "content": "x" * 40} for _ in range(6)]
+    result = build_messages(history)
+    assert len(result) == 3
+    assert result[0]["content"] == "sys"
+
+
+def test_build_messages_never_counts_the_system_prompt_against_the_budget(monkeypatch):
+    monkeypatch.setattr(config, "HISTORY_MAX_CHARS", 100)
+    history = [{"role": "system", "content": "s" * 500}]
+    history += [{"role": "user", "content": "x" * 40} for _ in range(2)]
+    result = build_messages(history)
+    assert len(result) == 3
+    assert result[0]["content"] == "s" * 500
+
+
+def test_build_messages_keeps_the_newest_message_even_when_it_alone_exceeds_the_budget(monkeypatch):
+    monkeypatch.setattr(config, "HISTORY_MAX_CHARS", 100)
+    history = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "x" * 40},
+        {"role": "user", "content": "y" * 500},
+    ]
+    result = build_messages(history)
+    assert len(result) == 2
+    assert result[-1]["content"] == "y" * 500
+
+
+def test_build_messages_tolerates_a_turn_that_carries_no_text(monkeypatch):
+    monkeypatch.setattr(config, "HISTORY_MAX_CHARS", 100)
+    history = [
+        {"role": "system", "content": "sys"},
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+        {"role": "user", "content": "hola"},
+    ]
+    result = build_messages(history)
+    assert len(result) == 3
 
 class TestRouteMessage(unittest.TestCase):
     @patch("core.conversation.providers.chat")

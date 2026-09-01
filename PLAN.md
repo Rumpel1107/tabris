@@ -147,10 +147,20 @@ Hermes-style — the memory-role model is the quality safeguard); the user audit
 facts list and prunes any fact with the `forget_fact` tool (soft-delete, reversible).
 
 ### 4.4 Context window management (applies at every stage)
-- History sent to the model must be **bounded**: system prompt + last N exchanges (start N=10).
+- History sent to the model must be **bounded**: system prompt + last N exchanges.
 - Reason: providers/local models truncate silently from the top when context overflows — the
   first thing lost is the system prompt (identity + memory). This is the root cause of past
   "model forgets who it is" issues.
+- **Two bounds, not one, and whichever runs out first wins (2026-09-01).** N went from 10 to 30
+  because both testers hit the same wall: a topic takes 20 to 30 exchanges to finish, and answers
+  started to slip once its opening left the window. Counting messages cannot see size, so a second
+  bound caps the combined characters of that window. It never fires in ordinary use — sixty typical
+  messages measure 31,486 characters against a budget of 40,000 — and exists for what a count is
+  blind to: an image riding along for thirty exchanges instead of ten (item 34b), a document whose
+  extracted text is one message the size of the whole window (item 34l), and a run of messages at
+  the per-message ceiling. The newest message is always kept even when it alone exceeds the budget,
+  and the system prompt is never counted against it. One deterministic rule, so no attachment type
+  needs a lifetime of its own.
 
 ---
 
@@ -256,7 +266,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - ✅ (2026-07-28, verified in code) Rebuild the system prompt per turn (not just once at session start): when `handle_turn` receives `persona`, it regenerates the whole system message — fresh facts + fresh `now` (via `build_system_prompt`'s default `datetime.now(utc)`) — and replaces `conversation_history[0]`. Both CLI and Discord pass `persona`, so the `## Current context` datetime refreshes every turn. Broader than the original bullet (rebuilds facts too, not just the datetime block).
    - ✅ (2026-08-12, diagnosed from a live gateway log) **A slow model call no longer freezes the bot.** Two causes, both fixed: the OpenAI client retried three times on its own before our fallback chain could act, tripling every timeout (`max_retries=0` — our ordered provider list already covers a failed provider); and `on_message` ran the blocking call on the event loop, so Discord's heartbeat stalled — the log escalated to "blocked for more than 50 seconds", which risks the gateway dropping the connection. `_run_locked` now offloads the call with `asyncio.to_thread`, guarded by a per-user `asyncio.Lock` so one person's turns stay ordered while other users run in parallel. The lock replaces the accidental serialization the event-loop block used to provide.
 34a. ✅ (2026-09-01) (slice 1 ✅ 2026-08-28, verified live from a phone; slice 2 built 2026-08-29, its live check failed 2026-08-31 — silence came back as "Gracias", a stock phrase the letters-only check reads as speech, so the transcript is answered as if it had been said; fixed the same day with a density rule in `core/transcribe.py`, verified live at eleven and five seconds, and the floor below which density is not judged dropped from four seconds to two when a three-second silence still slipped through — that last case verified live 2026-09-01 on the first deployment carrying it; slice 3 ❌ cancelled 2026-08-29 from live use — quoting the voice message answers a confusion that never occurs, since the typing indicator makes the sender wait and four minutes hold a whole request in one recording; see `docs/34a/`) Audio input (voice messages): transcribe incoming Discord voice messages to text via speech-to-text (Groq Whisper — cheap/fast), then feed the transcript into the normal text flow. Depends on item 34 (the messaging channel carries media; the CLI can't send audio). Read-only preprocessing step → no HITL confirmation.
-34b. ⬜ Image input (vision): accept photos sent via Discord and route them to a vision-capable model (Gemini, natively multimodal) so Tabris can "see" and reason about the image. Depends on item 34; add a vision-capable model to the `tools`/multimodal role. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
+34b. 🔶 (slice 1 built 2026-09-01, awaiting its live check from a phone — see `docs/34b/`) Image input (vision): accept photos sent via Discord and answer them with a model that can see, through a `vision` role of its own decided in code rather than by the router, since the router only ever sees text. Depends on item 34. The image never touches disk and never enters the history: it travels beside it in the session and meets the text only when the call is built. Image *generation* is NOT in scope (backlog). Video "seeing" / visual analysis is NOT in scope (backlog — see round-scope note in §5).
 
 34d. ⬜ Telegram as a second channel — a thin adapter (`python-telegram-bot`, polling; @BotFather token) reusing item 34's core untouched: same `handle_turn`, same `(channel, key)` identity, same link-code so a user maps Discord+Telegram to one profile, same hardening. Only new work: the adapter shell + wiring Telegram's voice/photo APIs into the shared media pipeline (34a/b). Low cost by design (D5); Rumpel wants both channels available. Mirrors Hermes's single-gateway/many-platforms model.
 

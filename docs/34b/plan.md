@@ -40,7 +40,7 @@ The channel recognizes the attachments, refuses what is too large or beyond the 
 
 - **Rehydration** — refilling the in-memory session from the database. The conversation lives in a dictionary inside the process, so it is empty when the service starts; the first message from each person reads their last messages back and rebuilds it. It happens on a restart, on a first-ever message, and on the first message since the last start — not on the gateway reconnections the journal shows every 40-60 minutes, which leave the process untouched.
 - **Data URL** — the way an image travels inside an ordinary chat call: the bytes encoded as base64 text inside the message, with no file and no upload of its own. It is why encoding inflates the payload by about a third, which is where the size limit comes from.
-- **Schema migration** — the database is created by `CREATE TABLE IF NOT EXISTS`, which does nothing to a table that already exists, so a new column needs an explicit `ALTER TABLE` guarded by a check of `PRAGMA table_info`. Idempotent, so it is safe on every start, and it is the first one this project has needed.
+- **Schema migration** — the database is created by `CREATE TABLE IF NOT EXISTS`, which does nothing to a table that already exists, so a new column needs an explicit `ALTER TABLE` guarded by a check of `PRAGMA table_info`. Idempotent, so it is safe on every start. **Corrected while building (2026-09-01): this is not the project's first.** `init_db` already migrates four columns this way — `location`, `timezone` and `deactivated_at` on `users`, and `retired_at` on `facts` — so the pattern was there to follow rather than to invent.
 
 ## What this makes stale
 

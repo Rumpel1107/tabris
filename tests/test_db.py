@@ -824,5 +824,45 @@ def test_connect_sets_concurrency_pragmas(tmp_path, pragma, expected):
         assert conn.execute(f"PRAGMA {pragma}").fetchone()[0] == expected
 
 
+def test_init_db_adds_the_attachment_column_to_a_messages_table_that_predates_it(tmp_path):
+    db_path = str(tmp_path / "older.db")
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.execute(
+            """CREATE TABLE messages (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                role       TEXT NOT NULL,
+                content    TEXT NOT NULL,
+                is_active  INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.commit()
+    init_db(db_path)
+    init_db(db_path)
+    with contextlib.closing(_connect(db_path)) as conn:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(messages)")}
+    assert "attachment" in columns
+
+
+@pytest.mark.parametrize("text", ["¿qué ves aquí?", "what do you see here?"])
+def test_save_message_stores_the_typed_text_and_the_mark_that_an_image_came(tmp_path, text):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    save_message(db_path, user_id, "user", text, attachment="image")
+    stored = get_messages(db_path, user_id)[-1]
+    assert stored["content"] == text
+    assert stored["attachment"] == "image"
+
+
+def test_save_message_leaves_the_mark_empty_when_no_attachment_came(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Rumpel", "es")
+    save_message(db_path, user_id, "user", "hola")
+    assert get_messages(db_path, user_id)[-1]["attachment"] is None
+
+
 if __name__ == "__main__":
     unittest.main()

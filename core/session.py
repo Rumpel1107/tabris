@@ -12,6 +12,7 @@ class Session:
     last_trigger_time: float = field(default_factory=time.time)
     last_analyzed_index: int = 0
     last_turn_message_ids: list = field(default_factory=list)
+    images: dict = field(default_factory=dict)
     rate_tokens: float = 0.0
     rate_last_refill: float = 0.0
     channel: str = ""
