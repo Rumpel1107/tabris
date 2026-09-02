@@ -1,5 +1,6 @@
 import os
 import pytest
+import struct
 import sys
 from unittest.mock import patch
 
@@ -71,10 +72,45 @@ def test_a_probe_carries_an_image_by_default():
     assert isinstance(probe_models.probe_messages(1_000)[-1]["content"], list)
 
 
+def test_a_probe_can_carry_several_images_to_find_where_a_model_refuses():
+    parts = probe_models.probe_messages(1_000, image_count=4)[-1]["content"]
+    assert [part["type"] for part in parts] == ["text", "image_url", "image_url", "image_url", "image_url"]
+
+
+@pytest.mark.parametrize("scale", [70, 3])
+def test_the_probe_image_can_be_drawn_at_the_size_a_screenshot_would_use(scale):
+    png = probe_models.make_image(scale=scale)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    width, height = struct.unpack(">II", png[16:24])
+    assert (width, height) == (probe_models.WIDTH, probe_models.HEIGHT)
+
+
 def test_a_text_probe_sends_no_image_so_a_text_role_can_be_measured():
     content = probe_models.probe_messages(1_000, with_image=False)[-1]["content"]
     assert isinstance(content, str)
     assert probe_models.CODE in content
+
+
+def test_the_grid_is_identical_every_run_so_models_face_the_same_input():
+    first_png, first_codes = probe_models.make_grid()
+    second_png, second_codes = probe_models.make_grid()
+    assert first_codes == second_codes
+    assert first_png == second_png
+
+
+def test_the_grid_question_names_cells_without_ever_giving_the_answer():
+    messages, expected = probe_models.build_probe(1_000, mode="grid")
+    question = messages[-1]["content"][0]["text"]
+    assert len(expected) == 3
+    assert len(set(expected)) == 3
+    for code in expected:
+        assert code not in question
+
+
+@pytest.mark.parametrize("mode", ["text", "image"])
+def test_the_simple_probes_expect_the_one_code_they_drew(mode):
+    _, expected = probe_models.build_probe(1_000, mode=mode)
+    assert expected == [probe_models.CODE]
 
 
 def test_probing_a_model_reports_how_long_it_took_and_whether_it_read(capsys):

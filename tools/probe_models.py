@@ -3,6 +3,7 @@ import base64
 import config
 import httpx
 import logging
+import random
 import statistics
 import struct
 import sys
@@ -15,6 +16,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 CODE = "7412"
+WIDTH, HEIGHT = 1920, 1080
 STATUS_CODES = ("400", "401", "403", "404", "413", "429", "500", "502", "503")
 
 DIGITS = {
@@ -74,9 +76,9 @@ def reads_code(answer: str, code: str) -> bool:
     return code in (answer or "")
 
 
-def make_image(code: str = CODE, width: int = 1920, height: int = 1080) -> bytes:
-    """A screenshot-sized PNG with `code` drawn large, so a reading can be checked without a fixture file."""
-    scale, gap = 70, 20
+def make_image(code: str = CODE, width: int = WIDTH, height: int = HEIGHT, scale: int = 70) -> bytes:
+    """A screenshot-sized PNG with `code` drawn on it; a small scale asks the model to read fine print."""
+    gap = max(2, scale // 4)
     rows = [[(245, 245, 245)] * width for _ in range(height)]
     glyph = 5 * scale + gap
     left = (width - (len(code) * glyph - gap)) // 2
@@ -89,8 +91,12 @@ def make_image(code: str = CODE, width: int = 1920, height: int = 1080) -> bytes
                         for x in range(left + index * glyph + col * scale,
                                        left + index * glyph + (col + 1) * scale):
                             rows[y][x] = (20, 20, 20)
+    return _encode_png(rows)
+
+
+def _encode_png(pixels: list[list[tuple]]) -> bytes:
     raw = bytearray()
-    for row in rows:
+    for row in pixels:
         raw.append(0)
         for red, green, blue in row:
             raw += bytes((red, green, blue))
@@ -101,13 +107,14 @@ def make_image(code: str = CODE, width: int = 1920, height: int = 1080) -> bytes
 
     return (
         b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", len(pixels[0]), len(pixels), 8, 2, 0, 0, 0))
         + chunk(b"IDAT", zlib.compress(bytes(raw), 6))
         + chunk(b"IEND", b"")
     )
 
 
-def probe_messages(history_chars: int, code: str = CODE, with_image: bool = True) -> list[dict]:
+def probe_messages(history_chars: int, code: str = CODE, with_image: bool = True,
+                   image_count: int = 1, scale: int = 70) -> list[dict]:
     """A call shaped like a real turn: a system prompt, a history of that many characters, and the code to read back."""
     filler = (
         "El servidor quedo configurado con fibra optica y el router conectado por cable. "
@@ -125,12 +132,51 @@ def probe_messages(history_chars: int, code: str = CODE, with_image: bool = True
     if not with_image:
         messages.append({"role": "user", "content": f"Repite exactamente este número y nada más: {code}"})
         return messages
-    url = "data:image/png;base64," + base64.b64encode(make_image(code)).decode()
+    url = "data:image/png;base64," + base64.b64encode(make_image(code, scale=scale)).decode()
+    parts = [{"type": "text", "text": "¿Qué número de cuatro dígitos aparece en la imagen? Responde solo con el número."}]
+    parts += [{"type": "image_url", "image_url": {"url": url}}] * image_count
+    messages.append({"role": "user", "content": parts})
+    return messages
+
+
+def make_grid(rows: int = 5, cols: int = 4, scale: int = 3) -> tuple[bytes, list[list[str]]]:
+    """A grid of small codes and the codes themselves; seeded, so every model is asked to read the same picture."""
+    draw = random.Random(7412)
+    codes = [[f"{draw.randint(1000, 9999)}" for _ in range(cols)] for _ in range(rows)]
+    pixels = [[(245, 245, 245)] * WIDTH for _ in range(HEIGHT)]
+    cell_w, cell_h = WIDTH // (cols + 1), HEIGHT // (rows + 1)
+    for row, line in enumerate(codes):
+        for col, code in enumerate(line):
+            left = cell_w * (col + 1) - (len(code) * 6 * scale) // 2
+            top = cell_h * (row + 1)
+            for index, digit in enumerate(code):
+                for y, bits in enumerate(DIGITS[digit]):
+                    for x, bit in enumerate(bits):
+                        if bit == "1":
+                            for py in range(top + y * scale, top + (y + 1) * scale):
+                                for px in range(left + index * 6 * scale + x * scale,
+                                                left + index * 6 * scale + (x + 1) * scale):
+                                    pixels[py][px] = (20, 20, 20)
+    return _encode_png(pixels), codes
+
+
+def build_probe(history_chars: int, mode: str = "image", image_count: int = 1,
+                scale: int = 70) -> tuple[list[dict], list[str]]:
+    """The call to make and what a correct answer must contain."""
+    if mode != "grid":
+        return probe_messages(history_chars, with_image=(mode == "image"),
+                              image_count=image_count, scale=scale), [CODE]
+    png, codes = make_grid()
+    cells = [(2, 3), (4, 1), (1, 4)]
+    expected = [codes[row - 1][col - 1] for row, col in cells]
+    asked = ", ".join(f"fila {row} columna {col}" for row, col in cells)
+    messages = probe_messages(history_chars, with_image=False)[:-1]
+    url = "data:image/png;base64," + base64.b64encode(png).decode()
     messages.append({"role": "user", "content": [
-        {"type": "text", "text": "¿Qué número de cuatro dígitos aparece en la imagen? Responde solo con el número."},
+        {"type": "text", "text": f"La imagen tiene una rejilla de números. Responde solo con los números de estas celdas, separados por comas: {asked}."},
         {"type": "image_url", "image_url": {"url": url}},
     ]})
-    return messages
+    return messages, expected
 
 
 def call_model(client, model: str, messages: list[dict]) -> tuple[float, str]:
@@ -168,6 +214,12 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Characters of conversation to send, as a real turn would (default 31000)")
     probing.add_argument("--no-image", action="store_true",
                          help="Probe a text-only role: the payload carries no image")
+    probing.add_argument("--images", type=int, default=1,
+                         help="How many images to send, to find where a model refuses (default 1)")
+    probing.add_argument("--scale", type=int, default=70,
+                         help="Height of the drawn digits; a small value asks for screenshot-sized print (default 70)")
+    probing.add_argument("--grid", action="store_true",
+                         help="Read three named cells out of a grid of small codes: tests locating, not just seeing")
     return parser
 
 
@@ -184,8 +236,11 @@ def _list(args) -> int:
 
 def _probe(args) -> int:
     client = _client(args.provider)
-    messages = probe_messages(args.history, with_image=not args.no_image)
-    carrying = "text only" if args.no_image else "plus one image"
+    mode = "grid" if args.grid else ("text" if args.no_image else "image")
+    messages, expected = build_probe(args.history, mode=mode,
+                                     image_count=args.images, scale=args.scale)
+    carrying = {"text": "text only", "grid": "plus a grid of small codes, three cells asked"}.get(
+        mode, f"plus {args.images} image(s) drawn at {args.scale}px")
     print(f"{args.rounds} rounds, {args.history:,} characters of history, {carrying}\n")
     print(f"{'model':<48} {'served':>7} {'read':>7} {'median':>8} {'worst':>8}  errors")
     dead = False
@@ -198,7 +253,7 @@ def _probe(args) -> int:
                 errors.append(classify_error(error))
                 continue
             times.append(seconds)
-            reads += reads_code(answer, CODE)
+            reads += all(reads_code(answer, code) for code in expected)
         served = f"{len(times)}/{args.rounds}"
         if times:
             shape = f"{statistics.median(times):7.1f}s {max(times):7.1f}s"

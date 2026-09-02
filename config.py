@@ -43,9 +43,9 @@ AGENT_ROLES = {
         "temperature": 0.7,
         "timeout": 40,      # a real call with images took 26 seconds against the global ceiling of 15
         "providers": [
-            {"provider": "gemini",     "model": "gemini-3.5-flash-lite"},
+            {"provider": "openrouter", "model": "openai/gpt-5-nano"},
             {"provider": "openrouter", "model": "minimax/minimax-m3:free"},
-            {"provider": "groq",       "model": "qwen/qwen3.8-27b"},
+            {"provider": "openrouter", "model": "dots-studio/dots-3-note-preview:free"},
         ],
     },
     "router": {
