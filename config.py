@@ -13,18 +13,18 @@ AGENT_ROLES = {
         "description": "general questions, conversation, explanations, anything not code",
         "temperature": 0.7,
         "providers": [
-            {"provider": "deepseek", "model": "deepseek-chat"},
-            {"provider": "gemini",   "model": "gemini-3.5-flash-lite"},
-            {"provider": "groq",     "model": "openai/gpt-oss-120b"},
+            {"provider": "deepseek",   "model": "deepseek-chat"},
+            {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
+            {"provider": "openrouter", "model": "z-ai/glm-5.2"},
         ],
     },
     "code": {
         "description": "programming, debugging, scripts, technical code, functions",
         "temperature": 0.2,
         "providers": [
-            {"provider": "openrouter", "model": "z-ai/glm-5.2:free"},
+            {"provider": "openrouter", "model": "z-ai/glm-5.2"},
             {"provider": "deepseek",   "model": "deepseek-chat"},
-            {"provider": "groq",       "model": "openai/gpt-oss-120b"},
+            {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
         ],
     },
     "memory": {
@@ -32,9 +32,9 @@ AGENT_ROLES = {
         "internal": True,   # the system calls this role directly; a user message is never routed to it
         "temperature": 0.0,
         "providers": [
-            {"provider": "deepseek", "model": "deepseek-chat"},
-            {"provider": "gemini",   "model": "gemini-3.5-flash-lite"},
-            {"provider": "groq",     "model": "openai/gpt-oss-120b"},
+            {"provider": "deepseek",   "model": "deepseek-chat"},
+            {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
+            {"provider": "openrouter", "model": "z-ai/glm-5.2"},
         ],
     },
     "vision": {
