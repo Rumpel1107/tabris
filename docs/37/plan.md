@@ -19,7 +19,7 @@ Actualizar es ejecutar un guion versionado con una etiqueta: sitúa el código, 
 | AC3 — arranca con el equipo | Definición del servicio: habilitado al arranque, tras la red | Se verifica reiniciando de verdad, no leyendo que figura habilitado |
 | AC4 — la copia de trabajo es irrelevante | Estructura de `/opt/tabris` | Producción no lee nada de la carpeta de desarrollo |
 | AC5 — estado consultable | Administrador de servicios | Corriendo, desde cuándo y cuántos reinicios, sin código propio |
-| AC6 — registros con fecha, sin contenido | Registro del sistema | Verificar en la fase 6 que ningún registro lleve texto de conversación |
+| AC6 — registros con fecha, sin contenido | Registro del sistema | Verificar en la verificación en vivo que ningún registro lleve texto de conversación |
 | AC7 — copia íntegra diaria, 7 días | Guion de respaldo + su temporizador | Función de respaldo de la biblioteca estándar; nombre por fecha |
 | AC8 — un respaldo fallido no interrumpe | Guion de respaldo | Registra y termina sin afectar al servicio |
 | AC9 — purgado recuperable | Temporizador del purgado, con recuperación de ejecución pendiente | Ejecuta `purge-auto`, que ya existe del ítem 34c |
@@ -68,7 +68,7 @@ Todos explicados durante la fase 2 y la fase 3, antes de decidir sobre ellos.
 
 ## Riesgos
 
-- **El servicio arranca pero no funciona.** Las pruebas pasan y el proceso vive, pero el bot no conecta —por ejemplo, un token vencido—. El estado del servicio diría "corriendo". Lo revelaría escribirle desde Discord, que es lo que exige la fase 6.
+- **El servicio arranca pero no funciona.** Las pruebas pasan y el proceso vive, pero el bot no conecta —por ejemplo, un token vencido—. El estado del servicio diría "corriendo". Lo revelaría escribirle desde Discord, que es lo que exige la verificación en vivo.
 - **Los registros podrían llevar contenido de conversaciones.** Hoy no deberían, pero pasan a guardarse en disco durante días. Se verifica leyendo los registros reales tras una conversación, no revisando el código.
 - **La copia inicial de la base se hace una sola vez.** Si se hace mal, se arrastra. Se verifica comparando cuentas, hechos y mensajes entre origen y copia antes de dar por buena la puesta en marcha.
 - **El equipo podría no levantar todo al arrancar.** Un servicio puede figurar como habilitado y aun así no iniciarse hasta que algo se lo pida. Solo un reinicio real lo demuestra.

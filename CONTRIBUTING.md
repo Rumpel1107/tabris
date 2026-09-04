@@ -12,6 +12,8 @@ How this project is built and how to keep building it — for any collaborator, 
 
 - **TDD.** Write the failing test first (red), then the implementation (green), then refactor. Never write implementation before a failing test exists.
 - **End-to-end at every step.** An item is done only when the real app (`channels/cli.py`) exercises the new code path and the path it replaces is retired — not when a module exists with green unit tests. No deferred integration.
+- **Review runs on the diff before anything is deployed.** `/code-review` for correctness plus reuse and efficiency, `/simplify` for quality alone, `/security-review` for a change that touches secrets, personal data or anything reachable from a chat. Naming the command here rather than in the method is deliberate: the phase states what a review must cover, this file states what performs it today.
+- **Before removing something that looks unnecessary, find out why it is there.** The reason is rarely in the code: it is in `PLAN.md`, in the item that introduced it, or in a row of `docs/defects.md`. A defect row that cites a line is a fence — what reads as leftover complexity is the fix for something that already broke in production.
 - **Vibe-coding boundary.** Scaffolding (UI, framework, deploy, boilerplate) may be generated fast. Domain logic (e.g. tax/payroll calculations) must be fully understood, owned, and tested — it is the product. Vibe-code how it looks; understand how it calculates.
 - **Memory writes auto-apply; other destructive actions stay human-confirmed.** Memory distillation applies automatically — soft-delete + `retired_at` keep every change reversible, and the user prunes via the forget flow. File changes and any non-reversible action are still confirmed by the user before being applied.
 
@@ -57,5 +59,7 @@ This is the number a release gets; `README.md` covers how a release is put into 
 ## Keeping the documentation current
 
 **`PLAN.md`.** When a task is confirmed done, update it directly: mark the item ✅ and bump the "Last updated" date. This is the one file to edit without proposing first. Item descriptions stay **one line** — reasoning, alternatives and session narrative belong in the conversation, not in the roadmap.
+
+**`docs/defects.md`.** Anything that broke after an item was called done — found in real use, by a test that had been passing, by a review, or reported by a tester — gets its row there when the work closes: symptom, cause, fix, how it was caught, and the class of mistake it belongs to. A defect that comes back is a new row naming the earlier one, never an edit of it. A test that goes red while its slice is being built is not a defect. The `/method` skill owns the format.
 
 **`README.md`.** It is the project's public face — assume a stranger reads it before anything else. Update it **in the same change** that alters what it promises: the setup command, the requirements, the entry points, the channel list, or the documentation map. Do not defer it to a later cleanup. A stale instruction costs a newcomer more than a missing one.
