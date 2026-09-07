@@ -5,22 +5,16 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-09-01
+Last updated: 2026-09-07
+
+Sections 2, 6 and 7 moved to the workspace plan on 2026-09-07: they described the owner, the
+portfolio and the gate for any repository, none of which is Tabris's to hold. The numbering keeps
+its gaps so that references from `CONTRIBUTING.md` and from the phase documents stay valid.
 
 ---
 
-## 1. Context & Goals
+## 1. What Tabris is
 
-### Who
-- User goes by **Rumpel**. Background: Scrum Master. Beginner programmer, learning by building.
-- Based in Colombia. Currently without formal employment.
-
-### Why (in priority order)
-1. **Independent income — the definition of success.** Generate revenue as an independent (SaaS / product / freelance) before runway ends. This is THE goal.
-2. **Learning that serves #1.** Every hour learns something transferable, but learning is now subordinate to shipping a sellable product.
-3. **Employability — Plan B financing only.** A technical job is a fallback IF the support fund is exhausted, NOT a parallel objective. Do not optimize for it..
-
-### What Tabris is
 A personal, always-on AI assistant (JARVIS-style) for Rumpel's **day-to-day** (plus a small number
 of beta-testers). **Not** primarily a tool to build the liquidador — Claude/Gemini are more robust
 for heavy development and remain the tools for that. Tabris's differential is **not raw reasoning**
@@ -31,18 +25,6 @@ feedback (Rumpel's own + beta-testers') to be refined from in the next round.
 Long-term: serve Rumpel plus a small number of additional users, leveraging data captured by
 the pipeline apps (habits, expenses, etc.). Designed to be **replicable**: anyone should be able
 to clone the repo, add their own API keys, and run their own Tabris.
-
----
-
-## 2. Hard Constraints
-
-| Constraint | Implication |
-|---|---|
-| Minimal budget | Free tiers first; paid services only when clearly justified (< ~$10 USD/mo total) |
-| Unstable power & internet at user's location | The deployment must come back on its own after a power or network cut: restart on failure, start with the machine, and survive a real reboot (item 37) |
-| User is a beginner | Prefer simple, well-documented tech; avoid premature complexity |
-| No portfolio exists yet | Everything built must be portfolio-grade before being made public |
-| First impressions matter | Repos go public only after passing the "Publishable Checklist" (§7) |
 
 ---
 
@@ -57,8 +39,6 @@ to clone the repo, add their own API keys, and run their own Tabris.
 | D5 | **Channel-agnostic core** | Tabris logic (routing, memory, agents) must not know whether input came from CLI or Telegram. Channels are thin adapters. Adding WhatsApp later = adding an adapter, not rewriting. |
 | D6 | **Runs as a system service on one always-on host, and the deployment stays host-agnostic** (updated 2026-08-18) | With inference via API, Tabris is a lightweight Python service: it needs a machine that stays on, not a particular provider. The unit definition, the data directory and the deploy procedure assume nothing about who owns the machine, so moving to a rented one is re-running the procedure, not a rewrite. Paying for a host was evaluated and deferred — it buys uptime the project owes no one until third parties depend on the service. |
 | D7 | **SQLite for structured storage** | Free, serverless, file-based, ships with Python. Used for per-user memory/profiles and for the pipeline apps. Skills transfer directly to any SQL job requirement. |
-| D8 | **Pipeline focus: 2 active projects max; nothing deleted, everything backlogged** | Two finished projects beat seven half-built ones. See prioritized matrix in §6. |
-| D9 | **Portfolio is a roadmap phase, not a side effect** | Public repo + serious README + deployed demo + posts documenting the journey. The "document everything" rule converts into LinkedIn/blog content. |
 | D10 | **Search APIs use the same abstraction + fallback as the model providers** | Internet access is a tool, not a new brain. `core/search.py` mirrors `core/providers.py`: an ordered `SEARCH_PROVIDERS` list in `config.py` (Tavily → Brave → DuckDuckGo), keys in `.env`, one `search(query)` that tries each in order, falls through on error or quota (`429`/`402`), and normalizes every provider's response to a common `{title, url, content}` shape. DDG (no key, no quota, lower quality) is the last-resort backup. Swapping/reordering providers = a one-line config change; zero lock-in. |
 | D11 | **Groq stays: it is the router's primary and the speech-to-text engine, not a spare** (decided 2026-08-18) | Two of its three jobs are on the critical path. The router runs on every message and needs the lowest time-to-first-token in the roster (~1s). Speech-to-text for item 34a runs on the same key at $0.67/1K min — the same Whisper through OpenRouter costs 9×, and Gemini transcribes better (2.9% vs 4.6% word error) at 17–27×. **That multiple is stale as of 2026-08-26:** Gemini 3.5 Transcribe lists ~$5 per 1K min, about 7×, at 2.6% word error — the decision stands, because Groq is still the cheapest and the new model is in preview (see item 39b). Dropping Groq entirely was evaluated and rejected: replacements exist for all three jobs (router → Gemini flash-lite, already second in that chain; audio → OpenRouter or Gemini; deep fallback → any OpenRouter model) and each is worse at the job. Revisit when a Groq model returns an error, not on every market review. |
 | D12 | **A roster is chosen by probing, and reliability is bought by leaving the free tier** (decided 2026-09-02) | Every failure found in a day of real use was a quota ceiling, never a limitation of a model: Groq's chat entries return 413 because its free tier allows 8,000 tokens a minute and one turn asks for more; `gemini-3.5-flash-lite` served 1 of 3 with a real payload, image or not, and Google's 503 is capacity shedding that a paid tier does not fix — enabling billing there would *lose* the free allowance and buy nothing. Of seven free vision models the catalog listed as image-capable, three answered. So the rosters for `general`, `code` and `memory` moved to paid entries on a key the project already holds, measured at 2.3–2.5s and 3 of 3: `openai/gpt-oss-120b` and `z-ai/glm-5.2`, replacing the `:free` variant that returned 429 on six of six. **The whole assistant costs about US$3 a month at 30 turns a day**, against a ceiling of 10 set by the owner — the reliability was never expensive, it was one setting away. Adding provider accounts was evaluated and rejected: OpenRouter passes provider rates through untouched and charges 5.5% on credit, so a direct key saves cents while adding a secret to manage in every environment (the exception is Anthropic, marked up 100% there, if Claude ever earns a place in `code`). Paid does not mean unlimited — `qwen/qwen3.7-flash` is paid and still returned 429 — which is why `tools/probe_models.py` exists and why `CONTRIBUTING.md` requires a probe before a roster changes. **A probe everything passes ranks nothing:** asking five vision models to read one large number separated none of them, and the fastest — proposed as the primary on that basis — turned out to read a grid of small codes wrongly on two of five tries, which is the failure the spec of item 34b calls undetectable. A roster is ordered by whether a model is *right*, and latency only breaks ties among models that are. `vision` therefore runs `openai/gpt-5-nano` → `minimax/minimax-m3:free` → `dots-studio/dots-3-note-preview:free`, all three of which read the grid 5 of 5; the owner put nano first to compare it against minimax, which answered every image turn on 2026-09-01 (the roster's own primary was serving none) and which he judged imperfect on real photographs — a judgement no synthetic probe here can make. |
@@ -221,7 +201,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
    - **TDD test:** inserting a fact/message with a non-existent `user_id` must raise `IntegrityError` (today it silently succeeds — that test is the proof the pragma is now live).
 28c. ✅ Memory CRUD completion (do before item 29): wire `deactivate_fact` into the distillation flow so Tabris can retire facts that became false/obsolete, closing the read-create-**retire** cycle. `update_memory` proposes additions **and** retirements (`id`s, with reason) in one human-confirmed step; a changed fact = retire stale + insert corrected. No in-place edit, no hard delete. Implements the §4.3 fact-lifecycle rule. Currently `deactivate_fact` exists and is unit-tested but is not wired into any flow. Additional scenarios folded in from the code review 2026-06-24 (this item rewrites `update_memory`, so do them in the same pass — don't touch the function twice):
    - **Dedupe facts.** "Only new facts" is a request to a non-deterministic model, not a guarantee — nothing in the schema stops the same fact being saved twice across sessions, and the "What I know about the user" block degrades over time. Fix: partial UNIQUE index on `(user_id, content)` WHERE `is_active=1`. ✅ Done. Known limitation: the index only catches exact string duplicates — semantically equivalent facts with different wording (e.g. "Trabaja en TaxL" vs "Trabaja en el proyecto TaxL") are not caught; that requires embeddings (M3, deferred).
-   - **Analyze the delta, not the whole history (cost).** `conversation_history` grows unbounded in-session (only what is *sent* to the model via `build_messages` is bounded, not the list itself). Re-serializing the FULL history into the distillation prompt every 5 exchanges = growing cost + re-analysis of already-processed messages. Fix: keep a watermark/index of the last analyzed message and distill only the delta since the last trigger. Aligns with the < $10/mo constraint (§2).
+   - **Analyze the delta, not the whole history (cost).** `conversation_history` grows unbounded in-session (only what is *sent* to the model via `build_messages` is bounded, not the list itself). Re-serializing the FULL history into the distillation prompt every 5 exchanges = growing cost + re-analysis of already-processed messages. Fix: keep a watermark/index of the last analyzed message and distill only the delta since the last trigger. Aligns with the < $10/mo constraint, which lives in the workspace plan.
    - **e2e test:** retire a fact end-to-end and assert it drops out of the assembled system prompt (covers the `deactivate_fact` e2e gap noted in the review).
 29. ✅ LLM-based router (replaces keyword router) using the cheap/free "router" role. Router classifies intent: `code`, `general`, or `exit`. **Resolves F6** (keyword false positives) and the exit-intent part of **F7** (replaces hardcoded exit phrases). Code review 2026-06-24 re-confirmed the substring bug (`"code"` matches inside `"encode"/"decode"`, `"error"` is common in normal chat → over-routes to `code`); the interim word-boundary regex patch is intentionally skipped because this item lands next and replaces the keyword router outright.
 30. ✅ Onboarding flow + channel-key identity. Replaces hardcoded `config.USER_NAME`/`config.LANGUAGE`. Identity is a `(channel, key)` pair, not the name: a new `user_channels` table maps each key to a `user_id`; the CLI key is an auto-generated UUID stored in a gitignored `tabris_client_id` file. On startup, look up the key → known key loads the user; unknown key triggers onboarding (ask name, detect language from first message, confirm once, persist). Language lives in `users.language` (a profile column, updatable any time via `update_user_language`), NOT in `facts`. Name is a display label only (drop the `UNIQUE` constraint) — access is by possession of the key, never by name, which structurally prevents impersonation and name collisions. `find_user_by_name`/`get_or_create_user` retired (name-based lookup is insecure in the multi-user model). Extra beyond original scope: `extract_name` uses the router LLM to pull a clean name out of a full sentence reply (e.g. "Mi nombre es Mauricio" → "Mauricio").
@@ -272,7 +252,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 34d. ⬜ Telegram as a second channel — a thin adapter (`python-telegram-bot`, polling; @BotFather token) reusing item 34's core untouched: same `handle_turn`, same `(channel, key)` identity, same link-code so a user maps Discord+Telegram to one profile, same hardening. Only new work: the adapter shell + wiring Telegram's voice/photo APIs into the shared media pipeline (34a/b). Low cost by design (D5); Rumpel wants both channels available. Mirrors Hermes's single-gateway/many-platforms model.
 
 34l. ⬜ **Documents attached to a message** (added 2026-08-29, on testers asking for it in real conversations and trials, not on intuition). Someone attaches a document and Tabris reads it and reasons about it, in whatever channel they use. Scoped as a whole rather than as a text-only first step, because the full request already exists: plain text (`.txt`, `.md`, `.csv`, source files) is the cheap half and needs no model change at all, since the text simply joins the chat call that already runs; PDF comes next and has to choose between a model that reads it natively and extracting the text locally; office formats (`.docx`, `.xlsx`) come last and are the only part that adds a dependency. Reuses the attachment handling item 34b builds — recognizing a file, checking its type and size, downloading it — rather than growing a second one beside it. Placed after Telegram because image input is already enough to open Tabris to more testers, and this lands on their feedback rather than ahead of it. Not item 47a, which is Tabris reading files that live on the machine; here the file arrives inside a message.
-34c. ✅ (2026-08-23) Data privacy minimums (code review 2026-07-02) — the gate before onboarding beta-testers (§6). Run through the `/method` cycle, documented in `docs/34c/`. Part 1 was decided against with a reason, parts 2 and 3 are built, and part 4 moved to item 39a because it needs machinery this item does not own. The gate is closed: an account can be exported, suspended, restored and erased, and conversation does not accumulate forever.
+34c. ✅ (2026-08-23) Data privacy minimums (code review 2026-07-02) — the gate before onboarding beta-testers, which the workspace plan's sequence places at the freeze. Run through the `/method` cycle, documented in `docs/34c/`. Part 1 was decided against with a reason, parts 2 and 3 are built, and part 4 moved to item 39a because it needs machinery this item does not own. The gate is closed: an account can be exported, suspended, restored and erased, and conversation does not accumulate forever.
    - ❌ **Part 1 — "view my data" on request: decided NOT to build (2026-08-13).** The profile and every active fact already travel in the system prompt on every turn, so the person can simply ask. A dedicated rendering path would duplicate what the prompt already carries. This retires the two earlier bullets of this item (rendering the answer in code, and reading intent instead of a `/olvidame` keyword).
    - ✅ **Part 2 — account lifecycle (2026-08-17, 271 tests).** Export, suspend, restore and erase, all from `tools/admin.py` and unreachable from any chat (AC9). A suspension exports first and stops the account from conversing without saving that exchange; a 14-day grace window (`ACCOUNT_GRACE_DAYS`) can be undone with everything intact; `purge-auto` erases whatever the window has released, unattended, and `purge-force` erases one account by hand, refusing an active one and refusing one still inside its window unless `--skip-grace` says otherwise. `delete_user_completely` is the project's only hard delete, in a single transaction, and the export file lives exactly as long as the window. Deactivation and restoration were confirmed live; the erase path is covered by tests only — Rumpel's call, since checking it live needs a throwaway database.
    - **A copy taken by hand does not belong in the rotation folder** (learned the hard way 2026-08-20). Backups are named by date alone, one per day, so the scheduled run overwrites any earlier copy from the same day and rotation removes it after seven. A copy taken deliberately before a delicate operation — a wipe, a migration — must go somewhere else, under its own name, or the routine will destroy exactly the copy that was taken because it mattered. Nearly proven on 2026-08-20: the copy taken before wiping the first production database shared a name with that day's scheduled one and was saved only by the move that should have merged them failing silently.
@@ -375,7 +355,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 41. ✅ (2026-08-20) Security pass on the git history. No secret was ever committed — `.env` and the channel identity file were never tracked (checked 2026-06-24, re-checked 2026-08-11), so no key needed rotating. What was there was personal: two early commits added `memory.md` and a database carrying the maintainer's own profile, and 36 commits carried the maintainer's machine name inside this file. Both were purged with `git filter-repo` in two passes — the files by path, the name by text replacement — and force-pushed, rewriting every hash; the deployment was re-cloned onto the new history and its previous clone destroyed, since a clone keeps the old objects in its own `.git`. Caveat recorded rather than hidden: a host does not garbage-collect immediately, so the old objects stay reachable by their exact hash until it does. With no forks and nobody holding those hashes the practical risk is low; asking the host to run the collection closes it entirely.
    - **Infrastructure names were committed until 2026-08-18.** Three lines of this file named the maintainer's own machine (items 37, 38a and the search-provider table); they were rewritten to describe the mechanism instead, per `AGENTS.md`. Removing them stops future exposure only — the name stays in every earlier commit, so it joins the purge below rather than being fixed by the edit.
    - **Checked 2026-08-11 — no secrets, but personal data is in the history.** `.env` and the client-id file were never tracked, so no key was ever exposed. Two early commits did add `memory.md` and `tabris.db`, and both carry the maintainer's own profile; neither is tracked today, but removing a file does not remove it from history. Purging them means rewriting history, which changes every commit hash — so it belongs before item 42, not after.
-42. ✅ Repo made public on 2026-08-18 — out of order, and recorded as such rather than tidied away: it went public before §7 was fully passed and before item 41's purge, which is the exact sequence §7 exists to prevent. The purge landed 2026-08-20, so the personal data in the history was public for two days.
+42. ✅ Repo made public on 2026-08-18 — out of order, and recorded as such rather than tidied away: it went public before the publishable checklist was fully passed and before item 41's purge, which is the exact sequence that checklist exists to prevent. The purge landed 2026-08-20, so the personal data in the history was public for two days.
 43. ⬜ First LinkedIn/blog post: "Building my own JARVIS as a career-change project" — the "document everything" rule becomes content. Target: 1 post per completed phase.
 44. ⬜ GitHub profile README + pin Tabris.
 
@@ -410,62 +390,15 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 
 ---
 
-## 6. Project Pipeline — Prioritized Backlog
-
-Scoring 1–5 (higher = better) on: **V**iability (can Rumpel build it soon), **M**onetization
-potential, **B**udget fit (cost to build/run), **C**omplexity (5 = simplest). Nothing is deleted.
-
-| # | Project | V | M | B | C | Total | Role in the plan |
-|---|---|---|---|---|---|---|---|
-| 1 | Employment contract liquidator (Colombia) | 4 | 4 | 5 | 4 | 17 | **Active #1 / flagship.** Local niche, real demand (employees & small employers), little quality competition, shows domain expertise — strongest portfolio piece and best SaaS bet. |
-| 2 | Habit & Task Tracker | 5 | 2 | 5 | 5 | 17 | Backlog — learning vehicle: CRUD, SQLite, API. Can become Tabris's first tool once the Phase 3 tool layer is in place. Weak as standalone product (saturated market). |
-| 3 | Income tax calculator (Colombia) | 4 | 4 | 5 | 3 | 16 | Backlog — natural sibling of #2 (shared domain & audience). Strong candidate to bundle with #2 into one "Colombian payroll/tax tools" product. Seasonal demand spike (tax season). |
-| 4 | Expense & budget tracker | 4 | 2 | 5 | 4 | 15 | Backlog — good second data source for Tabris-as-assistant; weak standalone monetization. |
-| 5 | Account reconciliation tool | 3 | 4 | 4 | 2 | 13 | Backlog — monetizable (freelance accountants/SMBs) but needs domain depth and real user input. Revisit after #2 ships and brings contact with that audience. |
-| 6 | Reading app | 3 | 2 | 4 | 3 | 12 | Backlog — personal value, crowded market. |
-| 7 | Streaming platform | 1 | 2 | 1 | 1 | 5 | On hold (as already agreed) — infrastructure cost and complexity are incompatible with current constraints. |
-| 8 | Documentation generator (video→manual) | 2 | ? | 4 | 2 | — | Backlog / UNVALIDATED. Crowded market (Scribe, Tango, Guidde, Docsie). Validate willingness-to-pay with the people who requested it BEFORE any build. Outside the financial-domain edge. |
-
-**Sequence:**
-- Tabris: finish Phases 3–4 this round (personal-assistant MVP), then FREEZE. Definition of done
-  (functional for daily use): persistent memory + internet (`web_search`/`web_fetch`) + Discord +
-  audio input + image input + always-on deploy + scheduled messages (item 39, pulled in on
-  2026-08-23 because testers named it as their highest-value addition). Everything beyond = backlog.
-- **At the freeze:** beta-testers are onboarded (the multi-user foundation already exists from item
-  30, so this costs no rework). The freeze is not "Tabris switched off" — it is feature-frozen for
-  development while running in **daily production use** by Rumpel + beta-testers, gathering feedback.
-- **During the freeze → Phase 5: Portfolio.** Swapped ahead of the liquidador on 2026-08-23: most of
-  it (README, licence, the history purge, the public repo) already landed as a by-product of
-  building Tabris, and what remains is the write-up and the profile page — cheap, and better written
-  while the work is fresh.
-- **Then → Phase 6: Liquidador de renta** as flagship wedge (built mainly with Claude/Gemini, with
-  Tabris dogfooded alongside). Start with an Excel prototype (validates logic + willingness to pay
-  before any code). Feedback collected on Tabris during the freeze is reviewed and its valuable
-  parts implemented when Tabris is picked back up (next round).
-- Tax season makes the liquidador time-sensitive: prioritize accordingly.
-
----
-
-## 7. Publishable Checklist (gate for making anything public)
-
-A repo/demo goes public only when ALL are true:
-- [ ] Works end-to-end for its core use case (no "coming soon" in the main flow)
-- [ ] `README.md` complete: what, why, architecture, setup, usage, screenshots
-- [ ] No secrets in code **or git history**; `.env.example` provided
-- [ ] Tests exist and pass (`python -m unittest` clean)
-- [ ] Code in English, reasonably clean (a beginner-honest standard, not perfection)
-- [ ] Public functions carry type hints + short docstrings (e.g. `def save_fact(db_path: str, user_id: int, content: str) -> int:`), enough to run `mypy` — beginner-honest, not exhaustive (code review 2026-06-24)
-- [ ] If it has a UI/bot: a reviewer can try it in < 2 minutes (demo, GIF, or test bot)
-
----
-
 ## 8. Working Agreements
 
 Binding collaboration and code agreements live in two agent-agnostic files at the repo root:
-- **`AGENTS.md`** — collaboration style + dev commands (one step at a time, explain before coding, propose-don't-apply, language convention, test/venv commands).
+- **`AGENTS.md`** — the entry point for any agent or human. It holds no rules of its own; it names where they live.
 - **`CONTRIBUTING.md`** — code standards + architecture patterns (TDD, end-to-end at every step, vibe-coding boundary, HITL for destructive actions, code conventions, provider/channel/DB patterns).
 
-Project-level drivers stay here as source of truth: budget constraint (§2); shipping-over-learning priority (§1); replicability / "document everything" (§6, D9).
+Who this is built for, why, the constraints it inherits, the prioritized project pipeline and the
+gate a repository passes before going public are not Tabris's to hold: they live in the workspace
+plan, one level above this repository.
 
 ---
 
@@ -475,7 +408,5 @@ Project-level drivers stay here as source of truth: budget constraint (§2); shi
 |---|---|
 | DeepSeek outages (~97% uptime) | Provider fallback (D2) is mandatory in `core/providers.py` |
 | API price changes | Role→provider map makes switching a one-line change; re-check prices quarterly |
-| Scope creep (7 projects, multi-agent dreams) | §6 sequence + "do not build before the second user exists" rule (M2) |
 | Leaked secrets | `.env` pattern + history check before going public + key rotation if in doubt. (Verified 2026-06-24: `.env` never in git history — clean.) |
 | Prompt injection in memory distillation | Raw conversation text is embedded in the distillation prompt; a user could type `HAS_NEW_FACTS: yes` / `FACTS:` lines to spoof the parser format. The human `si/no` gate was removed by auto-apply (2026-07-23) → this risk is now **live**; mitigation is the item-34 delimiting bullet (fence user turns in the 4 LLM-facing prompts), now higher priority. (Code review 2026-06-24.) |
-| Burnout / runway pressure | Portfolio milestones every phase = visible progress even if revenue lags |
