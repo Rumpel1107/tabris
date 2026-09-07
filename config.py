@@ -100,6 +100,7 @@ IMAGE_MAX_BYTES = 5 * 1024 * 1024   # one provider caps a whole request at 20 MB
 
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
+WEB_FETCH_MAX_REDIRECTS = 5   # hops web_fetch will follow; every one is re-checked, so the cap only bounds the walk
 
 # --- Transcription Configuration ---
 TRANSCRIBE_PROVIDERS = ["groq"]   # ordered; transcribe() tries each in turn, falls through on failure

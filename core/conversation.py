@@ -12,7 +12,7 @@ from core import memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, fence_user_input, format_date, stamp_time, strip_time_stamp
+from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
 from core.search import web_fetch, web_search
 from core.strings import MESSAGES, msg
 
@@ -242,9 +242,15 @@ def _run_forget_fact(db_path, user_id, fact_id):
         return f"No active fact with id {fact_id}."
     return f"Forgotten fact [{fact_id}]: {forgotten}"
 
+# Tools whose result is written by whoever owns the page, not by this project.
+UNTRUSTED_TOOLS = frozenset({"web_search", "web_fetch"})
+
 def _execute_tool_call(tool_call, executors):
+    name = tool_call.function.name
     args = json.loads(tool_call.function.arguments)
-    result = executors[tool_call.function.name](**args)
+    result = executors[name](**args)
+    if name in UNTRUSTED_TOOLS:
+        result = fence_tool_output(result)
     return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
 def run_with_tools(role, messages, tools, extra_executors=None):

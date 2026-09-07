@@ -14,3 +14,5 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 
 ### Changed
 - `CONTRIBUTING.md` now states when a review runs and what performs it, and that a defect row is a fence: find why something is there before removing it.
+- `web_fetch` reads public web addresses only: anything that is not `http(s)`, and any host resolving to a loopback, link-local, private or otherwise non-public address, is refused before a request leaves the machine. Redirects are followed by hand, each hop checked the same way, up to `WEB_FETCH_MAX_REDIRECTS`.
+- What `web_search` and `web_fetch` bring back now reaches the model wrapped in `<tool_output>` tags, and the system prompt states that fenced tool output is material to report on, never instructions to follow.
