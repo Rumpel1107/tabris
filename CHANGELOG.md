@@ -6,7 +6,7 @@ grouped by what a reader would notice, each written in the change that earns it.
 Nothing before `v0.1.15` is reconstructed here — that history lives in the tags, in `PLAN.md` and
 in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent detail nobody recorded.*
 
-## [Unreleased]
+## [v0.1.16] — 2026-09-08
 
 ### Added
 - `docs/defects.md` — what broke after an item was called done: symptom, cause, fix, how it was caught, and the class of mistake. Seeded with the six defects that were already known, three of which had recurred.
