@@ -426,7 +426,7 @@ def test_a_second_search_in_one_turn_gets_what_the_first_left(mock_chat, mock_se
     ]
     seen = []
 
-    def spend_half(query, budget):
+    def spend_half(query, budget, max_results=5):
         seen.append(budget.remaining)
         budget.spend(8000)
         return "resultados"
@@ -492,12 +492,53 @@ def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_ch
         assert redeem_link_code(db_path, issued, "discord", "disc-key-1") == user_id
 
 
+INVENTED_LINK = "https://news.ycombinator.com/item?id="
+
+
 def _session_with(db_path, language="es"):
     return Session(
         user_id=create_user(db_path, "Rumpel", language),
         language=language,
         conversation_history=[{"role": "system", "content": "sys"}],
     )
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_a_link_the_model_writes_mid_turn_does_not_authorize_itself(mock_chat, mock_search):
+    tool_call = SimpleNamespace(id="c1", function=SimpleNamespace(name="web_search", arguments='{"query": "hn"}'))
+    mock_chat.side_effect = [
+        # what the model says while asking for a tool is still the model talking, not a source
+        providers.ChatResponse(content=f"voy a mirar {INVENTED_LINK}", tool_calls=[tool_call]),
+        providers.ChatResponse(content=f"- Aquí está {INVENTED_LINK}", tool_calls=None),
+    ]
+    mock_search.return_value = "resultados sin direcciones"
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "midturn.db")
+        init_db(db_path)
+        session = _session_with(db_path)
+
+        reply = handle_turn(session, "busca algo", "general", db_path)
+
+    assert reply == msg("no_confirmed_sources", "es")
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_the_search_executor_still_takes_the_arguments_it_always_took(mock_chat, mock_search):
+    tool_call = SimpleNamespace(
+        id="c1",
+        function=SimpleNamespace(name="web_search", arguments='{"query": "trm", "max_results": 3}'),
+    )
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content="listo", tool_calls=None),
+    ]
+    mock_search.return_value = "resultados"
+
+    # a field the model adds on its own must not kill the turn
+    assert run_with_tools("general", [{"role": "user", "content": "trm?"}], tools=[WEB_SEARCH_TOOL]) == "listo"
+    assert mock_search.call_args.kwargs["max_results"] == 3
 
 
 @pytest.mark.parametrize("language, answer, expected", [

@@ -1,8 +1,9 @@
 import re
 
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
-_URL = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
+# the asterisk is excluded so a link written in bold is the link and not the markup around it
+_URL = re.compile(r"https?://[^\s<>\"')\]*]+", re.IGNORECASE)
 _ITEM = re.compile(r"^[ \t]*([-*•]|\d+[.)])\s", re.MULTILINE)
 _BLANK_LINE = re.compile(r"\n[ \t]*\n")
 
@@ -15,8 +16,8 @@ def find_urls(text: str) -> set[str]:
 def _normalize(url: str) -> str:
     """The same page written two ways compares equal: host case, a trailing slash and a fragment do not identify it."""
     parts = urlsplit(url.rstrip(".,;:!?"))
-    query = f"?{parts.query}" if parts.query else ""
-    return f"{parts.scheme.lower()}://{parts.netloc.lower()}{parts.path.rstrip('/')}{query}"
+    query = f"?{unquote(parts.query)}" if parts.query else ""
+    return f"{parts.scheme.lower()}://{parts.netloc.lower()}{unquote(parts.path).rstrip('/')}{query}"
 
 
 def _block_span(text: str, position: int) -> tuple[int, int]:
@@ -51,7 +52,8 @@ def drop_unverifiable_links(reply: str, allowed_urls: set[str]) -> tuple[str, in
         kept += reply[last:start]
         last = end
     kept += reply[last:]
-    return re.sub(r"\n{3,}", "\n\n", kept).strip(), len(merged)
+    # blocks, not spans: two removed side by side merge into one cut but are two things gone
+    return re.sub(r"\n{3,}", "\n\n", kept).strip(), len(set(spans))
 
 
 def split_message(text: str, limit: int) -> list[str]:

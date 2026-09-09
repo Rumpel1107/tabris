@@ -258,7 +258,7 @@ def run_with_tools(role, messages, tools, extra_executors=None):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
     executors = {
-        "web_search": lambda query: web_search(query=query, budget=budget),
+        "web_search": lambda query, max_results=5: web_search(query=query, max_results=max_results, budget=budget),
         "web_fetch": web_fetch,
     }
     if extra_executors:
@@ -278,8 +278,8 @@ def run_with_tools(role, messages, tools, extra_executors=None):
         logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
     raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
 
-def _keep_only_traceable_links(reply, messages, language):
-    """Drop what rests on an address the turn never saw: an invented link comes with an invented description (item 35b)."""
+def _urls_in(messages):
+    """Every address written in these messages, images and their parts included."""
     seen = set()
     for message in messages:
         content = message.get("content")
@@ -287,6 +287,11 @@ def _keep_only_traceable_links(reply, messages, language):
             seen |= find_urls(content)
         elif isinstance(content, list):
             seen |= {url for part in content if part.get("type") == "text" for url in find_urls(part["text"])}
+    return seen
+
+
+def _keep_only_traceable_links(reply, seen, language):
+    """Drop what rests on an address the turn never saw: an invented link comes with an invented description (item 35b)."""
     reply, dropped = drop_unverifiable_links(reply, seen)
     if not dropped:
         return reply
@@ -325,8 +330,9 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     # The history stays text: the images travel beside it and meet it only when the call is built.
     position = len(session.conversation_history) - 1
     session.images = {position: list(images)} if images else {}
-    # run_with_tools appends each tool result here, so afterwards this is everything the turn saw
     call_messages = _attach_images(build_messages(session.conversation_history), session.images.get(position, []))
+    # what the turn already had in front of it; what the model itself writes below is never a source
+    seen_urls = _urls_in(call_messages)
     try:
         reply = run_with_tools(
             role,
@@ -343,7 +349,9 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
         session.conversation_history.pop()
         raise
     reply = strip_time_stamp(reply)
-    reply = _keep_only_traceable_links(reply, call_messages, session.language)
+    # run_with_tools appended each tool result to call_messages: those are sources, the model's own lines are not
+    seen_urls |= _urls_in(m for m in call_messages if m.get("role") == "tool")
+    reply = _keep_only_traceable_links(reply, seen_urls, session.language)
     session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input, attachment="image" if images else None),

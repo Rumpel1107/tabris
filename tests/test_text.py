@@ -40,14 +40,31 @@ def test_a_block_whose_link_cannot_be_traced_is_dropped_whole(reply, gone):
 
 
 @pytest.mark.parametrize("written", [
-    "https://EXAMPLE.com/uno",      # the host is not case-sensitive
-    "https://example.com/uno/",     # a trailing slash is the same page
-    "https://example.com/uno#hoy",  # a fragment never reaches the server
+    "https://EXAMPLE.com/uno",       # the host is not case-sensitive
+    "https://example.com/uno/",      # a trailing slash is the same page
+    "https://example.com/uno#hoy",   # a fragment never reaches the server
+    "**https://example.com/uno**",   # a link the model wrote in bold
 ])
 def test_a_link_that_was_read_survives_being_written_differently(written):
     cleaned, dropped = drop_unverifiable_links(f"- Mira esto {written}", {READ})
     assert dropped == 0
     assert written in cleaned
+
+
+def test_the_same_address_encoded_and_decoded_is_one_address():
+    read = "https://es.wikipedia.org/wiki/Bogotá"
+    written = "https://es.wikipedia.org/wiki/Bogot%C3%A1"
+    cleaned, dropped = drop_unverifiable_links(f"- Sobre la ciudad {written}", {read})
+    assert dropped == 0
+    assert written in cleaned
+
+
+def test_two_blocks_removed_side_by_side_are_counted_as_two():
+    reply = f"- Uno {INVENTED}\n- Otro {INVENTED}2\n- El bueno {READ}"
+    cleaned, dropped = drop_unverifiable_links(reply, {READ})
+    # the log line is the only visibility a silent removal has, so it counts blocks and not spans
+    assert dropped == 2
+    assert cleaned == f"- El bueno {READ}"
 
 
 def test_an_invented_variant_of_a_real_link_is_not_taken_for_it():
