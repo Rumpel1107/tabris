@@ -492,6 +492,36 @@ def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_ch
         assert redeem_link_code(db_path, issued, "discord", "disc-key-1") == user_id
 
 
+def _session_with(db_path, language="es"):
+    return Session(
+        user_id=create_user(db_path, "Rumpel", language),
+        language=language,
+        conversation_history=[{"role": "system", "content": "sys"}],
+    )
+
+
+@pytest.mark.parametrize("language, answer, expected", [
+    # what rests on the address the user himself wrote stays, and it leaves no trace of the removal
+    ("es", "Te dejo dos:\n\n- Lo que leí https://example.com/uno\n- Y este https://news.ycombinator.com/item?id=",
+     "Te dejo dos:\n\n- Lo que leí https://example.com/uno"),
+    # nothing survives, and an empty message cannot be sent
+    ("en", "Only this one: https://news.ycombinator.com/item?id=", msg("no_confirmed_sources", "en")),
+])
+@patch("core.conversation.providers.chat")
+def test_handle_turn_drops_a_link_the_turn_never_saw(mock_chat, language, answer, expected):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "links.db")
+        init_db(db_path)
+        session = _session_with(db_path, language)
+        mock_chat.return_value = providers.ChatResponse(content=answer, tool_calls=None)
+
+        reply = handle_turn(session, "mira https://example.com/uno", "general", db_path)
+
+        assert reply == expected
+        # what the user reads is what gets stored
+        assert get_messages(db_path, session.user_id, 2)[-1]["content"] == reply
+
+
 @pytest.mark.parametrize("tool_name, arguments, executor", [
     ("web_search", '{"query": "trm de hoy"}', "core.conversation.web_search"),
     ("web_fetch", '{"url": "https://example.com/a"}', "core.conversation.web_fetch"),

@@ -15,6 +15,7 @@ from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
 from core.search import TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
+from core.text import drop_unverifiable_links, find_urls
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +278,23 @@ def run_with_tools(role, messages, tools, extra_executors=None):
         logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
     raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
 
+def _keep_only_traceable_links(reply, messages, language):
+    """Drop what rests on an address the turn never saw: an invented link comes with an invented description (item 35b)."""
+    seen = set()
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            seen |= find_urls(content)
+        elif isinstance(content, list):
+            seen |= {url for part in content if part.get("type") == "text" for url in find_urls(part["text"])}
+    reply, dropped = drop_unverifiable_links(reply, seen)
+    if not dropped:
+        return reply
+    # the count, never the text: the log carries no conversation
+    logger.info(f"links: dropped {dropped} block(s) resting on an address this turn never saw")
+    return reply or msg("no_confirmed_sources", language)
+
+
 def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     user_row = get_user(db_path, session.user_id)
     user_timezone = user_row["timezone"] if user_row else "UTC"
@@ -307,10 +325,12 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     # The history stays text: the images travel beside it and meet it only when the call is built.
     position = len(session.conversation_history) - 1
     session.images = {position: list(images)} if images else {}
+    # run_with_tools appends each tool result here, so afterwards this is everything the turn saw
+    call_messages = _attach_images(build_messages(session.conversation_history), session.images.get(position, []))
     try:
         reply = run_with_tools(
             role,
-            _attach_images(build_messages(session.conversation_history), session.images.get(position, [])),
+            call_messages,
             tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
             extra_executors={
                 "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
@@ -323,6 +343,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
         session.conversation_history.pop()
         raise
     reply = strip_time_stamp(reply)
+    reply = _keep_only_traceable_links(reply, call_messages, session.language)
     session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input, attachment="image" if images else None),

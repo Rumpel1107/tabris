@@ -9,6 +9,7 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 ## [Unreleased]
 
 ### Changed
+- An answer no longer carries a link the turn never saw. Every address in a reply is checked against what the turn actually had in front of it — the search results, the conversation, the message the user just wrote — and the block citing anything else is removed whole, its description with it, because an invented address arrives with an invented summary. The removal is silent; when nothing survives it, the reply says it has no sources it can confirm and offers to search again.
 - A web search now hands the model the text of the pages it found, not only the search engine's snippet: the first 4000 characters of each of the first three results, so an answer can rest on what the page says instead of on a two-line summary. A whole turn carries 16000 characters of page text at most; once spent, further searches in that turn return snippets alone, exactly as before.
 
 ## [v0.1.16] — 2026-09-08
