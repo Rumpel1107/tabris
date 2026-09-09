@@ -7,7 +7,7 @@ import socket
 import unittest
 
 import config
-from core.search import search, web_fetch, web_search, _search_ddg, _search_tavily
+from core.search import search, TextBudget, web_fetch, web_search, _search_ddg, _search_tavily
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -35,24 +35,32 @@ def test_search_ddg_normalizes_results(mock_ddgs_class):
     ]
     results = _search_ddg("clima en Panama")
     assert results == [
-        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
-        {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2"},
+        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1", "text": ""},
+        {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2", "text": ""},
     ]
 
 
+@pytest.mark.parametrize("with_text, page, expected_text", [
+    (False, None, ""),
+    (True, "La TRM de hoy es 3.126,08", "La TRM de hoy es 3.126,08"),
+])
 @patch("core.search.httpx.post")
-def test_search_tavily_normalizes_results(mock_post):
+def test_search_tavily_normalizes_results(mock_post, with_text, page, expected_text):
     mock_post.return_value.json.return_value = {
         "results": [
-            {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1", "score": 0.9},
-            {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2", "score": 0.8},
+            {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1", "score": 0.9,
+             "raw_content": page},
+            {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2", "score": 0.8,
+             "raw_content": page},
         ]
     }
-    results = _search_tavily("clima en Panama")
+    results = _search_tavily("clima en Panama", with_text=with_text)
     assert results == [
-        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
-        {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2"},
+        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1", "text": expected_text},
+        {"title": "Result 2", "url": "https://example.com/2", "content": "Snippet 2", "text": expected_text},
     ]
+    # asking for page text costs half a second, so it is only asked for when there is room for it
+    assert mock_post.call_args.kwargs["json"].get("include_raw_content", False) is with_text
 
 
 @patch("core.search.DDGS")
@@ -66,7 +74,7 @@ def test_search_uses_tavily_when_configured_first(mock_post, mock_ddgs_class):
     ]
     with patch("core.search.config.SEARCH_PROVIDERS", ["tavily", "duckduckgo"]):
         results = search("clima en Panama")
-    assert results == [{"title": "T", "url": "https://t.co", "content": "from tavily"}]
+    assert results == [{"title": "T", "url": "https://t.co", "content": "from tavily", "text": ""}]
 
 
 @patch("core.search.DDGS")
@@ -77,7 +85,7 @@ def test_search_uses_configured_provider(mock_ddgs_class):
     with patch("core.search.config.SEARCH_PROVIDERS", ["duckduckgo"]):
         results = search("clima en Panama")
     assert results == [
-        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1"},
+        {"title": "Result 1", "url": "https://example.com/1", "content": "Snippet 1", "text": ""},
     ]
 
 
@@ -177,6 +185,59 @@ def test_web_fetch_refuses_a_host_that_resolves_to_both_public_and_private(mock_
         result = web_fetch("http://rebinding.example/")
     mock_get.assert_not_called()
     assert "Refused" in result
+
+
+def _results(count, text_size=0):
+    return [
+        {
+            "title": f"Result {i}",
+            "url": f"https://example.com/{i}",
+            "content": f"Snippet {i}",
+            "text": "x" * text_size,
+        }
+        for i in range(count)
+    ]
+
+
+@patch("core.search.search")
+def test_web_search_gives_the_page_text_to_the_first_results_only(mock_search):
+    mock_search.return_value = _results(5, text_size=100)
+    budget = TextBudget(16000)
+    with patch("core.search.config.SEARCH_TEXT_RESULTS", 2):
+        formatted = web_search("trm hoy", budget=budget)
+    assert formatted.count("Page text:") == 2
+    assert budget.remaining == 16000 - 200
+    # the results beyond the cut still arrive, as the snippets they always were
+    assert "Snippet 4" in formatted
+
+
+@patch("core.search.search")
+def test_web_search_keeps_only_the_first_characters_of_a_long_page(mock_search):
+    mock_search.return_value = _results(1, text_size=9000)
+    budget = TextBudget(16000)
+    with patch("core.search.config.SEARCH_TEXT_MAX_CHARS", 4000):
+        formatted = web_search("trm hoy", budget=budget)
+    assert budget.remaining == 16000 - 4000
+    assert "x" * 4000 in formatted
+    assert "x" * 4001 not in formatted
+
+
+@pytest.mark.parametrize("start, pages, left", [
+    (16000, 3, 4000),   # room for every page the search is allowed to carry
+    (9000, 2, 1000),    # the third no longer fits and is dropped whole, not cut in half
+    (0, 0, 0),          # spent: the turn falls back to snippets, which is what it did before
+])
+@patch("core.search.search")
+def test_web_search_stops_at_the_budget_it_was_given(mock_search, start, pages, left):
+    mock_search.return_value = _results(3, text_size=4000)
+    budget = TextBudget(start)
+    with patch("core.search.config.SEARCH_TEXT_MAX_CHARS", 4000), \
+         patch("core.search.config.SEARCH_TEXT_RESULTS", 3):
+        formatted = web_search("trm hoy", budget=budget)
+    assert formatted.count("Page text:") == pages
+    assert budget.remaining == left
+    assert "Snippet 0" in formatted
+    assert mock_search.call_args.kwargs["with_text"] is (start > 0)
 
 
 if __name__ == "__main__":

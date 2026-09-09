@@ -6,6 +6,11 @@ grouped by what a reader would notice, each written in the change that earns it.
 Nothing before `v0.1.15` is reconstructed here — that history lives in the tags, in `PLAN.md` and
 in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent detail nobody recorded.*
 
+## [Unreleased]
+
+### Changed
+- A web search now hands the model the text of the pages it found, not only the search engine's snippet: the first 4000 characters of each of the first three results, so an answer can rest on what the page says instead of on a two-line summary. A whole turn carries 16000 characters of page text at most; once spent, further searches in that turn return snippets alone, exactly as before.
+
 ## [v0.1.16] — 2026-09-08
 
 ### Added

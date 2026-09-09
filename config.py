@@ -101,6 +101,9 @@ IMAGE_MAX_BYTES = 5 * 1024 * 1024   # one provider caps a whole request at 20 MB
 # --- Search Configuration ---
 SEARCH_PROVIDERS = ["tavily", "duckduckgo"]   # ordered; search() tries each in turn, falls through on failure
 WEB_FETCH_MAX_REDIRECTS = 5   # hops web_fetch will follow; every one is re-checked, so the cap only bounds the walk
+SEARCH_TEXT_MAX_CHARS = 4000   # page text kept per result; measured: the answer sat within the first 1072 of five TRM pages
+SEARCH_TEXT_RESULTS = 3   # results per search that carry page text; the rest arrive as the snippets they always were
+SEARCH_TEXT_BUDGET = 16000   # page text one turn may carry in total; spent, later searches fall back to snippets
 
 # --- Transcription Configuration ---
 TRANSCRIBE_PROVIDERS = ["groq"]   # ordered; transcribe() tries each in turn, falls through on failure

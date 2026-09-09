@@ -13,7 +13,7 @@ from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
-from core.search import web_fetch, web_search
+from core.search import TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
 
 logger = logging.getLogger(__name__)
@@ -254,7 +254,12 @@ def _execute_tool_call(tool_call, executors):
     return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
 def run_with_tools(role, messages, tools, extra_executors=None):
-    executors = {"web_search": web_search, "web_fetch": web_fetch}
+    # one budget for the whole turn: what one search reads, the next one no longer has
+    budget = TextBudget(config.SEARCH_TEXT_BUDGET)
+    executors = {
+        "web_search": lambda query: web_search(query=query, budget=budget),
+        "web_fetch": web_fetch,
+    }
     if extra_executors:
         executors.update(extra_executors)
     for _ in range(config.MAX_TOOL_ROUNDS):

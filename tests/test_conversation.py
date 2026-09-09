@@ -388,7 +388,7 @@ class TestRunWithTools(unittest.TestCase):
         result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL])
         
         self.assertEqual(result, "Hace sol en Panama")
-        mock_search.assert_called_once_with(query="clima en Panama")
+        self.assertEqual(mock_search.call_args.kwargs["query"], "clima en Panama")
         self.assertEqual(mock_chat.call_count, 2)
         
         second_call_messages = mock_chat.call_args_list[1][0][1]
@@ -411,6 +411,32 @@ def test_run_with_tools_gives_up_when_a_turn_never_settles(mock_chat, mock_searc
         run_with_tools("general", [{"role": "user", "content": "hola"}], tools=[WEB_SEARCH_TOOL])
 
     assert mock_chat.call_count == config.MAX_TOOL_ROUNDS
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_a_second_search_in_one_turn_gets_what_the_first_left(mock_chat, mock_search):
+    def call(n):
+        return SimpleNamespace(id=f"c{n}", function=SimpleNamespace(name="web_search", arguments='{"query": "trm"}'))
+
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[call(1)]),
+        providers.ChatResponse(content=None, tool_calls=[call(2)]),
+        providers.ChatResponse(content="listo", tool_calls=None),
+    ]
+    seen = []
+
+    def spend_half(query, budget):
+        seen.append(budget.remaining)
+        budget.spend(8000)
+        return "resultados"
+
+    mock_search.side_effect = spend_half
+    with patch("core.conversation.config.SEARCH_TEXT_BUDGET", 16000):
+        run_with_tools("general", [{"role": "user", "content": "hola"}], tools=[WEB_SEARCH_TOOL])
+
+    # one budget for the whole turn: what the first search read, the second no longer has
+    assert seen == [16000, 8000]
 
 
 @patch("core.conversation.web_fetch")

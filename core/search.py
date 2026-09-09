@@ -11,25 +11,49 @@ from urllib.parse import urljoin, urlparse
 logger = logging.getLogger(__name__)
 
 
-def _search_ddg(query, max_results=5):
+class TextBudget:
+    """How much page text one turn may still carry. Shared by every search of that turn."""
+
+    def __init__(self, remaining: int):
+        self.remaining = remaining
+
+    def spend(self, size: int) -> bool:
+        """Take `size` from the budget, or leave it untouched and answer False when it no longer fits."""
+        if size > self.remaining:
+            return False
+        self.remaining -= size
+        return True
+
+
+def _search_ddg(query, max_results=5, with_text=False):
+    # DuckDuckGo returns snippets only, so a turn that falls back here reads no pages
     results = DDGS().text(query, max_results=max_results)
     return [
-        {"title": r["title"], "url": r["href"], "content": r["body"]}
+        {"title": r["title"], "url": r["href"], "content": r["body"], "text": ""}
         for r in results
     ]
 
 
-def _search_tavily(query, max_results=5):
+def _search_tavily(query, max_results=5, with_text=False):
+    payload = {"query": query, "max_results": max_results}
+    if with_text:
+        # the page text rides along with the same call: no extra credit, about half a second
+        payload["include_raw_content"] = True
     response = httpx.post(
         "https://api.tavily.com/search",
         headers={"Authorization": f"Bearer {config.TAVILY_API_KEY}"},
-        json={"query": query, "max_results": max_results},
+        json=payload,
         timeout=config.PROVIDER_TIMEOUT,
     )
     response.raise_for_status()
     results = response.json()["results"]
     return [
-        {"title": r["title"], "url": r["url"], "content": r["content"]}
+        {
+            "title": r["title"],
+            "url": r["url"],
+            "content": r["content"],
+            "text": (r.get("raw_content") or "") if with_text else "",
+        }
         for r in results
     ]
 
@@ -40,19 +64,31 @@ _ADAPTERS = {
 }
 
 
-def search(query, max_results=5):
+def search(query, max_results=5, with_text=False):
     for name in config.SEARCH_PROVIDERS:
         try:
-            return _ADAPTERS[name](query, max_results=max_results)
+            return _ADAPTERS[name](query, max_results=max_results, with_text=with_text)
         except Exception as e:
             logger.warning(f"search provider '{name}' failed ({e}); trying next...")
     return []
 
 
-def web_search(query, max_results=5):
-    results = search(query, max_results=max_results)
+def _with_page_text(result, budget):
+    """The result as the model sees it: the snippet always, the page text while the turn can afford it."""
+    block = f"{result['title']}\n{result['content']}\n{result['url']}"
+    text = result["text"][:config.SEARCH_TEXT_MAX_CHARS]
+    if not text or not budget.spend(len(text)):
+        return block
+    return f"{block}\nPage text:\n{text}"
+
+
+def web_search(query, max_results=5, budget=None):
+    budget = budget or TextBudget(0)
+    results = search(query, max_results=max_results, with_text=budget.remaining > 0)
     return "\n\n".join(
-        f"{r['title']}\n{r['content']}\n{r['url']}" for r in results
+        _with_page_text(r, budget) if i < config.SEARCH_TEXT_RESULTS
+        else f"{r['title']}\n{r['content']}\n{r['url']}"
+        for i, r in enumerate(results)
     )
 
 
