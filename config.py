@@ -87,6 +87,7 @@ MAX_HISTORY = 30    # number of recent exchanges (user+assistant) sent to the mo
 HISTORY_MAX_CHARS = 40000   # combined size of that whole window, not of one message: whichever bound runs out first wins, so one bulky turn cannot crowd out the rest of the call
 PROVIDER_TIMEOUT = 15   # seconds to wait for a provider before giving up and trying the next fallback
 MAX_TOOL_ROUNDS = 10       # safety net: give up if a turn keeps asking for tools instead of answering
+MAX_LINK_CORRECTIONS = 2   # times an answer goes back to the model to justify or replace an address, before the net downstream cuts it
 MESSAGE_MAX_CHARS = 4000   # reject incoming user messages longer than this (channel-agnostic guard)
 MESSAGE_RATE_MAX = 10       # token-bucket capacity: max messages a user can burst
 MESSAGE_RATE_SECONDS = 60   # window the bucket refills over (MAX tokens per this many seconds)

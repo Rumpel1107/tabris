@@ -15,7 +15,7 @@ from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
 from core.search import TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
-from core.text import drop_unverifiable_links, find_urls
+from core.text import drop_unverifiable_links, find_urls, hosts_of, untraceable_urls
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +254,14 @@ def _execute_tool_call(tool_call, executors):
         result = fence_tool_output(result)
     return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
-def run_with_tools(role, messages, tools, extra_executors=None):
+LINK_CORRECTION = (
+    "These addresses are in your answer and in none of the results you received. Do not present "
+    "them. Search again for what is missing to complete the request, and cite only addresses the "
+    "results actually gave you.\n{urls}"
+)
+
+
+def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
     executors = {
@@ -263,10 +270,32 @@ def run_with_tools(role, messages, tools, extra_executors=None):
     }
     if extra_executors:
         executors.update(extra_executors)
-    for _ in range(config.MAX_TOOL_ROUNDS):
+    corrections = 0
+    for round_number in range(config.MAX_TOOL_ROUNDS):
         response = providers.chat(role, messages, tools=tools)
         if not response.tool_calls:
-            return response.content
+            if seen_urls is None:
+                return response.content
+            # sources are what the turn received: the model's own drafts never authorize themselves
+            allowed = seen_urls | _urls_in(m for m in messages if m.get("role") == "tool")
+            unjustified = untraceable_urls(response.content or "", allowed)
+            # a correction on the last round would leave the loop with no answer at all, and the
+            # user would read a tool-round failure instead of the reply the net can still clean
+            last_round = round_number == config.MAX_TOOL_ROUNDS - 1
+            if not unjustified or corrections >= config.MAX_LINK_CORRECTIONS or last_round:
+                return response.content
+            corrections += 1
+            # the count and the host, never the text: the log carries no conversation
+            logger.info(
+                f"links: answer returned to role {role}, {len(unjustified)} address(es) it could not justify "
+                f"({', '.join(sorted(hosts_of(unjustified)))})"
+            )
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({
+                "role": "system",
+                "content": LINK_CORRECTION.format(urls=fence_tool_output(", ".join(unjustified))),
+            })
+            continue
         messages.append({
             "role": "assistant",
             "content": response.content,
@@ -344,6 +373,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
                 "request_link_code": lambda: _run_request_link_code(db_path, session.user_id),
                 "update_profile": lambda **fields: _run_update_profile(db_path, session.user_id, **fields),
             },
+            seen_urls=seen_urls,
         )
     except Exception:
         session.conversation_history.pop()

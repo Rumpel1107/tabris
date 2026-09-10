@@ -131,15 +131,24 @@ def _get_following_redirects(url: str):
     raise RuntimeError(f"more than {config.WEB_FETCH_MAX_REDIRECTS} redirects")
 
 
+def _named(url: str) -> str:
+    """What a failed fetch may repeat back: the host, never the address it was given.
+
+    Its message is a tool result, and every address in a tool result counts as a source — so
+    echoing the address would let a fetch that failed turn an invented one into a source.
+    """
+    return urlparse(url).hostname or "that address"
+
+
 def web_fetch(url, max_chars=4000):
     try:
         response = _get_following_redirects(url)
     except BlockedURL as e:
         logger.warning(f"web_fetch refused {url} ({e})")
-        return f"Refused to fetch {url}: only public web addresses can be read."
+        return f"Refused to fetch {_named(url)}: only public web addresses can be read."
     except Exception as e:
         logger.warning(f"web_fetch failed for {url} ({e})")
-        return f"Could not fetch {url}."
+        return f"Could not fetch {_named(url)}."
     tree = lxml_html.fromstring(response.text)
     for bad in tree.xpath("//script | //style"):
         bad.getparent().remove(bad)

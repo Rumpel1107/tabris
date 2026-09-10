@@ -10,6 +10,7 @@ import config
 from core.search import search, TextBudget, web_fetch, web_search, _search_ddg, _search_tavily
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 
 class TestWebSearch(unittest.TestCase):
@@ -185,6 +186,21 @@ def test_web_fetch_refuses_a_host_that_resolves_to_both_public_and_private(mock_
         result = web_fetch("http://rebinding.example/")
     mock_get.assert_not_called()
     assert "Refused" in result
+
+
+@pytest.mark.parametrize("url, resolves_to", [
+    ("http://192.168.1.1/admin", "192.168.1.1"),
+    ("https://invented.example/articulo?id=", "93.184.216.34"),
+])
+@patch("core.search.httpx.get")
+def test_web_fetch_names_the_host_and_never_the_address_it_could_not_read(mock_get, url, resolves_to):
+    # the message is a tool result, and every address in a tool result counts as a source: a failed
+    # fetch must not be how an invented address becomes one
+    mock_get.side_effect = RuntimeError("no route")
+    with patch("core.search.socket.getaddrinfo", _resolves_to(resolves_to)):
+        result = web_fetch(url)
+    assert url not in result
+    assert urlsplit(url).hostname in result
 
 
 def _results(count, text_size=0):

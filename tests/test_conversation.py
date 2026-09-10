@@ -510,7 +510,9 @@ def test_a_link_the_model_writes_mid_turn_does_not_authorize_itself(mock_chat, m
     mock_chat.side_effect = [
         # what the model says while asking for a tool is still the model talking, not a source
         providers.ChatResponse(content=f"voy a mirar {INVENTED_LINK}", tool_calls=[tool_call]),
-        providers.ChatResponse(content=f"- Aquí está {INVENTED_LINK}", tool_calls=None),
+        # it is asked to justify or replace the address as many times as the budget allows, and insists
+        *[providers.ChatResponse(content=f"- Aquí está {INVENTED_LINK}", tool_calls=None)
+          for _ in range(1 + config.MAX_LINK_CORRECTIONS)],
     ]
     mock_search.return_value = "resultados sin direcciones"
     with tempfile.TemporaryDirectory() as tmp:
@@ -539,6 +541,118 @@ def test_the_search_executor_still_takes_the_arguments_it_always_took(mock_chat,
     # a field the model adds on its own must not kill the turn
     assert run_with_tools("general", [{"role": "user", "content": "trm?"}], tools=[WEB_SEARCH_TOOL]) == "listo"
     assert mock_search.call_args.kwargs["max_results"] == 3
+
+
+@patch("core.conversation.providers.chat")
+def test_an_untraceable_link_goes_back_to_the_model_before_the_answer_leaves(mock_chat):
+    drafts = [
+        providers.ChatResponse(content=f"- Mira esto {INVENTED_LINK}", tool_calls=None),
+        providers.ChatResponse(content="- Mira esto https://good.example/1", tool_calls=None),
+    ]
+    # run_with_tools appends to the caller's list, so the payload of each call is copied as it is sent
+    sent = []
+
+    def answer(role, messages, **kwargs):
+        sent.append([dict(m) for m in messages])
+        return drafts[len(sent) - 1]
+
+    mock_chat.side_effect = answer
+
+    reply = run_with_tools("general", [{"role": "user", "content": "dame publicaciones"}],
+                           tools=[], seen_urls={"https://good.example/1"})
+
+    assert reply == "- Mira esto https://good.example/1"
+    assert len(sent) == 2
+    correction = sent[1][-1]
+    assert correction["role"] == "system"
+    assert INVENTED_LINK in correction["content"]
+    # the address travels as fenced material, never as an instruction of the highest-trust role
+    assert "<tool_output>" in correction["content"]
+
+
+@patch("core.conversation.web_fetch")
+@patch("core.conversation.providers.chat")
+def test_a_failed_fetch_does_not_turn_an_invented_address_into_a_source(mock_chat, mock_fetch):
+    tool_call = SimpleNamespace(
+        id="c1",
+        function=SimpleNamespace(name="web_fetch", arguments=f'{{"url": "{INVENTED_LINK}"}}'),
+    )
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=f"- Publicacion {INVENTED_LINK}", tool_calls=None),
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content=f"- Publicacion {INVENTED_LINK}", tool_calls=None),
+        providers.ChatResponse(content=f"- Publicacion {INVENTED_LINK}", tool_calls=None),
+    ]
+    # what web_fetch answers when it could not read the page: the host, never the address itself
+    mock_fetch.return_value = "Could not fetch news.ycombinator.com."
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "launder.db")
+        init_db(db_path)
+        session = _session_with(db_path)
+
+        reply = handle_turn(session, "dame publicaciones", "general", db_path)
+
+    assert reply == msg("no_confirmed_sources", "es")
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_a_correction_is_not_issued_on_the_last_round_it_could_not_finish(mock_chat, mock_search):
+    tool_call = SimpleNamespace(id="c1", function=SimpleNamespace(name="web_search", arguments='{"query": "ia"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content=f"- Publicacion {INVENTED_LINK}", tool_calls=None),
+    ]
+    mock_search.return_value = "resultados sin direcciones"
+
+    # the rounds are spent searching: a correction here would fall out of the loop as a tool-round failure
+    with patch("core.conversation.config.MAX_TOOL_ROUNDS", 2):
+        reply = run_with_tools("general", [{"role": "user", "content": "5 publicaciones"}],
+                               tools=[WEB_SEARCH_TOOL], seen_urls=set())
+
+    assert INVENTED_LINK in reply
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_the_model_may_search_again_to_replace_a_link_it_could_not_justify(mock_chat, mock_search):
+    tool_call = SimpleNamespace(id="c1", function=SimpleNamespace(name="web_search", arguments='{"query": "ia"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=f"- Publicacion {INVENTED_LINK}", tool_calls=None),
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content="- Publicacion https://real.example/articulo", tool_calls=None),
+    ]
+    mock_search.return_value = "Titulo\nResumen\nhttps://real.example/articulo"
+
+    reply = run_with_tools("general", [{"role": "user", "content": "5 publicaciones"}],
+                           tools=[WEB_SEARCH_TOOL], seen_urls=set())
+
+    assert reply == "- Publicacion https://real.example/articulo"
+    assert mock_search.call_count == 1
+
+
+@patch("core.conversation.providers.chat")
+def test_the_correction_gives_up_after_the_configured_attempts(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content=f"- Insisto {INVENTED_LINK}", tool_calls=None)
+
+    reply = run_with_tools("general", [{"role": "user", "content": "dame publicaciones"}],
+                           tools=[], seen_urls=set())
+
+    # the draft still carries it: removing what survives is the net downstream, not this loop's job
+    assert INVENTED_LINK in reply
+    assert mock_chat.call_count == 1 + config.MAX_LINK_CORRECTIONS
+
+
+@patch("core.conversation.providers.chat")
+def test_an_answer_whose_links_all_check_out_costs_no_second_call(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="- Ahi va https://good.example/1", tool_calls=None)
+
+    reply = run_with_tools("general", [{"role": "user", "content": "dame uno"}],
+                           tools=[], seen_urls={"https://good.example/1"})
+
+    assert reply == "- Ahi va https://good.example/1"
+    assert mock_chat.call_count == 1
 
 
 @pytest.mark.parametrize("language, answer, expected", [

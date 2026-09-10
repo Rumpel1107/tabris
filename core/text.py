@@ -27,6 +27,17 @@ def _block_span(text: str, position: int) -> tuple[int, int]:
     return max(s for s in starts if s <= position), min(e for e in ends if e > position)
 
 
+def hosts_of(urls) -> set[str]:
+    """The host of each address: names a source in a log line without carrying any conversation."""
+    return {urlsplit(url).netloc.lower() for url in urls}
+
+
+def untraceable_urls(text: str, allowed_urls: set[str]) -> list[str]:
+    """Every address in the text that is in none of `allowed_urls`, compared as the same page."""
+    allowed = {_normalize(url) for url in allowed_urls}
+    return sorted({m.group() for m in _URL.finditer(text or "") if _normalize(m.group()) not in allowed})
+
+
 def drop_unverifiable_links(reply: str, allowed_urls: set[str]) -> tuple[str, int]:
     """Remove every block carrying a link that is in none of `allowed_urls`, and say how many went.
 

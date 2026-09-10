@@ -9,6 +9,12 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 ## [Unreleased]
 
 ### Changed
+- An answer resting on an address the turn never saw no longer reaches the user cut short: it goes back to the model, which is told which addresses it could not justify and can search again to complete what was asked, twice at most. Only what it still cannot justify after that is cut, as before — so a request for five sources comes back with five it can stand behind, instead of the three that survived the cut. The log now names the host of each rejected address, which is what tells an invented domain apart from a real site refused over a detail of its address.
+- A web page that could not be read is reported by its host rather than by the address that was tried. Its message is a tool result, and every address in a tool result counts as a source, so failing to fetch an address was a way of turning an invented one into a source it could then cite.
+
+## [v0.1.17] — 2026-09-09
+
+### Changed
 - An answer no longer carries a link the turn never saw. Every address in a reply is checked against what the turn actually had in front of it — the search results, the conversation, the message the user just wrote — and the block citing anything else is removed whole, its description with it, because an invented address arrives with an invented summary. The removal is silent; when nothing survives it, the reply says it has no sources it can confirm and offers to search again.
 - A web search now hands the model the text of the pages it found, not only the search engine's snippet: the first 4000 characters of each of the first three results, so an answer can rest on what the page says instead of on a two-line summary. A whole turn carries 16000 characters of page text at most; once spent, further searches in that turn return snippets alone, exactly as before.
 
