@@ -179,10 +179,10 @@ def build_probe(history_chars: int, mode: str = "image", image_count: int = 1,
     return messages, expected
 
 
-def call_model(client, model: str, messages: list[dict]) -> tuple[float, str]:
+def call_model(client, model: str, messages: list[dict], temperature: float = 0.7) -> tuple[float, str]:
     """Make one real call, returning how long it took and what came back."""
     started = time.monotonic()
-    response = client.chat.completions.create(model=model, messages=messages, temperature=0.7)
+    response = client.chat.completions.create(model=model, messages=messages, temperature=temperature)
     return time.monotonic() - started, (response.choices[0].message.content or "").strip()
 
 

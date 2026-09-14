@@ -48,6 +48,11 @@ the model's own knowledge as fast as possible and accepts that it may be stale.
 - **Second live case** (2026-09-11): the daily report turn at 14:50:56 UTC ran the router, one chat
   call and the memory pass — nothing else. The whole day's journal holds no `tools:` line at all,
   and the links in the report were the previous day's.
+- **Third live case** (2026-09-13): the first message of the day got the news of 2026-09-10 and
+  2026-09-11 back, and the model admitted it — "I did not run a fresh search today; if you want, I
+  will" — then searched without trouble once asked. Unlike the two cases above it did not claim
+  freshness: the rule against claiming a source held, the rule to search did not. The owner stopped
+  using Tabris for those days partly because of this.
 - **Probe, 5 runs** (2026-09-11): the same question that failed on 2026-09-09, asked with an empty
   history and no facts, searched 5 times out of 5 and answered correctly. The failure is therefore
   not constant: it appears when the window already holds something shaped like the answer.
