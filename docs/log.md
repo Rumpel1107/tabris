@@ -8,6 +8,25 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken and what is still pending live
 > in `PLAN.md` for now — §3 and §5 — until this project adopts the standard layout.
 
+## 2026-09-13 — Production moves to a rented host
+
+Item 37b, slices 1–4, in one evening: the deployment procedure of item 37 re-run on a machine the
+owner already pays for, the database carried by `tools/backup.py`, the old service stopped before
+the new one started, and a real reboot that put Tabris back on Discord five seconds after the unit
+started. Counts matched on both sides — 2 users, 28 active facts, 718 messages — and the first two
+replies from the new host, one of them a forced search, closed the cutover. The old deployment stays
+installed and disabled for seven days as the way back (M3); slice 5 removes it.
+
+Two things the procedure did not say and the move needed. A shell glob in front of `sudo` expands
+as the caller, who cannot read `/opt/tabris`, so it reaches the command unexpanded — run the whole
+line as root or as the service user. And the engine's backup call is the only copy that is whole:
+the `-wal` file exists only while a connection is open, so a listing without it proves nothing
+about what a plain copy would have caught mid-write.
+
+The connectivity probe moves with everything else and stays on. Its reason — counting a home
+network's outages — is gone; it stays because the new host's uptime is so far an expectation, and
+a month of its log turns that into a number before anyone decides to retire it.
+
 ## 2026-09-07 — What was never Tabris's leaves the plan
 
 Sections 2, 6 and 7 moved to the workspace plan one level up: the owner's constraints, the
