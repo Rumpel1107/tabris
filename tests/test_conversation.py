@@ -464,6 +464,11 @@ def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
     assert tool_message["tool_call_id"] == "call_2"
 
 
+# the verdict is pinned where a test sequences the model's replies and is not about freshness (item 35j)
+STABLE_VERDICT = patch("core.conversation.freshness.classify", new=lambda user_input: "stable")
+
+
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -570,6 +575,7 @@ def test_an_untraceable_link_goes_back_to_the_model_before_the_answer_leaves(moc
     assert "<tool_output>" in correction["content"]
 
 
+@STABLE_VERDICT
 @patch("core.conversation.web_fetch")
 @patch("core.conversation.providers.chat")
 def test_a_failed_fetch_does_not_turn_an_invented_address_into_a_source(mock_chat, mock_fetch):
@@ -738,6 +744,7 @@ def test_run_with_tools_logs_which_tools_it_ran(mock_chat, caplog):
     assert "web_search" in caplog.text
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_remember_fact_tool_saves_fact_for_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -797,6 +804,7 @@ def test_handle_turn_remember_fact_tool_tolerates_an_already_known_fact(mock_cha
         assert len(get_facts(db_path, user_id)) == 1
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -839,6 +847,7 @@ def _profile_session_and_tool_call(db_path, arguments):
     return user_id, session, tool_call
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -864,6 +873,7 @@ def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
         assert "America/Bogota" in tool_message["content"]
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -1065,6 +1075,74 @@ def test_run_in_background_logs_exceptions_instead_of_losing_them(caplog):
         run_in_background(work).join()
 
     assert "boom" in caplog.text
+
+
+# item 35j: a fresh verdict removes the model's choice on the first round; the code guarantees the search happens
+FORCED_SEARCH = {"type": "function", "function": {"name": "web_search"}}
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_forces_the_search_on_the_first_round_only(mock_chat, mock_search):
+    tool_call = SimpleNamespace(
+        id="call_1",
+        function=SimpleNamespace(name="web_search", arguments='{"query": "TRM hoy"}'),
+    )
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[tool_call]),
+        providers.ChatResponse(content="La TRM hoy es 4.100", tool_calls=None),
+    ]
+    mock_search.return_value = "TRM 4.100"
+
+    result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True)
+
+    assert result == "La TRM hoy es 4.100"
+    assert mock_chat.call_args_list[0][1]["tool_choice"] == FORCED_SEARCH
+    assert mock_chat.call_args_list[1][1]["tool_choice"] is None
+
+
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_leaves_the_choice_to_the_model_when_nothing_is_forced(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="Tomorrow I cannot go", tool_calls=None)
+
+    run_with_tools("general", [{"role": "user", "content": "Tradúceme: mañana no puedo ir"}], tools=[WEB_SEARCH_TOOL])
+
+    assert mock_chat.call_args[1]["tool_choice"] is None
+
+
+@pytest.mark.parametrize("verdict, tool_choice", [
+    ("fresh", FORCED_SEARCH),
+    ("no verdict", FORCED_SEARCH),
+    ("stable", None),
+])
+@patch("core.conversation.providers.chat")
+def test_handle_turn_forces_the_search_unless_the_verdict_is_stable(mock_chat, verdict, tool_choice, caplog):
+    mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "freshness.db")
+        init_db(db_path)
+        session = Session(user_id=create_user(db_path, "Rumpel", "es"), language="es", conversation_history=[{"role": "system", "content": "sys"}])
+
+        with patch("core.conversation.freshness.classify", return_value=verdict), caplog.at_level(logging.INFO, logger="core.conversation"):
+            handle_turn(session, "¿Cuánto vale el dólar hoy?", "general", db_path)
+
+    assert f"freshness: {verdict}" in caplog.text
+    assert mock_chat.call_args[1]["tool_choice"] == tool_choice
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_classifies_the_users_own_words(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "freshness.db")
+        init_db(db_path)
+        session = Session(user_id=create_user(db_path, "Rumpel", "es"), language="es", conversation_history=[{"role": "system", "content": "sys"}])
+
+        with patch("core.conversation.freshness.classify", return_value="stable") as mock_classify:
+            handle_turn(session, "What do you remember about me?", "general", db_path, images=["data:image/png;base64,AAA"])
+
+    # the message as the user wrote it: no time stamp, no image, no history
+    mock_classify.assert_called_once_with("What do you remember about me?")
 
 
 if __name__ == "__main__":

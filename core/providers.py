@@ -43,17 +43,19 @@ def _get_client(provider):
         )
     return _clients[provider]
 
-def _call_provider(provider, model, messages, tools=None, temperature=None, timeout=None):
+def _call_provider(provider, model, messages, tools=None, temperature=None, timeout=None, tool_choice=None):
     # Omitted rather than sent as null, so a caller without a temperature keeps the provider default.
     sampling = {} if temperature is None else {"temperature": temperature}
     if timeout is not None:
         sampling["timeout"] = timeout   # the client's own ceiling stands for every role that declares none
+    if tool_choice is not None:
+        sampling["tool_choice"] = tool_choice   # the model still writes the arguments; the call itself is no longer its choice
     client = _get_client(provider)
     response = client.chat.completions.create(model=model, messages=messages, tools=tools, **sampling)
     message = response.choices[0].message
     return ChatResponse(content=message.content, tool_calls=message.tool_calls)
 
-def chat(role, messages, tools=None):
+def chat(role, messages, tools=None, tool_choice=None):
     attempts = config.AGENT_ROLES[role]["providers"]
     temperature = config.AGENT_ROLES[role].get("temperature")
     timeout = config.AGENT_ROLES[role].get("timeout")
@@ -62,7 +64,9 @@ def chat(role, messages, tools=None):
         provider = attempt["provider"]
         model = attempt["model"]
         try:
-            return _call_provider(provider, model, messages, tools=tools, temperature=temperature, timeout=timeout)
+            return _call_provider(
+                provider, model, messages, tools=tools, temperature=temperature, timeout=timeout, tool_choice=tool_choice,
+            )
         except Exception as e:
             last_error = e
             logger.warning(f"{provider} failed ({e}); trying next fallback...")

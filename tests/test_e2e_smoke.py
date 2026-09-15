@@ -29,6 +29,7 @@ class TestChatE2ESmoke(unittest.TestCase):
         mock_input.side_effect = ["Hola", msg("exit_command", "es")]
         mock_chat.side_effect = [
             providers.ChatResponse(content="general", tool_calls=None),
+            providers.ChatResponse(content="stable", tool_calls=None),               # freshness verdict
             providers.ChatResponse(content="Reply from Tabris", tool_calls=None),
             providers.ChatResponse(content="exit", tool_calls=None),
             providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None)
@@ -101,6 +102,7 @@ class TestNewUserLanguageE2E(unittest.TestCase):
                                    tool_calls=None),                                 # resolve_location, one call for both
             providers.ChatResponse(content="ok", tool_calls=None),                   # interpret_confirmation accepts the read-back
             providers.ChatResponse(content="general", tool_calls=None),              # route_message for the real request
+            providers.ChatResponse(content="stable", tool_calls=None),               # freshness verdict
             providers.ChatResponse(content="Respuesta de Tabris", tool_calls=None),  # model reply
             providers.ChatResponse(content="exit", tool_calls=None),                 # route_message for "salir"
             providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None),      # memory_manager on exit

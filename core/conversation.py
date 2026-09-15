@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
-from core import memory_manager, providers
+from core import freshness, memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
@@ -261,7 +261,10 @@ LINK_CORRECTION = (
 )
 
 
-def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None):
+FORCED_SEARCH = {"type": "function", "function": {"name": "web_search"}}
+
+
+def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
     executors = {
@@ -272,7 +275,9 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None):
         executors.update(extra_executors)
     corrections = 0
     for round_number in range(config.MAX_TOOL_ROUNDS):
-        response = providers.chat(role, messages, tools=tools)
+        # item 35j: the first round can only compose the query; whether it searches is not the model's call
+        tool_choice = FORCED_SEARCH if force_search and round_number == 0 else None
+        response = providers.chat(role, messages, tools=tools, tool_choice=tool_choice)
         if not response.tool_calls:
             if seen_urls is None:
                 return response.content
@@ -362,6 +367,9 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     call_messages = _attach_images(build_messages(session.conversation_history), session.images.get(position, []))
     # what the turn already had in front of it; what the model itself writes below is never a source
     seen_urls = _urls_in(call_messages)
+    # item 35j: only the user's own words reach the classifier, and anything short of `stable` searches
+    verdict = freshness.classify(user_input)
+    logger.info(f"freshness: {verdict}")
     try:
         reply = run_with_tools(
             role,
@@ -374,6 +382,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
                 "update_profile": lambda **fields: _run_update_profile(db_path, session.user_id, **fields),
             },
             seen_urls=seen_urls,
+            force_search=verdict != "stable",
         )
     except Exception:
         session.conversation_history.pop()

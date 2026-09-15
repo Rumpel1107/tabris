@@ -128,5 +128,26 @@ def test_call_provider_sends_the_timeout_it_was_given(mock_get_client):
     assert mock_get_client.return_value.chat.completions.create.call_args[1]["timeout"] == 40
 
 
+FORCED_SEARCH = {"type": "function", "function": {"name": "web_search"}}
+
+
+@patch("core.providers._get_client")
+def test_call_provider_sends_the_tool_choice_it_was_given(mock_get_client):
+    providers._call_provider("groq", "m", [{"role": "user", "content": "hola"}], tool_choice=FORCED_SEARCH)
+    assert mock_get_client.return_value.chat.completions.create.call_args[1]["tool_choice"] == FORCED_SEARCH
+
+
+@patch("core.providers._get_client")
+def test_call_provider_omits_the_tool_choice_rather_than_sending_null(mock_get_client):
+    providers._call_provider("groq", "m", [{"role": "user", "content": "hola"}])
+    assert "tool_choice" not in mock_get_client.return_value.chat.completions.create.call_args[1]
+
+
+@patch("core.providers._call_provider")
+def test_chat_passes_the_tool_choice_through(mock_call):
+    chat("general", [{"role": "user", "content": "hola"}], tool_choice=FORCED_SEARCH)
+    assert mock_call.call_args[1]["tool_choice"] == FORCED_SEARCH
+
+
 if __name__ == "__main__":
     unittest.main()
