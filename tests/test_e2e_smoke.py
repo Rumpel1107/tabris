@@ -10,6 +10,7 @@ from channels import cli
 from core import providers
 from core.db import register_user_channel, get_messages
 from core.strings import msg
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -46,6 +47,36 @@ class TestChatE2ESmoke(unittest.TestCase):
         contents = [m["content"] for m in get_messages(self.db_path, user_id)]
         self.assertIn("Hola", contents)
         self.assertIn("Reply from Tabris", contents)
+
+    @patch("core.conversation.web_search", return_value="TRM hoy: 4.100 (2026-09-15)")
+    @patch("core.providers.chat")
+    @patch("builtins.input")
+    @patch("channels.cli.get_client_key", return_value="test-key-123")
+    def test_a_fresh_question_is_searched_before_it_is_answered(self, mock_key, mock_input, mock_chat, mock_search):
+        # item 35j through the real CLI flow: verdict, forced first round, executed search, reply
+        mock_input.side_effect = ["¿Cuánto vale el dólar hoy?", msg("exit_command", "es")]
+        search_call = SimpleNamespace(id="call_1", function=SimpleNamespace(name="web_search", arguments='{"query": "TRM hoy"}'))
+        mock_chat.side_effect = [
+            providers.ChatResponse(content="general", tool_calls=None),
+            providers.ChatResponse(content="fresh", tool_calls=None),                 # freshness verdict
+            providers.ChatResponse(content=None, tool_calls=[search_call]),           # forced first round
+            providers.ChatResponse(content="Hoy la TRM está en 4.100", tool_calls=None),
+            providers.ChatResponse(content="exit", tool_calls=None),
+            providers.ChatResponse(content="HAS_CHANGES: no", tool_calls=None),
+        ]
+
+        from core.db import init_db, create_user, register_user_channel
+        init_db(self.db_path)
+        user_id = create_user(self.db_path, "TestUser", "es")
+        register_user_channel(self.db_path, user_id, "cli", "test-key-123")
+
+        with patch.object(config, "DB_PATH", self.db_path):
+            cli.chat()
+
+        forced_round = mock_chat.call_args_list[2]
+        self.assertEqual(forced_round[1]["tool_choice"], {"type": "function", "function": {"name": "web_search"}})
+        self.assertEqual(mock_search.call_args.kwargs["query"], "TRM hoy")
+        self.assertIn("Hoy la TRM está en 4.100", [m["content"] for m in get_messages(self.db_path, user_id)])
     
     @patch("core.providers.chat")
     def test_retire_fact_e2e(self, mock_chat):

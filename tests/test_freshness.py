@@ -47,3 +47,17 @@ def test_classify_asks_the_router_role_and_names_what_it_read(mock_chat, answer,
 @patch("core.freshness.providers.chat", side_effect=RuntimeError("all providers down"))
 def test_classify_returns_no_verdict_when_the_call_fails(mock_chat):
     assert freshness.classify("¿Cuánto vale el dólar hoy?") == "no verdict"
+
+
+@patch("core.freshness.providers.chat")
+def test_classify_returns_no_verdict_when_the_answer_is_not_text(mock_chat):
+    mock_chat.return_value = providers.ChatResponse(content=[{"type": "text", "text": "fresh"}], tool_calls=None)
+    assert freshness.classify("What is the exchange rate today?") == "no verdict"
+
+
+@pytest.mark.parametrize("user_input", ["", "   \n"])
+@patch("core.freshness.providers.chat")
+def test_a_turn_with_no_words_is_stable_without_asking(mock_chat, user_input):
+    # a captionless photo, a voice note that transcribed to nothing: nothing in it can have changed
+    assert freshness.classify(user_input) == "stable"
+    mock_chat.assert_not_called()

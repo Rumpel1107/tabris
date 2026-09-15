@@ -5,7 +5,7 @@
 > Conversations with the user happen in **Spanish**; all code, commits and docs are in **English**.
 > Working agreement: **one step at a time, wait for user confirmation, explain every command/concept.**
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 Sections 2, 6 and 7 moved to the workspace plan on 2026-09-07: they described the owner, the
 portfolio and the gate for any repository, none of which is Tabris's to hold. The numbering keeps
@@ -329,6 +329,7 @@ Pending fixes (expert code review, 2026-06-10) — small, high-learning-value ta
 35k. ⬜ **A precise claim the turn never received** (added 2026-09-11, split from 35j because each half acts at a different moment of the turn). What the model remembers about a rare stable fact — an exact figure, a citation, a title, an article number — fails with the confidence of being right, and unlike 35j it is invisible in the question and shows only in the answer, so its remedy is a check before the reply leaves, the shape of the fence in 35i. Unverified here: how often it happens in this project has never been probed, and the probe is the first slice.
 
 35m. ⬜ **Replace the dead second link of `vision`** (added 2026-09-14, found while probing forced tool use for item 35j: `minimax/minimax-m3:free` answers 404 to every call, with or without tools — the provider moved it to a paid slug — so every photo the primary does not serve falls straight to the third link, a free pool). Choose a replacement, paid or free, the way the roster was chosen on 2026-09-02: `tools/probe_models.py --grid` for reading quality first, then availability and cost from the live catalog; a paid model is acceptable within the budget ceiling. Until then the chain has two working links and the failure is silent in the journal beyond the ordinary provider warning.
+35n. ⬜ **The roster probe measures forced tool choice** (added 2026-09-15, from the review of item 35j slice 1). Since 35j a `fresh` turn sends `tool_choice` to whichever link of `general` or `vision` answers, and `tools/probe_models.py` never sends it, so the gate that admits a model to a roster cannot see one that rejects the parameter — such a link would turn every `fresh` turn into a total failure instead of a degraded answer. Today's links were measured by hand on 2026-09-14; the gap is for the next roster change, 35m included. Add a `--tool-choice` mode to the probe and run it on 35m's replacement before it enters.
 
 ### Phase 4 — Always-on (deploy, then speaking first)
 36. ✅ (2026-08-18) Host chosen: one always-on machine running the service directly, host-agnostic by design (D6). The rented-host comparison is parked rather than discarded — it reopens when someone outside the maintainer depends on uptime. Reopened and settled on 2026-09-13 (D13, item 37b).

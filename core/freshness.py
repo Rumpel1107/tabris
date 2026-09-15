@@ -33,9 +33,10 @@ def parse_verdict(answer: str | None) -> str | None:
 
 def classify(user_input: str) -> str:
     """Ask the router role whether the answer can have changed since training: 'fresh', 'stable' or 'no verdict' (item 35j)."""
+    if not user_input.strip():
+        return "stable"   # no words, nothing that can have changed
     try:
-        answer = providers.chat("router", classifier_prompt(user_input)).content
+        return parse_verdict(providers.chat("router", classifier_prompt(user_input)).content) or NO_VERDICT
     except Exception as error:
         logger.warning(f"freshness classification failed ({error})")
         return NO_VERDICT
-    return parse_verdict(answer) or NO_VERDICT

@@ -508,6 +508,7 @@ def _session_with(db_path, language="es"):
     )
 
 
+@STABLE_VERDICT
 @patch("core.conversation.web_search")
 @patch("core.conversation.providers.chat")
 def test_a_link_the_model_writes_mid_turn_does_not_authorize_itself(mock_chat, mock_search):
@@ -774,6 +775,7 @@ def test_handle_turn_remember_fact_tool_saves_fact_for_session_user(mock_chat):
         assert [fact["content"] for fact in get_facts(db_path, user_id)] == ["El usuario juega GT New Horizons"]
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_remember_fact_tool_tolerates_an_already_known_fact(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -894,6 +896,7 @@ def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock
         assert "wait for their answer" in mock_chat.call_args_list[1][0][1][-1]["content"].lower()
 
 
+@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_rejects_an_unsupported_language(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
