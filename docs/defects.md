@@ -30,6 +30,7 @@
 
 | DEF-10 | 2026-09-09 | `core/conversation.py` | Asked for five publications, the answer carried five links; one was `news.ycombinator.com/item?id=` with no id, and the descriptions around them summarised articles nobody had opened | Nothing compared the answer against what the turn had received: the search returns a title, a snippet and an address, and the reply is written from those plus whatever the model supplies. Item 35b answered this same shape with a line in `prompts/persona.md`, which is the DEF-9 class — an instruction among forty | The search now hands over the first 4000 characters of the page itself; the answer is checked before it leaves and, when an address is in none of the results, it goes back to the model — which may search again to complete the request — and only what it still cannot justify is cut, `v0.1.17`–`v0.1.18` | reported | claims-what-it-cannot-check | fixed |
 | DEF-11 | 2026-09-09 | `prompts/persona.md` | Asked for the TRM of 30 and 31 December 2025, answered $4,420.00 and $4,409.15 — the real ones are $3,706.97 and $3,757.08 — heading both replies "Confirmado con fuentes" | The journal shows no `tools:` line for either turn: it never searched. A question about a past date reads as something already known, and nothing anywhere checks a claim of having confirmed something. Same class as DEF-10 and same day, but no address is involved, so the fence built for DEF-10 cannot see it | open | reported | claims-what-it-cannot-check | open |
+| DEF-12 | 2026-09-15 | `core/memory_manager.py` | A merge whose replacement is the wording of one of the facts it retires leaves nothing active: the insert collides with the unique index, the error is swallowed as a duplicate, and the retire runs anyway | DEF-6's fence sits in `analyze_memory` and only sees a pass with no new facts; here `new_facts` is not empty, so the retire reaches `apply_memory_changes` unchecked | A fact is never retired by its own wording: `apply_memory_changes` skips any retire whose active content is among the new facts, and logs how many it kept | review — seven of eight candidate reviewer models named it while being measured on the commit that introduced item 35c | fence-sees-one-shape | fixed |
 
 ## Class
 
@@ -43,6 +44,7 @@ The class names the shape of the mistake, not the area of code. Reuse one whenev
 | drops-out-of-view-silently | Something the user believes is still in the conversation has left it, and nothing says so | DEF-7 |
 | claims-what-it-cannot-check | The model asserts something about its own context, tools or capabilities that it has no way to verify | DEF-8, DEF-10, DEF-11 |
 | instruction-competes-and-loses | An instruction that is present and correct is not followed, because it is one among many | DEF-9 |
+| fence-sees-one-shape | A fence built for the first shape a problem took lets the second shape of the same problem through | DEF-12 |
 
 ## Notes
 

@@ -308,6 +308,20 @@ def test_apply_skips_duplicate_and_saves_the_rest(db):
     assert "Es Scrum Master" in contents
 
 
+@pytest.mark.parametrize("wording", ["Trabaja en TaxL como Scrum Master", "Works on TaxL as a Scrum Master"])
+def test_apply_never_retires_a_fact_by_its_own_wording(db, wording):
+    # the merge whose replacement is one of the facts it retires: the insert collides, the retire must not follow
+    db_path, user_id = db
+    save_fact(db_path, user_id, wording)
+    kept_id = get_facts(db_path, user_id)[0]["id"]
+    save_fact(db_path, user_id, "Trabaja en TaxL")
+    merged_id = get_facts(db_path, user_id)[1]["id"]
+
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[wording], retire_ids=[kept_id, merged_id]))
+
+    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording]
+
+
 def test_forget_fact_retires_and_returns_content(db):
     db_path, user_id = db
     save_fact(db_path, user_id, "Trabaja en TaxL")
