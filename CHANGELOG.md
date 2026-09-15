@@ -8,13 +8,19 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 
 ## [Unreleased]
 
+## [v0.1.19] — 2026-09-15
+
 ### Changed
 - A question whose answer can have changed since the model was trained — a rate, a price, a score, the news, who holds a position — is searched before it is answered, even when the conversation already holds a value that looks like the answer. A cheap call decides this from the user's own words, and on a yes the first thing the model does is search; it no longer gets to choose. Questions whose answer cannot have changed — a translation, an opinion, a summary — take the same path as before. The log records the verdict of every turn (`freshness:`).
-- An answer resting on an address the turn never saw no longer reaches the user cut short: it goes back to the model, which is told which addresses it could not justify and can search again to complete what was asked, twice at most. Only what it still cannot justify after that is cut, as before — so a request for five sources comes back with five it can stand behind, instead of the three that survived the cut. The log now names the host of each rejected address, which is what tells an invented domain apart from a real site refused over a detail of its address.
-- A web page that could not be read is reported by its host rather than by the address that was tried. Its message is a tool result, and every address in a tool result counts as a source, so failing to fetch an address was a way of turning an invented one into a source it could then cite.
 
 ### Fixed
-- A memory merge whose result was the wording of one of the facts it replaced no longer erases that fact: the pass kept nothing because the duplicate was refused and the retire still ran. A fact is now never retired by its own wording, and the log says when that guard acted.
+- A memory merge whose result was the wording of one of the facts it replaced no longer erases that fact: the pass kept nothing because the duplicate was refused and the retire still ran. A fact is now never retired by its own wording, a pass that saved nothing new retires nothing, and the log says when either guard acted.
+
+## [v0.1.18] — 2026-09-10
+
+### Changed
+- An answer resting on an address the turn never saw no longer reaches the user cut short: it goes back to the model, which is told which addresses it could not justify and can search again to complete what was asked, twice at most. Only what it still cannot justify after that is cut, as before — so a request for five sources comes back with five it can stand behind, instead of the three that survived the cut. The log now names the host of each rejected address, which is what tells an invented domain apart from a real site refused over a detail of its address.
+- A web page that could not be read is reported by its host rather than by the address that was tried. Its message is a tool result, and every address in a tool result counts as a source, so failing to fetch an address was a way of turning an invented one into a source it could then cite.
 
 ## [v0.1.17] — 2026-09-09
 
