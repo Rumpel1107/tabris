@@ -283,12 +283,20 @@ def test_apply_saves_new_facts(db):
     assert "Likes short answers" in [f["content"] for f in get_facts(db_path, user_id)]
 
 
-def test_apply_retires_ids(db):
+def test_apply_retires_ids_beside_a_saved_replacement(db):
+    db_path, user_id = db
+    save_fact(db_path, user_id, "Hecho a retirar")
+    fact_id = get_facts(db_path, user_id)[0]["id"]
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=["Hecho que lo reemplaza"], retire_ids=[fact_id]))
+    assert [f["content"] for f in get_facts(db_path, user_id)] == ["Hecho que lo reemplaza"]
+
+
+def test_apply_refuses_a_pass_that_retires_and_saves_nothing(db):
     db_path, user_id = db
     save_fact(db_path, user_id, "Hecho a retirar")
     fact_id = get_facts(db_path, user_id)[0]["id"]
     apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[], retire_ids=[fact_id]))
-    assert get_facts(db_path, user_id) == []
+    assert [f["content"] for f in get_facts(db_path, user_id)] == ["Hecho a retirar"]
 
 
 def test_apply_empty_is_noop(db):
@@ -319,7 +327,22 @@ def test_apply_never_retires_a_fact_by_its_own_wording(db, wording):
 
     apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[wording], retire_ids=[kept_id, merged_id]))
 
-    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording]
+    # nothing new was saved, so nothing is retired: the duplicate stays, the data does not go
+    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording, "Trabaja en TaxL"]
+
+
+@pytest.mark.parametrize("wording", ["Trabaja en TaxL como Scrum Master", "Works on TaxL as a Scrum Master"])
+def test_apply_retires_only_when_the_pass_saved_something_new(db, wording):
+    db_path, user_id = db
+    save_fact(db_path, user_id, wording)
+    kept_id = get_facts(db_path, user_id)[0]["id"]
+    save_fact(db_path, user_id, "Trabaja en TaxL")
+    merged_id = get_facts(db_path, user_id)[1]["id"]
+
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[wording, "Vive en Bogotá"], retire_ids=[kept_id, merged_id]))
+
+    # a real replacement was saved: the merge goes through, except for the fact retired by its own wording
+    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording, "Vive en Bogotá"]
 
 
 def test_forget_fact_retires_and_returns_content(db):

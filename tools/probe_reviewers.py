@@ -1,3 +1,4 @@
+"""Run as `python -m tools.probe_reviewers --out DIR` from the repository root, like the other probes."""
 import argparse
 import config
 import logging
@@ -49,6 +50,8 @@ CASES = [
                      r"prefix|\[id\]|\[\d+\]|strip|bracket"),
             _finding("DEF-6", "retire ids are applied even when no new fact came back, so facts are deleted with nothing in their place",
                      r"empty|nothing (in|to) (its|their) place|without (a |any )?(replacement|new)|retire.{0,80}(no|without).{0,20}new|data loss|lose|lost"),
+            _finding("DEF-12", "a replacement that collides with an active fact is swallowed as a duplicate and the retire still runs",
+                     r"IntegrityError|duplicate.{0,120}(retir|deactivat)|(retir|deactivat).{0,120}duplicate|swallow"),
         ],
     },
     {
@@ -148,8 +151,11 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     client = _client()
     cases = [c for c in CASES if c["commit"] in args.cases]
+    if not cases:
+        sys.exit(f"no case matches {args.cases}; known: {', '.join(c['commit'] for c in CASES)}")
     inputs = {c["commit"]: build_case_input(c["commit"]) for c in cases}
     expected = sum(len(c["findings"]) for c in cases) * args.rounds
+    answered = 0
     for model in args.models:
         hits, times, tokens_in, tokens_out, errors = [], [], 0, 0, 0
         out_dir = args.out / model.replace("/", "__")
@@ -159,12 +165,13 @@ def main(argv=None) -> int:
                 started = time.monotonic()
                 try:
                     response = client.chat.completions.create(model=model, messages=review_messages(inputs[case["commit"]]))
+                    answer = (response.choices[0].message.content or "").strip()
                 except Exception as error:
                     errors += 1
                     logger.warning(f"{model} on {case['commit']}: {type(error).__name__}: {error}")
                     continue
                 times.append(time.monotonic() - started)
-                answer = (response.choices[0].message.content or "").strip()
+                answered += 1
                 if response.usage:
                     tokens_in += response.usage.prompt_tokens or 0
                     tokens_out += response.usage.completion_tokens or 0
@@ -180,7 +187,7 @@ def main(argv=None) -> int:
             summary += f", {errors} error(s)"
         print(f"{model:<32} {summary}")
     print(f"\nanswers in {args.out} — the hints point, the reader decides")
-    return 0
+    return 0 if answered else 1
 
 
 if __name__ == "__main__":

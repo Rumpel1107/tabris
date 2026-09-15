@@ -151,15 +151,20 @@ Omit NEW_FACTS if none. Omit RETIRE_IDS if none. No explanation outside this for
 
 def apply_memory_changes(db_path, user_id, changes: MemoryChanges) -> None:
     """Persist distilled changes: save new facts, soft-delete retired ones."""
+    saved = 0
     for fact in changes.new_facts:
         try:
             save_fact(db_path, user_id, fact)
+            saved += 1
         except sqlite3.IntegrityError:
             logger.info(f"memory: user {user_id} — duplicate fact not saved again")
+    if changes.retire_ids and not saved:   # DEF-12: DEF-6's rule again, where what was saved is known
+        logger.warning(f"memory: user {user_id} — kept {len(changes.retire_ids)} retire(s) from a pass that saved nothing new")
+        return
     wording_of = {f["id"]: f["content"] for f in get_facts(db_path, user_id)}
     kept = [fact_id for fact_id in changes.retire_ids if wording_of.get(fact_id) in changes.new_facts]   # DEF-12
     if kept:
-        logger.info(f"memory: user {user_id} — kept {len(kept)} fact(s) a pass proposed to retire by their own wording")
+        logger.warning(f"memory: user {user_id} — kept {len(kept)} fact(s) a pass proposed to retire by their own wording")
     for fact_id in changes.retire_ids:
         if fact_id not in kept:
             deactivate_fact(db_path, user_id, fact_id)
