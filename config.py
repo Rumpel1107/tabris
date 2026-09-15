@@ -44,8 +44,8 @@ AGENT_ROLES = {
         "timeout": 40,      # a real call with images took 26 seconds against the global ceiling of 15
         "providers": [
             {"provider": "openrouter", "model": "openai/gpt-5-nano"},
-            {"provider": "openrouter", "model": "minimax/minimax-m3:free"},
-            {"provider": "openrouter", "model": "dots-studio/dots-3-note-preview:free"},
+            {"provider": "openrouter", "model": "z-ai/glm-5.3-flash"},          # item 35m
+            {"provider": "openrouter", "model": "bytedance-seed/seed-1.6-flash"},  # item 35m
         ],
     },
     "router": {

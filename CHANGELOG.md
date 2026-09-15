@@ -8,6 +8,11 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 
 ## [Unreleased]
 
+## [v0.1.20] — 2026-09-15
+
+### Changed
+- The two fallback models for a turn carrying an image are replaced. The second had answered "not found" to every call since the provider moved it to a paid name, and the third took minutes to answer, past the forty seconds a turn waits — so a photo the first model could not serve got no answer at all. The two that replace them read a grid of small codes as well as the first, obey a forced search, and answer in about four seconds.
+
 ## [v0.1.19] — 2026-09-15
 
 ### Changed

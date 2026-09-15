@@ -8,6 +8,20 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken and what is still pending live
 > in `PLAN.md` for now — §3 and §5 — until this project adopts the standard layout.
 
+## 2026-09-15 — The vision chain had one working link
+
+Items 35n and 35m, in that order. The roster probe gained `--tool-choice`, the call a fresh turn
+makes since 35j, and its first run on the `vision` roster showed what the journal could not: the
+second link answered 404 to everything, and the third obeyed the forcing half the time and took
+four to eight minutes to answer, past the forty seconds the role waits. For a photo the primary
+could not serve there was no answer at all, and nothing but the ordinary provider warning said so.
+
+Five candidates went through `--grid` and `--tool-choice`. One read nothing, one ignored the
+forcing — each caught by the probe the other would have passed — and three tied on both. The owner
+chose by price and family over a three-second difference: `glm-5.3-flash` second,
+`seed-1.6-flash` third, which puts a fourth model family in the system. A tie on the property that
+decides is a tie; what separated the three was what the probes do not measure.
+
 ## 2026-09-15 — A fresh question is searched before it is answered
 
 Item 35j, slice 1, in service as `v0.1.19`. A router-sized call reads the user's own words and says
