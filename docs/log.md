@@ -8,6 +8,29 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken and what is still pending live
 > in `PLAN.md` for now — §3 and §5 — until this project adopts the standard layout.
 
+## 2026-09-15 — A fresh question is searched before it is answered
+
+Item 35j, slice 1, in service as `v0.1.19`. A router-sized call reads the user's own words and says
+`fresh` or `stable`; on anything but `stable` the first tool round is sent with `tool_choice`
+naming `web_search`, so the search is no longer the model's choice. Verified live under the
+defect's own condition — today's report already in the window — by text, by voice note and beside
+a photo: `freshness: fresh` followed by `tools: … web_search` on the rate question, `stable` and no
+tool line on a translation and on "what is this?" with a picture. The verdict costs 0.3 s; the
+image turn skips the router and pays only the classifier.
+
+Two things the build found that the documents did not say. The classifier consumes one model reply
+inside `handle_turn`, so every test that scripts the replies in sequence had to pin the verdict —
+six went red and were pinned, three stayed green with their tool never running, and only the first
+review caught them (DEF-13). And a captionless photo reaches the classifier as an empty string,
+which is now `stable` in code without a call, against D6's default, because there is nothing in it
+that can have changed.
+
+The review itself changed shape this week: three models outside the author's family, chosen by
+measuring eight on commits that had broken in production, run from `method/tools/review.py`. Its
+first two runs each found one defect no test would have — the three rotted tests above, and a
+second shape of DEF-6 in the DEF-12 fix. The tag was cut at slice 1 rather than at close, because
+the live verification needs code in service; slice 3 cuts the next one.
+
 ## 2026-09-13 — Production moves to a rented host
 
 Item 37b, slices 1–4, in one evening: the deployment procedure of item 37 re-run on a machine the
