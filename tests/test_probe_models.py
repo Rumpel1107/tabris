@@ -121,6 +121,44 @@ def test_probing_a_model_reports_how_long_it_took_and_whether_it_read(capsys):
     assert "2/2" in printed
 
 
+def test_a_forced_call_sends_the_search_tool_and_names_what_the_model_called():
+    # item 35n: the gate must send what production sends since 35j, and see whether the model obeyed
+    from types import SimpleNamespace
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=None)))
+    tool_call = SimpleNamespace(function=SimpleNamespace(name="web_search"))
+    reply = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[tool_call]))])
+    sent = {}
+
+    def create(**kwargs):
+        sent.update(kwargs)
+        return reply
+    client.chat.completions.create = create
+
+    _, called = probe_models.call_forced(client, "vendor/obeys", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}])
+
+    assert called == "web_search"
+    assert sent["tools"] == [probe_models.WEB_SEARCH_TOOL]
+    assert sent["tool_choice"] == probe_models.FORCED_SEARCH
+
+
+def test_a_forced_call_reports_a_model_that_answered_in_text_instead():
+    from types import SimpleNamespace
+    reply = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="4.100", tool_calls=None))])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: reply)))
+
+    _, called = probe_models.call_forced(client, "vendor/ignores", [{"role": "user", "content": "hola"}])
+
+    assert called is None
+
+
+def test_probing_with_tool_choice_counts_the_rounds_the_model_obeyed(capsys):
+    with patch("tools.probe_models.call_forced", side_effect=[(1.0, "web_search"), (1.0, None)]):
+        assert probe_models.main(["probe", "openrouter", "vendor/sees:free", "--rounds", "2", "--tool-choice"]) == 0
+    printed = capsys.readouterr().out
+    assert "obeyed" in printed
+    assert "1/2" in printed
+
+
 def test_a_model_that_never_answers_is_reported_without_crashing(capsys):
     with patch("tools.probe_models.call_model", side_effect=RuntimeError("Error code: 413 - too large")):
         assert probe_models.main(["probe", "groq", "vendor/nope", "--rounds", "2"]) == 1

@@ -10,6 +10,7 @@ import sys
 import time
 import zlib
 
+from core.conversation import FORCED_SEARCH, WEB_SEARCH_TOOL
 from core.providers import PROVIDER_CONFIG
 from openai import OpenAI
 
@@ -186,6 +187,16 @@ def call_model(client, model: str, messages: list[dict], temperature: float = 0.
     return time.monotonic() - started, (response.choices[0].message.content or "").strip()
 
 
+def call_forced(client, model: str, messages: list[dict], temperature: float = 0.7) -> tuple[float, str | None]:
+    """The call a fresh turn makes since item 35j: the search tool forced. Returns what the model called, or None if it answered in text."""
+    started = time.monotonic()
+    response = client.chat.completions.create(
+        model=model, messages=messages, temperature=temperature, tools=[WEB_SEARCH_TOOL], tool_choice=FORCED_SEARCH,
+    )
+    calls = response.choices[0].message.tool_calls or []
+    return time.monotonic() - started, (calls[0].function.name if calls else None)
+
+
 def _client(provider: str):
     settings = PROVIDER_CONFIG[provider]
     return OpenAI(
@@ -220,6 +231,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Height of the drawn digits; a small value asks for screenshot-sized print (default 70)")
     probing.add_argument("--grid", action="store_true",
                          help="Read three named cells out of a grid of small codes: tests locating, not just seeing")
+    probing.add_argument("--tool-choice", action="store_true",
+                         help="Force the search tool as a fresh turn does (item 35j): reports whether the model called it instead of answering")
     return parser
 
 
@@ -241,19 +254,26 @@ def _probe(args) -> int:
                                      image_count=args.images, scale=args.scale)
     carrying = {"text": "text only", "grid": "plus a grid of small codes, three cells asked"}.get(
         mode, f"plus {args.images} image(s) drawn at {args.scale}px")
+    if args.tool_choice:
+        carrying += ", search tool forced"
     print(f"{args.rounds} rounds, {args.history:,} characters of history, {carrying}\n")
-    print(f"{'model':<48} {'served':>7} {'read':>7} {'median':>8} {'worst':>8}  errors")
+    print(f"{'model':<48} {'served':>7} {'obeyed' if args.tool_choice else 'read':>7} {'median':>8} {'worst':>8}  errors")
     dead = False
     for model in args.models:
         times, reads, errors = [], 0, []
         for _ in range(args.rounds):
             try:
-                seconds, answer = call_model(client, model, messages)
+                if args.tool_choice:
+                    seconds, called = call_forced(client, model, messages)
+                    read = called == "web_search"
+                else:
+                    seconds, answer = call_model(client, model, messages)
+                    read = all(reads_code(answer, code) for code in expected)
             except Exception as error:
                 errors.append(classify_error(error))
                 continue
             times.append(seconds)
-            reads += all(reads_code(answer, code) for code in expected)
+            reads += read
         served = f"{len(times)}/{args.rounds}"
         if times:
             shape = f"{statistics.median(times):7.1f}s {max(times):7.1f}s"
