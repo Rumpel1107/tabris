@@ -17,6 +17,7 @@ from core import providers
 from core.conversation import build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
+from core.search import FailedFetch
 from core.onboarding import ResolvedLocation
 from core.prompt import format_date
 from core.session import Session
@@ -81,6 +82,7 @@ def test_build_messages_tolerates_a_turn_that_carries_no_text(monkeypatch):
     ]
     result = build_messages(history)
     assert len(result) == 3
+
 
 class TestRouteMessage(unittest.TestCase):
     @patch("core.conversation.providers.chat")
@@ -158,7 +160,7 @@ class TestHandleTurn(unittest.TestCase):
             language="es",
             conversation_history=[{"role": "system", "content": "sys"}],
         )
-    
+
     def tearDown(self):
         self.tmp.cleanup()
     
@@ -464,11 +466,6 @@ def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
     assert tool_message["tool_call_id"] == "call_2"
 
 
-# the verdict is pinned where a test sequences the model's replies and is not about freshness (item 35j)
-STABLE_VERDICT = patch("core.conversation.freshness.classify", new=lambda user_input: "stable")
-
-
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_request_link_code_tool_issues_code_for_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -508,7 +505,6 @@ def _session_with(db_path, language="es"):
     )
 
 
-@STABLE_VERDICT
 @patch("core.conversation.web_search")
 @patch("core.conversation.providers.chat")
 def test_a_link_the_model_writes_mid_turn_does_not_authorize_itself(mock_chat, mock_search):
@@ -576,7 +572,6 @@ def test_an_untraceable_link_goes_back_to_the_model_before_the_answer_leaves(moc
     assert "<tool_output>" in correction["content"]
 
 
-@STABLE_VERDICT
 @patch("core.conversation.web_fetch")
 @patch("core.conversation.providers.chat")
 def test_a_failed_fetch_does_not_turn_an_invented_address_into_a_source(mock_chat, mock_fetch):
@@ -745,7 +740,6 @@ def test_run_with_tools_logs_which_tools_it_ran(mock_chat, caplog):
     assert "web_search" in caplog.text
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_remember_fact_tool_saves_fact_for_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -775,7 +769,6 @@ def test_handle_turn_remember_fact_tool_saves_fact_for_session_user(mock_chat):
         assert [fact["content"] for fact in get_facts(db_path, user_id)] == ["El usuario juega GT New Horizons"]
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_remember_fact_tool_tolerates_an_already_known_fact(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -806,7 +799,6 @@ def test_handle_turn_remember_fact_tool_tolerates_an_already_known_fact(mock_cha
         assert len(get_facts(db_path, user_id)) == 1
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -849,7 +841,6 @@ def _profile_session_and_tool_call(db_path, arguments):
     return user_id, session, tool_call
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -875,7 +866,6 @@ def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
         assert "America/Bogota" in tool_message["content"]
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -896,7 +886,6 @@ def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock
         assert "wait for their answer" in mock_chat.call_args_list[1][0][1][-1]["content"].lower()
 
 
-@STABLE_VERDICT
 @patch("core.conversation.providers.chat")
 def test_handle_turn_update_profile_tool_rejects_an_unsupported_language(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
@@ -1130,7 +1119,8 @@ def test_handle_turn_forces_the_search_unless_the_verdict_is_stable(mock_chat, v
             handle_turn(session, "¿Cuánto vale el dólar hoy?", "general", db_path)
 
     assert f"freshness: {verdict}" in caplog.text
-    assert mock_chat.call_args[1]["tool_choice"] == tool_choice
+    # the first round carries the forcing; a double that never searches earns a correction round after it
+    assert mock_chat.call_args_list[0][1]["tool_choice"] == tool_choice
 
 
 @patch("core.conversation.providers.chat")
@@ -1146,6 +1136,162 @@ def test_handle_turn_classifies_the_users_own_words(mock_chat):
 
     # the message as the user wrote it: no time stamp, no image, no history
     mock_classify.assert_called_once_with("What do you remember about me?")
+
+
+def _search_call(query):
+    return SimpleNamespace(id="call_1", function=SimpleNamespace(name="web_search", arguments=f'{{"query": "{query}"}}'))
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_corrects_a_forced_turn_that_answered_without_searching(mock_chat, mock_search, caplog):
+    mock_chat.side_effect = [
+        providers.ChatResponse(content="La TRM hoy es 4.100", tool_calls=None),
+        providers.ChatResponse(content=None, tool_calls=[_search_call("TRM hoy")]),
+        providers.ChatResponse(content="La TRM hoy es 3.116", tool_calls=None),
+    ]
+    mock_search.return_value = "TRM 3.116"
+    messages = [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}]
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+
+    assert result == "La TRM hoy es 3.116"
+    assert "freshness: forced search missing, corrected" in caplog.text
+    # the answer without a search never leaves the loop, and the correction rides as an instruction
+    assert messages[1] == {"role": "assistant", "content": "La TRM hoy es 4.100"}
+    assert messages[2]["role"] == "system"
+
+
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_asks_for_the_answer_without_the_value_it_could_not_verify(mock_chat, caplog):
+    mock_chat.side_effect = [
+        providers.ChatResponse(content="The meeting is tomorrow. El dólar hoy está a 4.100", tool_calls=None),
+        providers.ChatResponse(content="The meeting is tomorrow. El dólar hoy está a 4.100", tool_calls=None),
+        providers.ChatResponse(content="The meeting is tomorrow. No pude obtener la TRM de hoy", tool_calls=None),
+    ]
+    messages = [{"role": "user", "content": "traduce 'la reunión es mañana' y dime la TRM de hoy"}]
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+
+    # what the turn verified survives: only the value nothing backed is dropped, and the model drops it
+    assert result == "The meeting is tomorrow. No pude obtener la TRM de hoy"
+    assert "freshness: forced search missing, corrected" in caplog.text
+    assert "freshness: forced search missing, answer without the value requested" in caplog.text
+
+
+@pytest.mark.parametrize("language, notice", [
+    ("es", "No pude obtener ese dato ahora"),
+    ("en", "I could not get that value now"),
+])
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_withholds_only_after_the_rewrite_is_ignored_too(mock_chat, language, notice, caplog):
+    mock_chat.return_value = providers.ChatResponse(content="The rate today is 4,100", tool_calls=None)
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        result = run_with_tools("general", [{"role": "user", "content": "what is the rate today?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language=language)
+
+    assert notice in result
+    assert "4,100" not in result
+    # search, rewrite, and only then the notice
+    assert mock_chat.call_count == 3
+    assert "freshness: forced search missing, withheld" in caplog.text
+
+
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_names_what_the_turn_applied_when_it_withholds(mock_chat):
+    remember = SimpleNamespace(id="call_1", function=SimpleNamespace(name="remember_fact", arguments='{"content": "se mudó a Medellín"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[remember]),
+        providers.ChatResponse(content="Anotado. El dólar hoy está a 4.100", tool_calls=None),
+        providers.ChatResponse(content="Anotado. El dólar hoy está a 4.100", tool_calls=None),
+        providers.ChatResponse(content="Anotado. El dólar hoy está a 4.100", tool_calls=None),
+    ]
+
+    result = run_with_tools(
+        "general",
+        [{"role": "user", "content": "recuerda que me mudé a Medellín y dime la TRM de hoy"}],
+        tools=[WEB_SEARCH_TOOL, REMEMBER_FACT_TOOL],
+        extra_executors={"remember_fact": lambda content: "saved"},
+        force_search=True,
+        language="es",
+    )
+
+    # the code executed it, so the code states it: the notice never denies what already happened
+    assert msg("fresh_value_withheld", "es") in result
+    assert msg("still_applied", "es", actions=msg("action_remember_fact", "es")) in result
+
+
+@patch("core.conversation.web_fetch")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_accepts_a_page_read_as_the_outside_content_of_the_turn(mock_chat, mock_fetch):
+    fetch_call = SimpleNamespace(id="call_1", function=SimpleNamespace(name="web_fetch", arguments='{"url": "https://example.com/trm"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[fetch_call]),
+        providers.ChatResponse(content="La TRM de hoy es 3.116", tool_calls=None),
+    ]
+    mock_fetch.return_value = "TRM de hoy: 3.116"
+
+    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es")
+
+    # the value was obtained this turn; that it came from a page and not from a search changes nothing
+    assert result == "La TRM de hoy es 3.116"
+    assert mock_chat.call_count == 2
+
+
+@patch("core.conversation.web_fetch")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_does_not_take_a_failed_page_read_as_outside_content(mock_chat, mock_fetch):
+    fetch_call = SimpleNamespace(id="call_1", function=SimpleNamespace(name="web_fetch", arguments='{"url": "https://example.com/trm"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[fetch_call]),
+        providers.ChatResponse(content="La TRM de hoy es 4.100", tool_calls=None),
+        providers.ChatResponse(content="La TRM de hoy es 4.100", tool_calls=None),
+        providers.ChatResponse(content="La TRM de hoy es 4.100", tool_calls=None),
+    ]
+    # the reading failed: what comes back is a message about the failure, not the page
+    mock_fetch.return_value = FailedFetch("Could not fetch example.com.")
+
+    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es")
+
+    assert result == msg("fresh_value_withheld", "es")
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_lets_the_answer_through_when_the_search_ran_and_brought_nothing(mock_chat, mock_search, caplog):
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[_search_call("TRM hoy")]),
+        providers.ChatResponse(content="No pude obtener la TRM de hoy; la de ayer fue 3.109", tool_calls=None),
+    ]
+    # every provider failed, or nothing exists: the tool ran and brought nothing back
+    mock_search.return_value = ""
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+
+    # what the model says about the missing value is its own; the journal counts the turn
+    assert result == "No pude obtener la TRM de hoy; la de ayer fue 3.109"
+    assert mock_chat.call_count == 2
+    assert "freshness: required search brought nothing" in caplog.text
+
+
+@patch("core.conversation.web_search")
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_counts_an_empty_required_search_once_per_turn(mock_chat, mock_search, caplog):
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[_search_call("TRM hoy")]),
+        # an address nothing in the turn backs: the link cycle sends this answer back, the count must not repeat
+        providers.ChatResponse(content="La TRM está en https://inventado.example/trm", tool_calls=None),
+        providers.ChatResponse(content="No pude obtener la TRM de hoy", tool_calls=None),
+    ]
+    mock_search.return_value = ""
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], seen_urls=set(), force_search=True, language="es")
+
+    assert caplog.text.count("freshness: required search brought nothing") == 1
 
 
 if __name__ == "__main__":

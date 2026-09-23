@@ -8,6 +8,9 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 
 ## [Unreleased]
 
+### Changed
+- A question whose answer can have changed is no longer answered from memory when the model skips the search it was told to run. The answer goes back to the model twice: first to search, then — if it still did not — to write the same answer again without the value nothing backs, so everything else that was asked still arrives. Only an answer that comes back word for word is withheld, and the notice then names what the turn did apply, such as a fact saved or a profile updated. A search that ran and found nothing, or a page read successfully, is not this case: the reply arrives as the model wrote it.
+
 ## [v0.1.20] — 2026-09-15
 
 ### Changed

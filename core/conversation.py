@@ -13,7 +13,7 @@ from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
 from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
-from core.search import TextBudget, web_fetch, web_search
+from core.search import FailedFetch, TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
 from core.text import drop_unverifiable_links, find_urls, hosts_of, untraceable_urls
 
@@ -261,32 +261,106 @@ LINK_CORRECTION = (
 )
 
 
+FRESHNESS_CORRECTION = (
+    "The question asks for a value that can have changed since your training, and no search "
+    "brought anything back this turn. Do not present the value from memory. Search for it now; "
+    "if the search brings nothing, say plainly that you could not obtain it."
+)
+
+
+FRESHNESS_REWRITE = (
+    "Nothing this turn backs that value, and the search did not run. Write the answer again "
+    "without it: keep everything you did verify, and say plainly that this value could not be "
+    "obtained now. Do not state it from memory."
+)
+
+
 FORCED_SEARCH = {"type": "function", "function": {"name": "web_search"}}
 
 
-def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False):
+# what the code itself applied, so a withheld reply never denies what already happened (item 35j)
+APPLIED_ACTIONS = {
+    "remember_fact": "action_remember_fact",
+    "forget_fact": "action_forget_fact",
+    "update_profile": "action_update_profile",
+    "request_link_code": "action_request_link_code",
+}
+
+
+def _withheld_notice(applied, language):
+    """The notice, followed by what the turn applied before it was withheld: the code ran it, so the code says it."""
+    notice = msg("fresh_value_withheld", language)
+    if not applied:
+        return notice
+    actions = ", ".join(msg(APPLIED_ACTIONS[name], language) for name in dict.fromkeys(applied))
+    return f"{notice} {msg('still_applied', language, actions=actions)}"
+
+
+def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False, language="en"):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
-    executors = {
-        "web_search": lambda query, max_results=5: web_search(query=query, max_results=max_results, budget=budget),
-        "web_fetch": web_fetch,
-    }
+    # what the turn searched and whether anything came back: the net reads the first, the journal the second
+    searches = []
+    read_a_page = False
+
+    def _search(query, max_results=5):
+        result = web_search(query=query, max_results=max_results, budget=budget)
+        searches.append(bool(result))
+        return result
+
+    def _fetch(url, **kwargs):
+        nonlocal read_a_page
+        result = web_fetch(url=url, **kwargs)
+        # a page read is outside content like a search result; a reading that failed is not
+        read_a_page = read_a_page or not isinstance(result, FailedFetch)
+        return result
+
+    executors = {"web_search": _search, "web_fetch": _fetch}
     if extra_executors:
         executors.update(extra_executors)
+    applied = []
     corrections = 0
+    fresh_stage = 0
+    rewrite_source = None
+    counted_empty = False
     for round_number in range(config.MAX_TOOL_ROUNDS):
         # item 35j: the first round can only compose the query; whether it searches is not the model's call
         tool_choice = FORCED_SEARCH if force_search and round_number == 0 else None
         response = providers.chat(role, messages, tools=tools, tool_choice=tool_choice)
         if not response.tool_calls:
+            # a correction on the last round would leave the loop with no answer at all, and the
+            # user would read a tool-round failure instead of the reply the net can still clean
+            last_round = round_number == config.MAX_TOOL_ROUNDS - 1
+            # item 35j: a forced turn with no outside content behind it is sent back to search, then to
+            # write the answer without the value; only a model that refuses both has its reply withheld.
+            # A search that ran and brought nothing is the model's to state, and the journal counts it.
+            answer = response.content or ""
+            if force_search and not searches and not read_a_page:
+                if fresh_stage == 0 and not last_round:
+                    fresh_stage = 1
+                    logger.info("freshness: forced search missing, corrected")
+                    messages.append({"role": "assistant", "content": answer})
+                    messages.append({"role": "system", "content": FRESHNESS_CORRECTION})
+                    continue
+                if fresh_stage == 1 and not last_round:
+                    fresh_stage = 2
+                    rewrite_source = answer
+                    logger.info("freshness: forced search missing, answer without the value requested")
+                    messages.append({"role": "assistant", "content": answer})
+                    messages.append({"role": "system", "content": FRESHNESS_REWRITE})
+                    continue
+                # an answer that came back word for word was not rewritten: only then is it withheld
+                if fresh_stage != 2 or answer == rewrite_source:
+                    logger.info("freshness: forced search missing, withheld")
+                    return _withheld_notice(applied, language)
+            if force_search and not counted_empty and not read_a_page and searches and not any(searches):
+                counted_empty = True
+                logger.info("freshness: required search brought nothing")
             if seen_urls is None:
                 return response.content
             # sources are what the turn received: the model's own drafts never authorize themselves
             allowed = seen_urls | _urls_in(m for m in messages if m.get("role") == "tool")
             unjustified = untraceable_urls(response.content or "", allowed)
-            # a correction on the last round would leave the loop with no answer at all, and the
-            # user would read a tool-round failure instead of the reply the net can still clean
-            last_round = round_number == config.MAX_TOOL_ROUNDS - 1
             if not unjustified or corrections >= config.MAX_LINK_CORRECTIONS or last_round:
                 return response.content
             corrections += 1
@@ -308,6 +382,8 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
         })
         for tool_call in response.tool_calls:
             messages.append(_execute_tool_call(tool_call, executors))
+            if tool_call.function.name in APPLIED_ACTIONS:
+                applied.append(tool_call.function.name)
         # The only trace a tool ran: tool messages stay inside the turn and are never persisted.
         logger.info(f"tools: role {role} ran {', '.join(call.function.name for call in response.tool_calls)}")
     raise RuntimeError(f"role {role} kept asking for tools after {config.MAX_TOOL_ROUNDS} rounds")
@@ -383,6 +459,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
             },
             seen_urls=seen_urls,
             force_search=verdict != "stable",
+            language=session.language,
         )
     except Exception:
         session.conversation_history.pop()

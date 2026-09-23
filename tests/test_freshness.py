@@ -8,6 +8,8 @@ from core import freshness, providers
 from core.prompt import fence_user_input
 from unittest.mock import patch
 
+pytestmark = pytest.mark.real_verdict
+
 
 def test_the_prompt_fences_the_message_as_data():
     messages = freshness.classifier_prompt("¿A cuánto está el dólar hoy?")

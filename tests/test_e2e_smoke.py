@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import pytest
 import tempfile
 import unittest
 
@@ -12,6 +13,9 @@ from core.db import register_user_channel, get_messages
 from core.strings import msg
 from types import SimpleNamespace
 from unittest.mock import patch
+
+# the smoke drives the whole flow, the classifier's call included: its verdicts are scripted below
+pytestmark = pytest.mark.real_verdict
 
 
 class TestChatE2ESmoke(unittest.TestCase):

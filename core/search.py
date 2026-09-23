@@ -140,15 +140,19 @@ def _named(url: str) -> str:
     return urlparse(url).hostname or "that address"
 
 
+class FailedFetch(str):
+    """A reading that brought no page. It reads as its message for the model, and says so to the code (item 35j)."""
+
+
 def web_fetch(url, max_chars=4000):
     try:
         response = _get_following_redirects(url)
     except BlockedURL as e:
         logger.warning(f"web_fetch refused {url} ({e})")
-        return f"Refused to fetch {_named(url)}: only public web addresses can be read."
+        return FailedFetch(f"Refused to fetch {_named(url)}: only public web addresses can be read.")
     except Exception as e:
         logger.warning(f"web_fetch failed for {url} ({e})")
-        return f"Could not fetch {_named(url)}."
+        return FailedFetch(f"Could not fetch {_named(url)}.")
     tree = lxml_html.fromstring(response.text)
     for bad in tree.xpath("//script | //style"):
         bad.getparent().remove(bad)
