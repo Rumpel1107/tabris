@@ -8,6 +8,16 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-09-24 — The old deployment is retired, closing 37b
+
+Item 37b, slice 5, the last piece of the move to the rented host (D13). M3's seven-day window from
+the 2026-09-13 cutover closed on 2026-09-20; the retirement itself ran four days after that. On the
+homelab host: the four units (`tabris`, `tabris-backup`, `tabris-probe`, `tabris-purge` — service
+and timer) were confirmed `disabled` and unloaded before their unit files were deleted, then
+`/opt/tabris`, the `tabris` system user and `/var/backups/tabris` were removed. `id tabris` and
+`ls -d` on both paths came back not-found, which is the item's own exit condition — nothing of the
+old install is left on that host, and Tabris keeps answering from the new one, unaffected.
+
 ## 2026-09-15 — The vision chain had one working link
 
 Items 35n and 35m, in that order. The roster probe gained `--tool-choice`, the call a fresh turn

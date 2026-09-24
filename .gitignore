@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 *_client_id
 .env
+*.local.md

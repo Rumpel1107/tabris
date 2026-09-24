@@ -42,7 +42,7 @@ for, at a glance.
 | 1 — Stabilize & complete base system | Early bugs fixed; conversation history bounded for the first time | ✅ |
 | 2 — API migration | Zero local-model dependency; provider fallback (D1, D2) | ✅ |
 | 3 — Memory v1 + Internet + Discord | SQLite memory, web search, Discord as the first real channel | 🔶 — `docs/roadmap.md` #1–10 |
-| 4 — Always-on | Deploy as a system service; Tabris speaks first | 🔶 — `docs/roadmap.md` #11–19 |
+| 4 — Always-on | Deploy as a system service; Tabris speaks first | 🔶 — `docs/roadmap.md` #11–18 |
 | 5 — Portfolio (Tabris's part) | Public repo, README, a git history clean of personal data | ✅ — further presentation is the workspace `PLAN.md`'s "Portfolio site" |
 
 > Freeze exit criterion (Phase 4): Rumpel talks to Tabris from his phone with his PC off, and
