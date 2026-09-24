@@ -1,6 +1,35 @@
 # Contributing to Tabris
 
-How this project is built and how to keep building it — for any collaborator, human or agent. **This file is the single source of truth for how the project is run:** setup, tests, code conventions, architecture patterns and documentation upkeep. For goals, decisions and roadmap see `PLAN.md`. The *rationale* behind these rules lives in `PLAN.md` (§3 decisions, §4 architecture) — this file states the actionable rule and points there instead of repeating the why.
+How this project is built and how to keep building it — for any collaborator, human or agent. **This file is the single source of truth for how the project is run:** setup, tests, code conventions and documentation upkeep. For what the product is see `PLAN.md`; for what is pending, `docs/roadmap.md`; for why something was decided, `docs/decisions.md`; for the principles this project does not negotiate, `memory/constitution.md` — this file states the actionable rule and points there instead of repeating the why.
+
+## Layout
+
+```
+channels/        thin adapters, one per channel — cli.py, discord_ch.py
+                 started with `python -m channels.<name>`
+core/            channel-agnostic — conversation, onboarding, memory_manager, db,
+                 account, providers, search, prompt, session, strings, text
+tools/           operator-side, unreachable from any chat — admin.py (account
+                 lifecycle), backup.py, setup.sh
+deploy/          the service definition that keeps Tabris running unattended
+config.py        roles, providers, limits (committed)  ·  .env — secrets (gitignored)
+prompts/         persona.md, loaded into the system prompt
+docs/<item>/     the `/method` trail behind one roadmap item — framing, spec, plan, tasks
+data/            DATA_DIR, overridable per environment — the database, the channel
+                 identity file and the exports; owner-only, created locked down
+tests/           mirrors the modules one to one
+```
+
+Per-turn flow, identical on every channel:
+```
+incoming message
+  └── adapter: resolve (channel, key) → Session
+        ├── no user yet → advance_onboarding()          (shared state machine)
+        └── route_message() → safe_handle_turn()
+              └── handle_turn(): rebuild system prompt (persona + facts + profile + now)
+                    └── run_with_tools() ⇄ providers.chat() → ordered fallback chain
+                          └── after replying: distillation runs in a background thread
+```
 
 ## Dev setup
 
@@ -45,21 +74,18 @@ This is the number a release gets; `README.md` covers how a release is put into 
 - **Nothing personal in committed files.** This repository is public. Never write the maintainer's infrastructure (machine names, host/container layout, mount paths, absolute paths from a personal setup) or personal data (real names, real locations) into code, tests, or docs. Document the general mechanism instead — it leaks nothing and is more useful to anyone cloning the project.
 - **Examples come in both languages.** Every example written into a model instruction or a test — a few-shot case, a sample message, a fixture — carries a Spanish and an English version. Tabris runs in both (English default, Spanish supported), so a set of examples in one language teaches that language's shape and leaves the other unexercised.
 
-## Architecture patterns
+## Architecture — mechanisms
 
-- **Deterministic first; the model only where judgment is required.** When the answer is defined by a rule that can be written down — a format, a bounded set, a comparison — write it in code. Reserve model calls for open-ended language, where enumerating the cases breaks instead of scaling (the keyword router became an LLM router in item 29 for exactly that reason). Every model output that reaches stored data passes a deterministic check on the way in: ids are filtered against what was actually shown, counts are capped, formats are parsed rather than trusted. Adding a second model call to a path one call already handles is a cost, not a refinement — three independent calls over the same text is how a city and its time zone ended up on different continents (item 34i).
-- **Channel-agnostic core (D5).** `core/` must not know which channel (CLI, Telegram) the input came from. Channels are thin adapters that call the core. Per-session state lives in `core/session.py`'s `Session`, never in module globals.
-- **Provider abstraction + fallback (D2/D10).** Model providers (`core/providers.py`), search providers (`core/search.py`) and transcription providers (`core/transcribe.py`) share one shape: an ordered list in `config.py`, tried in order, falling through to the next on error or quota. To add a provider, mirror the existing structure and normalize its response to the common shape — don't special-case call sites. A role that needs longer than the global `PROVIDER_TIMEOUT` declares its own `timeout` beside its providers; it is a property of the role, not of the payload, so two callers can never disagree about the same call.
-- **A model enters a roster only after `tools/probe_models.py` has served it, and never on the strength of documentation.** `probe_models list` reads the provider's live catalog, which is the only trustworthy source for a model id and for whether it takes images — a search result has twice named a model that does not exist. But no catalog says whether *your* key on *your* tier will be served: a free tier's per-minute token ceiling is what makes a model useless here, and it appears in no model page. `probe_models probe` calls it with a turn-shaped payload and reports whether it answered, how fast, and whether it read the image. Run it before a roster changes, and again whenever a provider changes its tiers or the size of a turn changes — a roster verified against a smaller turn can be silently dead against a larger one. Since item 35j a fresh turn forces the search tool on whichever link answers, so a `general` or `vision` candidate is also probed with `--tool-choice`: a model that rejects the parameter turns every fresh turn into a failure, and the probe is the only place that shows it before production does (item 35n).
-- **The freshness classifier is measured before it changes, never reworded on a hunch (item 35j).** Its prompt lives in `core/freshness.py` and `tools/probe_freshness.py` imports it from there, so what the probe measures is what production runs. The prompt and the `router` roster change only after the probe has run against the new wording or model; a clause that reads as an improvement has already been measured to move noise rather than behaviour. Every real miss the journal shows — a `freshness: stable` on a turn that needed a search, or the reverse — becomes a case in the probe's lot, so the lot grows from production and not from imagination.
-- **Config vs secrets (D3).** Structure and non-secret config live in `config.py` (committed). Secrets live in `.env` (gitignored); `.env.example` documents the required variables. Never commit a key.
-- **Schema changes are additive.** `ADD COLUMN`, a new table or a new index. Anything that drops or renames ships in its own change, after the code that used it is already in service. *Why: `deploy.sh` returns the code and cannot return the database — after a destructive migration its automatic rollback puts old code on a new schema and reports success. The daily backup is the only way back.*
-- **Data paths derive from `config.DATA_DIR`, never from `BASE_DIR` (item 37).** Everything a user owns — the database, the channel identity file, the exports — hangs off `DATA_DIR`, which reads `TABRIS_DATA_DIR` and falls back to the repository's `data/`. A deployment keeps its data beside the clone, not inside it, so a hardcoded path breaks it. `BASE_DIR` is only for files that ship with the code, like `prompts/persona.md`.
-- **Personal data is created locked down.** The database, `.env`, the channel identity file and every data export are owner-only (`600`, or `700` for a directory), applied at the moment the file is created rather than by a later sweep. Any copy or sync recreates a file with the system default, so permissions drift; setting them at creation is the only version that survives. Careful with directories: a mode passed at creation is ignored when the directory already exists, so enforce it explicitly.
-- **Database access.** Every `core/db.py` function goes through the `_connect` helper (sets `PRAGMA foreign_keys = ON` and `row_factory`). Facts are append-only: retire via `is_active = 0` (soft-delete, scoped by `user_id`), never edit content in place or hard delete (§4.3).
-- **A schema change is an additive, idempotent step inside `init_db`.** `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a new column is an `ALTER TABLE` guarded by a check of `PRAGMA table_info`. It runs on every start and must stay safe to repeat. Add the column to the `CREATE TABLE` as well, so a fresh database and a migrated one end up identical.
-- **Two deliberate exceptions to the soft-delete rule, both of them privacy deletions.** Marking a row inactive leaves the data exactly where it was, which is not a deletion at all when the point is that the data stops existing. `delete_user_completely` erases every row of one user in a single transaction; `delete_messages_before` erases conversation past its retention window, retired messages included — `is_active = 0` says a turn left the conversation, never that its text stopped being text. Both are reachable from `tools/admin.py` alone and no chat path may ever call either (item 34c, AC9). These two are the whole list: anything else that needs to remove data soft-deletes it, and adding a third is a decision, not a detail.
-- **Bounded context window (§4.4).** Only the system prompt + last N messages are sent to the model, to avoid silent top-truncation that drops the system prompt. The window carries **two** bounds — a message count and a combined character budget — and the one that runs out first wins. Anything bulky that rides in the history (an image, a document's extracted text) is bounded by that budget rather than by a lifetime of its own, so adding a new kind of attachment does not add a new rule.
+The principles behind these — why the core stays channel-agnostic, why facts are append-only,
+why a model never enters a roster untested — are `memory/constitution.md`. This section is only
+the "how":
+
+- **Adding a provider** (model, search or transcription) means mirroring the existing structure in `core/providers.py`, `core/search.py` or `core/transcribe.py` and normalizing its response to the common shape — never special-casing a call site. A role that needs longer than the global `PROVIDER_TIMEOUT` declares its own `timeout` beside its providers; it is a property of the role, not of the payload, so two callers can never disagree about the same call.
+- **Probing a roster candidate:** `probe_models list` reads the provider's live catalog — the only trustworthy source for a model id and for whether it takes images. `probe_models probe` calls it with a turn-shaped payload and reports whether it answered, how fast, and whether it read the image; add `--tool-choice` for any `general` or `vision` candidate, since a fresh turn forces the search tool on whichever link answers (item 35j) and a model that rejects the parameter turns every fresh turn into a failure (item 35n). Run it again whenever a provider changes its tiers or the size of a turn changes.
+- **Changing the freshness classifier:** its prompt lives in `core/freshness.py`, and `tools/probe_freshness.py` imports it from there, so what the probe measures is what production runs. Change the prompt or the `router` roster only after the probe has run against the new wording or model.
+- **A schema change** is an `ADD COLUMN`, a new table or a new index, added as an idempotent step inside `init_db`: `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a new column is an `ALTER TABLE` guarded by a check of `PRAGMA table_info`, safe to run on every start. Add the column to the `CREATE TABLE` as well, so a fresh database and a migrated one end up identical. *Why additive-only: `deploy.sh` returns the code and cannot return the database — after a destructive migration its automatic rollback puts old code on a new schema and reports success. The daily backup is the only way back.*
+- **Database access:** every `core/db.py` function goes through the `_connect` helper, which sets `PRAGMA foreign_keys = ON` and `row_factory`.
+- **Locking down a new kind of personal data:** owner-only (`600`, or `700` for a directory) applied at the moment the file is created, never by a later sweep — a mode passed at directory creation is ignored when the directory already exists, so enforce it explicitly there.
 
 ## Keeping the documentation current
 
