@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import time
 
+from dataclasses import dataclass, field
 from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
@@ -296,6 +297,13 @@ def _withheld_notice(applied, language):
     return f"{notice} {msg('still_applied', language, actions=actions)}"
 
 
+@dataclass
+class TurnResult:
+    """What the turn answered and what it ran to get there: the one place that dispatches tools is the one that says so."""
+    reply: str | None
+    tools_ran: list = field(default_factory=list)
+
+
 def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False, language="en"):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
@@ -319,6 +327,7 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
     if extra_executors:
         executors.update(extra_executors)
     applied = []
+    tools_ran = []
     corrections = 0
     fresh_stage = 0
     rewrite_source = None
@@ -352,17 +361,17 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
                 # an answer that came back word for word was not rewritten: only then is it withheld
                 if fresh_stage != 2 or answer == rewrite_source:
                     logger.info("freshness: forced search missing, withheld")
-                    return _withheld_notice(applied, language)
+                    return TurnResult(_withheld_notice(applied, language), tools_ran)
             if force_search and not counted_empty and not read_a_page and searches and not any(searches):
                 counted_empty = True
                 logger.info("freshness: required search brought nothing")
             if seen_urls is None:
-                return response.content
+                return TurnResult(response.content, tools_ran)
             # sources are what the turn received: the model's own drafts never authorize themselves
             allowed = seen_urls | _urls_in(m for m in messages if m.get("role") == "tool")
             unjustified = untraceable_urls(response.content or "", allowed)
             if not unjustified or corrections >= config.MAX_LINK_CORRECTIONS or last_round:
-                return response.content
+                return TurnResult(response.content, tools_ran)
             corrections += 1
             # the count and the host, never the text: the log carries no conversation
             logger.info(
@@ -382,6 +391,7 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
         })
         for tool_call in response.tool_calls:
             messages.append(_execute_tool_call(tool_call, executors))
+            tools_ran.append(tool_call.function.name)
             if tool_call.function.name in APPLIED_ACTIONS:
                 applied.append(tool_call.function.name)
         # The only trace a tool ran: tool messages stay inside the turn and are never persisted.
@@ -447,7 +457,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     verdict = freshness.classify(user_input)
     logger.info(f"freshness: {verdict}")
     try:
-        reply = run_with_tools(
+        result = run_with_tools(
             role,
             call_messages,
             tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
@@ -464,7 +474,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     except Exception:
         session.conversation_history.pop()
         raise
-    reply = strip_time_stamp(reply)
+    reply = strip_time_stamp(result.reply)
     # run_with_tools appended each tool result to call_messages: those are sources, the model's own lines are not
     seen_urls |= _urls_in(m for m in call_messages if m.get("role") == "tool")
     reply = _keep_only_traceable_links(reply, seen_urls, session.language)

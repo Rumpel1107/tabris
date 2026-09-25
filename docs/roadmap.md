@@ -67,18 +67,19 @@ deployed are marked below.
 | 17 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
 | 18 | **39b** — Second transcription provider: reassess Gemini 3.5 Transcribe as Groq's fallback | ⬜ |
 | 19 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
+| 20 | **38b** — An empty model reply costs the whole turn: `strip_time_stamp` receives `None` and raises, and the line sits outside the rollback, so the user's own message stays in the history. Found reviewing item 35h slice 1 on 2026-09-25; the hole predates it and has never been seen in production | ⬜ |
 
 ## Phase 5 — After the freeze (backlog, not started)
 
 | # | Item | Status |
 |---|---|---|
-| 20 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
-| 21 | **47** — Notion integration via its API | ⬜ |
-| 22 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
-| 23 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
-| 24 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
-| 25 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
-| 26 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
-| 27 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
-| 28 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
-| 29 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
+| 21 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
+| 22 | **47** — Notion integration via its API | ⬜ |
+| 23 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
+| 24 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
+| 25 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
+| 26 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
+| 27 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
+| 28 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
+| 29 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
+| 30 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |

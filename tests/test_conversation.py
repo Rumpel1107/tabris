@@ -387,8 +387,8 @@ class TestRunWithTools(unittest.TestCase):
         mock_search.return_value = "resultado de busqueda"
         
         messages = [{"role": "user", "content": "como esta el clima en Panama?"}]
-        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL])
-        
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL]).reply
+
         self.assertEqual(result, "Hace sol en Panama")
         self.assertEqual(mock_search.call_args.kwargs["query"], "clima en Panama")
         self.assertEqual(mock_chat.call_count, 2)
@@ -455,7 +455,7 @@ def test_run_with_tools_dispatches_web_fetch(mock_chat, mock_fetch):
     mock_fetch.return_value = "contenido de la pagina"
 
     messages = [{"role": "user", "content": "que dice example.com/a?"}]
-    result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL])
+    result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL]).reply
 
     assert result == "La pagina habla de X"
     mock_fetch.assert_called_once_with(url="https://example.com/a")
@@ -541,7 +541,7 @@ def test_the_search_executor_still_takes_the_arguments_it_always_took(mock_chat,
     mock_search.return_value = "resultados"
 
     # a field the model adds on its own must not kill the turn
-    assert run_with_tools("general", [{"role": "user", "content": "trm?"}], tools=[WEB_SEARCH_TOOL]) == "listo"
+    assert run_with_tools("general", [{"role": "user", "content": "trm?"}], tools=[WEB_SEARCH_TOOL]).reply == "listo"
     assert mock_search.call_args.kwargs["max_results"] == 3
 
 
@@ -561,7 +561,7 @@ def test_an_untraceable_link_goes_back_to_the_model_before_the_answer_leaves(moc
     mock_chat.side_effect = answer
 
     reply = run_with_tools("general", [{"role": "user", "content": "dame publicaciones"}],
-                           tools=[], seen_urls={"https://good.example/1"})
+                           tools=[], seen_urls={"https://good.example/1"}).reply
 
     assert reply == "- Mira esto https://good.example/1"
     assert len(sent) == 2
@@ -611,7 +611,7 @@ def test_a_correction_is_not_issued_on_the_last_round_it_could_not_finish(mock_c
     # the rounds are spent searching: a correction here would fall out of the loop as a tool-round failure
     with patch("core.conversation.config.MAX_TOOL_ROUNDS", 2):
         reply = run_with_tools("general", [{"role": "user", "content": "5 publicaciones"}],
-                               tools=[WEB_SEARCH_TOOL], seen_urls=set())
+                               tools=[WEB_SEARCH_TOOL], seen_urls=set()).reply
 
     assert INVENTED_LINK in reply
 
@@ -628,7 +628,7 @@ def test_the_model_may_search_again_to_replace_a_link_it_could_not_justify(mock_
     mock_search.return_value = "Titulo\nResumen\nhttps://real.example/articulo"
 
     reply = run_with_tools("general", [{"role": "user", "content": "5 publicaciones"}],
-                           tools=[WEB_SEARCH_TOOL], seen_urls=set())
+                           tools=[WEB_SEARCH_TOOL], seen_urls=set()).reply
 
     assert reply == "- Publicacion https://real.example/articulo"
     assert mock_search.call_count == 1
@@ -639,7 +639,7 @@ def test_the_correction_gives_up_after_the_configured_attempts(mock_chat):
     mock_chat.return_value = providers.ChatResponse(content=f"- Insisto {INVENTED_LINK}", tool_calls=None)
 
     reply = run_with_tools("general", [{"role": "user", "content": "dame publicaciones"}],
-                           tools=[], seen_urls=set())
+                           tools=[], seen_urls=set()).reply
 
     # the draft still carries it: removing what survives is the net downstream, not this loop's job
     assert INVENTED_LINK in reply
@@ -651,7 +651,7 @@ def test_an_answer_whose_links_all_check_out_costs_no_second_call(mock_chat):
     mock_chat.return_value = providers.ChatResponse(content="- Ahi va https://good.example/1", tool_calls=None)
 
     reply = run_with_tools("general", [{"role": "user", "content": "dame uno"}],
-                           tools=[], seen_urls={"https://good.example/1"})
+                           tools=[], seen_urls={"https://good.example/1"}).reply
 
     assert reply == "- Ahi va https://good.example/1"
     assert mock_chat.call_count == 1
@@ -738,6 +738,34 @@ def test_run_with_tools_logs_which_tools_it_ran(mock_chat, caplog):
         run_with_tools("general", [{"role": "user", "content": "cual es la trm de hoy"}], tools=[])
 
     assert "web_search" in caplog.text
+
+
+@patch("core.conversation.providers.chat")
+def test_run_with_tools_names_the_tools_the_turn_ran(mock_chat):
+    search = SimpleNamespace(id="call_t1", function=SimpleNamespace(name="web_search", arguments='{"query": "trm hoy"}'))
+    remember = SimpleNamespace(id="call_t2", function=SimpleNamespace(name="remember_fact", arguments='{"content": "le gusta el té"}'))
+    mock_chat.side_effect = [
+        providers.ChatResponse(content=None, tool_calls=[search, remember]),
+        providers.ChatResponse(content="La TRM de hoy es 3.116. Anotado.", tool_calls=None),
+    ]
+
+    with patch("core.conversation.web_search", return_value="TRM 3.116"):
+        result = run_with_tools(
+            "general",
+            [{"role": "user", "content": "la trm de hoy, y recuerda que me gusta el té"}],
+            tools=[],
+            extra_executors={"remember_fact": lambda content: "saved"},
+        )
+
+    assert result.reply == "La TRM de hoy es 3.116. Anotado."
+    assert result.tools_ran == ["web_search", "remember_fact"]
+
+
+def test_a_turn_that_ran_no_tool_says_so():
+    with patch("core.conversation.providers.chat", return_value=providers.ChatResponse(content="Tomorrow I cannot go", tool_calls=None)):
+        result = run_with_tools("general", [{"role": "user", "content": "Tradúceme: mañana no puedo ir"}], tools=[])
+
+    assert result.tools_ran == []
 
 
 @patch("core.conversation.providers.chat")
@@ -1086,7 +1114,7 @@ def test_run_with_tools_forces_the_search_on_the_first_round_only(mock_chat, moc
     ]
     mock_search.return_value = "TRM 4.100"
 
-    result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True)
+    result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True).reply
 
     assert result == "La TRM hoy es 4.100"
     assert mock_chat.call_args_list[0][1]["tool_choice"] == FORCED_SEARCH
@@ -1154,7 +1182,7 @@ def test_run_with_tools_corrects_a_forced_turn_that_answered_without_searching(m
     messages = [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}]
 
     with caplog.at_level(logging.INFO, logger="core.conversation"):
-        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es").reply
 
     assert result == "La TRM hoy es 3.116"
     assert "freshness: forced search missing, corrected" in caplog.text
@@ -1173,7 +1201,7 @@ def test_run_with_tools_asks_for_the_answer_without_the_value_it_could_not_verif
     messages = [{"role": "user", "content": "traduce 'la reunión es mañana' y dime la TRM de hoy"}]
 
     with caplog.at_level(logging.INFO, logger="core.conversation"):
-        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+        result = run_with_tools("general", messages, tools=[WEB_SEARCH_TOOL], force_search=True, language="es").reply
 
     # what the turn verified survives: only the value nothing backed is dropped, and the model drops it
     assert result == "The meeting is tomorrow. No pude obtener la TRM de hoy"
@@ -1190,7 +1218,7 @@ def test_run_with_tools_withholds_only_after_the_rewrite_is_ignored_too(mock_cha
     mock_chat.return_value = providers.ChatResponse(content="The rate today is 4,100", tool_calls=None)
 
     with caplog.at_level(logging.INFO, logger="core.conversation"):
-        result = run_with_tools("general", [{"role": "user", "content": "what is the rate today?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language=language)
+        result = run_with_tools("general", [{"role": "user", "content": "what is the rate today?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language=language).reply
 
     assert notice in result
     assert "4,100" not in result
@@ -1219,8 +1247,10 @@ def test_run_with_tools_names_what_the_turn_applied_when_it_withholds(mock_chat)
     )
 
     # the code executed it, so the code states it: the notice never denies what already happened
-    assert msg("fresh_value_withheld", "es") in result
-    assert msg("still_applied", "es", actions=msg("action_remember_fact", "es")) in result
+    assert msg("fresh_value_withheld", "es") in result.reply
+    assert msg("still_applied", "es", actions=msg("action_remember_fact", "es")) in result.reply
+    # a withheld reply is still a turn that ran a tool: the record does not empty out with the answer
+    assert result.tools_ran == ["remember_fact"]
 
 
 @patch("core.conversation.web_fetch")
@@ -1233,7 +1263,7 @@ def test_run_with_tools_accepts_a_page_read_as_the_outside_content_of_the_turn(m
     ]
     mock_fetch.return_value = "TRM de hoy: 3.116"
 
-    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es")
+    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es").reply
 
     # the value was obtained this turn; that it came from a page and not from a search changes nothing
     assert result == "La TRM de hoy es 3.116"
@@ -1253,7 +1283,7 @@ def test_run_with_tools_does_not_take_a_failed_page_read_as_outside_content(mock
     # the reading failed: what comes back is a message about the failure, not the page
     mock_fetch.return_value = FailedFetch("Could not fetch example.com.")
 
-    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es")
+    result = run_with_tools("general", [{"role": "user", "content": "¿la TRM de hoy? mira https://example.com/trm"}], tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL], force_search=True, language="es").reply
 
     assert result == msg("fresh_value_withheld", "es")
 
@@ -1269,7 +1299,7 @@ def test_run_with_tools_lets_the_answer_through_when_the_search_ran_and_brought_
     mock_search.return_value = ""
 
     with caplog.at_level(logging.INFO, logger="core.conversation"):
-        result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language="es")
+        result = run_with_tools("general", [{"role": "user", "content": "¿a cuánto está el dólar hoy?"}], tools=[WEB_SEARCH_TOOL], force_search=True, language="es").reply
 
     # what the model says about the missing value is its own; the journal counts the turn
     assert result == "No pude obtener la TRM de hoy; la de ayer fue 3.109"
