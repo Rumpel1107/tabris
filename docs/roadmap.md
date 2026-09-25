@@ -50,34 +50,35 @@ deployed are marked below.
 | 5 | **35f** — Search its own stored conversation: a tool beside `web_search`, SQL over `messages` scoped by user, by topic or by date. Foundation for 35g and 35k | ⬜ |
 | 6 | **35g** — What deserves to be a fact: an exploration ending in a written decision about the distillation's churn; needs 35f first | ⬜ |
 | 7 | **35h** — Recite stored memory deterministically: a `list_facts` tool rendered by code instead of trusting the model's own numbering | ⬜ |
-| 8 | **35j** — Fresh data outranks what the model remembers, slice 3 (close): correct `docs/defects.md` DEF-11's wording, mark the item, cut the tag and verify live — held by the deploy freeze above | 🔶 slices 1-2 done, not deployed |
-| 9 | **35k** — A precise claim the turn never received: first slice is a probe measuring how often a stable fact is misremembered; also unifies the correction cycles now living side by side (D8 in `docs/35j/plan.md`) | ⬜ |
-| 10 | **35l** — A fresh value can still be wrong: needs 35j in service first; decide what makes a search result verified | ⬜ |
+| 8 | **35o** — Act on the fact the user meant when they name a number: the model can read "el 3" as the third line rather than id 3, and the integer the tool receives looks valid either way; decide the control — confirm before retiring, or hand back the fact's content before acting. Needs 35h in service first | ⬜ |
+| 9 | **35j** — Fresh data outranks what the model remembers, slice 3 (close): correct `docs/defects.md` DEF-11's wording, mark the item, cut the tag and verify live — held by the deploy freeze above | 🔶 slices 1-2 done, not deployed |
+| 10 | **35k** — A precise claim the turn never received: first slice is a probe measuring how often a stable fact is misremembered; also unifies the correction cycles now living side by side (D8 in `docs/35j/plan.md`) | ⬜ |
+| 11 | **35l** — A fresh value can still be wrong: needs 35j in service first; decide what makes a search result verified | ⬜ |
 
 ## Phase 4 — Always-on (pre-freeze)
 
 | # | Item | Status |
 |---|---|---|
-| 11 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
-| 12 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
-| 13 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
-| 14 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
-| 15 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first | ⬜ |
-| 16 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
-| 17 | **39b** — Second transcription provider: reassess Gemini 3.5 Transcribe as Groq's fallback | ⬜ |
-| 18 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
+| 12 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
+| 13 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
+| 14 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
+| 15 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
+| 16 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first | ⬜ |
+| 17 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
+| 18 | **39b** — Second transcription provider: reassess Gemini 3.5 Transcribe as Groq's fallback | ⬜ |
+| 19 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
 
 ## Phase 5 — After the freeze (backlog, not started)
 
 | # | Item | Status |
 |---|---|---|
-| 19 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
-| 20 | **47** — Notion integration via its API | ⬜ |
-| 21 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
-| 22 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
-| 23 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
-| 24 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
-| 25 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
-| 26 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
-| 27 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
-| 28 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
+| 20 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
+| 21 | **47** — Notion integration via its API | ⬜ |
+| 22 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
+| 23 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
+| 24 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
+| 25 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
+| 26 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
+| 27 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
+| 28 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
+| 29 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
