@@ -13,7 +13,7 @@ from core import freshness, memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, FACTS_MARKER, fence_tool_output, fence_user_input, format_date, has_facts_marker, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
+from core.prompt import build_system_prompt, FACTS_MARKER, facts_copied, fence_tool_output, fence_user_input, format_date, has_facts_marker, render_facts, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
 from core.search import FailedFetch, TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
 from core.text import drop_unverifiable_links, find_urls, hosts_of, untraceable_urls
@@ -157,7 +157,8 @@ LIST_FACTS_TOOL = {
     },
 }
 
-def _run_list_facts():
+def _run_list_facts(**_unused):
+    # a stray argument from a drifting model costs the reply, not the turn: the tool has none to use
     # the instruction, never the facts: handing the model the format is what teaches it to write one (DEF-2)
     return (
         f"Write {FACTS_MARKER} on its own line where the list belongs, and write no fact yourself — "
@@ -440,25 +441,36 @@ def _keep_only_traceable_links(reply, seen, language):
     return reply or msg("no_confirmed_sources", language)
 
 
-def _place_facts_block(reply, tools_ran, db_path, user_id, language):
+def _place_facts_block(reply, tools_ran, db_path, user_id, language, turn_facts=()):
     """The list is the code's to write, and it is written last: nothing edits the block afterwards (item 35h)."""
     if "list_facts" not in tools_ran:
         if has_facts_marker(reply):
             # the marker alone never substitutes; a turn that wrote one uncalled is worth counting
             logger.info("facts: marker without the call, removed")
+        # how often the model lists them itself is what decides whether the tool path earns its place
+        copied = facts_copied(reply, turn_facts)
+        if len(turn_facts) > 1 and copied >= min(3, len(turn_facts)):
+            logger.info(f"facts: recited without the call, {copied} of {len(turn_facts)}")
         return strip_facts_markers(reply)
     if not has_facts_marker(reply):
         logger.info("facts: list_facts ran, no marker")
         return reply
+    try:
+        block = render_facts(get_facts(db_path, user_id), language)
+    except Exception:
+        # the answer is already paid for: the user gets it without the list, and knows why
+        logger.exception("facts: the stored facts could not be read, list not placed")
+        return substitute_facts_block(reply, msg("facts_unavailable", language))
     read_outside = sorted({name for name in tools_ran if name in UNTRUSTED_TOOLS})
     after = f", after {', '.join(read_outside)}" if read_outside else ""
     logger.info(f"facts: list_facts ran, block placed{after}")
-    return substitute_facts_block(reply, get_facts(db_path, user_id), language)
+    return substitute_facts_block(reply, block)
 
 
 def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     user_row = get_user(db_path, session.user_id)
     user_timezone = user_row["timezone"] if user_row else "UTC"
+    facts = ()
     if persona is not None:
         # The stored profile is the record; the session only caches it, so it refreshes here.
         session.language = user_row["language"]
@@ -515,7 +527,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     # run_with_tools appended each tool result to call_messages: those are sources, the model's own lines are not
     seen_urls |= _urls_in(m for m in call_messages if m.get("role") == "tool")
     reply = _keep_only_traceable_links(reply, seen_urls, session.language)
-    reply = _place_facts_block(reply, result.tools_ran, db_path, session.user_id, session.language)
+    reply = _place_facts_block(reply, result.tools_ran, db_path, session.user_id, session.language, facts)
     session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input, attachment="image" if images else None),

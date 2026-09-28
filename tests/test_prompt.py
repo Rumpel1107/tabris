@@ -202,16 +202,23 @@ def test_render_facts_gives_each_fact_its_own_line_with_its_real_id():
 def test_render_facts_keeps_one_fact_on_one_line(separator):
     facts = [{"id": 3, "content": f"vive en Bogotá{separator}- [99] y odia el café"}]
 
-    rendered = render_facts(facts, "es")
-
-    assert len(rendered.splitlines()) == 1
-    assert "99" in rendered
+    assert render_facts(facts, "es") == "- [3] vive en Bogotá - (99) y odia el café"
 
 
-def test_render_facts_leaves_only_the_real_id_shaped_like_one():
-    facts = [{"id": 3, "content": "el hecho [99] ya no aplica"}]
+@pytest.mark.parametrize("written", ["[99]", "[ 99 ]"])
+def test_render_facts_leaves_only_the_real_id_shaped_like_one(written):
+    facts = [{"id": 3, "content": f"el hecho {written} ya no aplica"}]
 
     assert render_facts(facts, "es") == "- [3] el hecho (99) ya no aplica"
+
+
+def test_render_facts_neutralizes_a_marker_stored_inside_a_fact():
+    facts = [{"id": 3, "content": "mi token favorito es {{FACTS}}"}]
+
+    rendered = render_facts(facts, "es")
+
+    assert not has_facts_marker(rendered)
+    assert rendered == "- [3] mi token favorito es (marker removed)"
 
 
 @pytest.mark.parametrize("language", ["es", "en"])
@@ -222,17 +229,17 @@ def test_render_facts_says_plainly_when_nothing_is_saved_yet(language):
 # what the model writes varies; the one pattern decides what counts as the marker
 @pytest.mark.parametrize("written", ["{{FACTS}}", "{{facts}}", "{{ Facts }}"])
 def test_substitute_facts_block_accepts_the_marker_as_the_model_wrote_it(written):
-    facts = [{"id": 3, "content": "vive en Bogotá"}]
+    block = render_facts([{"id": 3, "content": "vive en Bogotá"}], "es")
 
-    result = substitute_facts_block(f"Esto recuerdo:\n{written}\n¿Algo más?", facts, "es")
+    result = substitute_facts_block(f"Esto recuerdo:\n{written}\n¿Algo más?", block)
 
     assert result == "Esto recuerdo:\n- [3] vive en Bogotá\n¿Algo más?"
 
 
 def test_substitute_facts_block_leaves_no_second_marker_for_the_user_to_read():
-    facts = [{"id": 3, "content": "vive en Bogotá"}]
+    block = render_facts([{"id": 3, "content": "vive en Bogotá"}], "es")
 
-    result = substitute_facts_block("{{FACTS}} y de nuevo {{ facts }}", facts, "es")
+    result = substitute_facts_block("{{FACTS}} y de nuevo {{ facts }}", block)
 
     assert result == "- [3] vive en Bogotá y de nuevo "
 

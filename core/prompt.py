@@ -37,34 +37,47 @@ def _starts_a_new_day(last_message_at, local_now, timezone):
     return last_utc.astimezone(ZoneInfo(timezone)).date() < local_now.date()
 
 
-def render_facts(facts, language):
+def render_facts(facts: list, language: str) -> str:
     """The facts as the code writes them, for the user and for the model alike: one line each, the only id its own."""
     if not facts:
         return msg("no_facts_yet", language)
     return "\n".join(f"- [{fact['id']}] {_one_line(fact['content'])}" for fact in facts)
 
 
-def _one_line(content):
-    """A fact occupies one line and carries nothing else shaped like an id (item 35h)."""
-    return re.sub(r"\[(\d+)\]", r"(\1)", " ".join(content.splitlines()))
+def _one_line(content: str) -> str:
+    """A fact occupies one line and carries nothing else shaped like an id or like the marker (item 35h)."""
+    one_line = " ".join(content.splitlines())
+    # the block is inserted unscanned, so a marker stored inside a fact is neutralized here or never
+    return re.sub(r"\[\s*(\d+)\s*\]", r"(\1)", _FACTS_MARKER_PATTERN.sub("(marker removed)", one_line))
 
 
-def has_facts_marker(text):
+def facts_copied(reply: str, facts) -> int:
+    """How many stored facts the reply carries word for word — what tells a recital from a mention (item 35h)."""
+    body = _flattened(reply)
+    return sum(1 for fact in facts if _flattened(fact["content"]) in body)
+
+
+def _flattened(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").casefold().strip()
+
+
+def has_facts_marker(text: str) -> bool:
+    """Whether the model asked for the list to be placed, by the one rule that decides it everywhere."""
     return bool(_FACTS_MARKER_PATTERN.search(text or ""))
 
 
-def strip_facts_markers(text):
+def strip_facts_markers(text: str) -> str:
     """What the code never fills in never reaches the user as a raw token."""
     return _FACTS_MARKER_PATTERN.sub("", text or "")
 
 
-def substitute_facts_block(text, facts, language):
+def substitute_facts_block(text: str, block: str) -> str:
     """The first marker becomes the block; every other one is removed before the block exists (item 35h)."""
     match = _FACTS_MARKER_PATTERN.search(text or "")
     if not match:
         return text
     # all marker surgery happens on the model's text: a fact's own content is never scanned
-    return text[:match.start()] + render_facts(facts, language) + strip_facts_markers(text[match.end():])
+    return text[:match.start()] + block + strip_facts_markers(text[match.end():])
 
 
 def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None, last_message_at=None):

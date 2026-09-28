@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from config import MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import _place_facts_block, build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
 from core.search import FailedFetch
@@ -835,6 +835,32 @@ def test_handle_turn_journals_whether_the_block_was_placed(mock_chat, caplog):
 
         # the call proves the list was owed, so a reply without the marker is a countable miss
         assert "facts: list_facts ran, no marker" in caplog.text
+
+
+@pytest.mark.parametrize("reply, counted", [
+    ("Recuerdo que vive en Bogotá, que le gusta el té y que tiene dos gatos.", True),
+    ("Como me dijiste que vive en Bogotá, te propongo un plan por allá.", False),
+])
+def test_place_facts_block_counts_a_recital_the_tool_never_wrote(reply, counted, caplog):
+    facts = [
+        {"id": 1, "content": "vive en Bogotá"},
+        {"id": 2, "content": "le gusta el té"},
+        {"id": 3, "content": "tiene dos gatos"},
+    ]
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        _place_facts_block(reply, [], "unused.db", 1, "es", facts)
+
+    assert ("facts: recited without the call, 3 of 3" in caplog.text) is counted
+
+
+def test_place_facts_block_answers_the_user_when_the_facts_cannot_be_read(caplog):
+    with tempfile.TemporaryDirectory() as tmp:
+        with caplog.at_level(logging.INFO, logger="core.conversation"):
+            reply = _place_facts_block("Claro:\n{{FACTS}}", ["list_facts"], tmp, 1, "es")
+
+    assert reply == f"Claro:\n{msg('facts_unavailable', 'es')}"
+    assert "could not be read" in caplog.text
 
 
 def test_list_facts_tool_hands_the_model_no_fact_of_its_own():
