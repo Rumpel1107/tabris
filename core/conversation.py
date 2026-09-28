@@ -13,7 +13,7 @@ from core import freshness, memory_manager, providers
 from core.account import deletion_deadline
 from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, stamp_time, strip_time_stamp
+from core.prompt import build_system_prompt, FACTS_MARKER, fence_tool_output, fence_user_input, format_date, has_facts_marker, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
 from core.search import FailedFetch, TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
 from core.text import drop_unverifiable_links, find_urls, hosts_of, untraceable_urls
@@ -143,6 +143,26 @@ FORGET_FACT_TOOL = {
         },
     },
 }
+
+LIST_FACTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_facts",
+        "description": "Show the user every fact stored about them, exactly as it is stored. Use it whenever they ask what you remember or know about them. It takes no arguments and returns no facts: it answers with where to place the list, and the list itself is filled in for you.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+}
+
+def _run_list_facts():
+    # the instruction, never the facts: handing the model the format is what teaches it to write one (DEF-2)
+    return (
+        f"Write {FACTS_MARKER} on its own line where the list belongs, and write no fact yourself — "
+        "not one, not a summary, not a count. The stored list is placed there for you."
+    )
 
 REQUEST_LINK_CODE_TOOL = {
     "type": "function",
@@ -420,6 +440,22 @@ def _keep_only_traceable_links(reply, seen, language):
     return reply or msg("no_confirmed_sources", language)
 
 
+def _place_facts_block(reply, tools_ran, db_path, user_id, language):
+    """The list is the code's to write, and it is written last: nothing edits the block afterwards (item 35h)."""
+    if "list_facts" not in tools_ran:
+        if has_facts_marker(reply):
+            # the marker alone never substitutes; a turn that wrote one uncalled is worth counting
+            logger.info("facts: marker without the call, removed")
+        return strip_facts_markers(reply)
+    if not has_facts_marker(reply):
+        logger.info("facts: list_facts ran, no marker")
+        return reply
+    read_outside = sorted({name for name in tools_ran if name in UNTRUSTED_TOOLS})
+    after = f", after {', '.join(read_outside)}" if read_outside else ""
+    logger.info(f"facts: list_facts ran, block placed{after}")
+    return substitute_facts_block(reply, get_facts(db_path, user_id), language)
+
+
 def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     user_row = get_user(db_path, session.user_id)
     user_timezone = user_row["timezone"] if user_row else "UTC"
@@ -460,9 +496,10 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
         result = run_with_tools(
             role,
             call_messages,
-            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
+            tools=[WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL],
             extra_executors={
                 "forget_fact": lambda fact_id: _run_forget_fact(db_path, session.user_id, fact_id),
+                "list_facts": _run_list_facts,
                 "remember_fact": lambda content: _run_remember_fact(db_path, session.user_id, content),
                 "request_link_code": lambda: _run_request_link_code(db_path, session.user_id),
                 "update_profile": lambda **fields: _run_update_profile(db_path, session.user_id, **fields),
@@ -478,6 +515,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
     # run_with_tools appended each tool result to call_messages: those are sources, the model's own lines are not
     seen_urls |= _urls_in(m for m in call_messages if m.get("role") == "tool")
     reply = _keep_only_traceable_links(reply, seen_urls, session.language)
+    reply = _place_facts_block(reply, result.tools_ran, db_path, session.user_id, session.language)
     session.conversation_history.append({"role": "assistant", "content": reply})
     session.last_turn_message_ids = [
         save_message(db_path, session.user_id, "user", user_input, attachment="image" if images else None),

@@ -3,7 +3,12 @@ import re
 from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
-from core.strings import MONTHS, WEEKDAYS
+from core.strings import MONTHS, msg, WEEKDAYS
+
+# The model writes this where the list of facts belongs; the code puts the list there (item 35h).
+FACTS_MARKER = "{{FACTS}}"
+# One pattern decides everywhere: the presence check, the substitution and the strip
+_FACTS_MARKER_PATTERN = re.compile(r"\{\{\s*facts\s*\}\}", re.IGNORECASE)
 
 
 def load_persona(path=config.PERSONA_PATH):
@@ -32,6 +37,36 @@ def _starts_a_new_day(last_message_at, local_now, timezone):
     return last_utc.astimezone(ZoneInfo(timezone)).date() < local_now.date()
 
 
+def render_facts(facts, language):
+    """The facts as the code writes them, for the user and for the model alike: one line each, the only id its own."""
+    if not facts:
+        return msg("no_facts_yet", language)
+    return "\n".join(f"- [{fact['id']}] {_one_line(fact['content'])}" for fact in facts)
+
+
+def _one_line(content):
+    """A fact occupies one line and carries nothing else shaped like an id (item 35h)."""
+    return re.sub(r"\[(\d+)\]", r"(\1)", " ".join(content.splitlines()))
+
+
+def has_facts_marker(text):
+    return bool(_FACTS_MARKER_PATTERN.search(text or ""))
+
+
+def strip_facts_markers(text):
+    """What the code never fills in never reaches the user as a raw token."""
+    return _FACTS_MARKER_PATTERN.sub("", text or "")
+
+
+def substitute_facts_block(text, facts, language):
+    """The first marker becomes the block; every other one is removed before the block exists (item 35h)."""
+    match = _FACTS_MARKER_PATTERN.search(text or "")
+    if not match:
+        return text
+    # all marker surgery happens on the model's text: a fact's own content is never scanned
+    return text[:match.start()] + render_facts(facts, language) + strip_facts_markers(text[match.end():])
+
+
 def build_system_prompt(persona, facts, language, name, location="", timezone="UTC", channels=(), now=None, last_message_at=None):
     if now is None:
         now = datetime.now(dt_timezone.utc)
@@ -52,7 +87,7 @@ def build_system_prompt(persona, facts, language, name, location="", timezone="U
     name_block = f"\n\n## Profile\nYou are talking to {name}{location_part}.{channels_part}"
     if not facts:
         return persona + name_block + context_block + directive
-    facts_block = "\n".join(f"- [{fact['id']}] {fact['content']}" for fact in facts)
+    facts_block = render_facts(facts, language)
     return f"{persona}{name_block}\n\n## What I know about the user\n{facts_block}{context_block}{directive}"
 
 def stamp_time(content: str, when: datetime, timezone: str) -> str:

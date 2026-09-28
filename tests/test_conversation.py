@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from config import MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
-from core.conversation import build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
+from core.conversation import build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
 from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
 from core.search import FailedFetch
@@ -277,7 +277,7 @@ class TestHandleTurn(unittest.TestCase):
         handle_turn(self.session, "Hola", "general", self.db_path)
         
         called_tools = mock_chat.call_args[1]["tools"]
-        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL])
+        self.assertEqual(called_tools, [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, FORGET_FACT_TOOL, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, UPDATE_PROFILE_TOOL])
 
 
 @patch("core.conversation.providers.chat")
@@ -740,6 +740,108 @@ def test_run_with_tools_logs_which_tools_it_ran(mock_chat, caplog):
     assert "web_search" in caplog.text
 
 
+def _list_facts_call(call_id="call_l1"):
+    return SimpleNamespace(id=call_id, function=SimpleNamespace(name="list_facts", arguments="{}"))
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_writes_the_stored_facts_itself_when_list_facts_ran(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "recital.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        fact_id = save_fact(db_path, user_id, "vive en Bogotá")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
+            providers.ChatResponse(content="Esto tengo guardado:\n{{FACTS}}", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
+
+        assert reply == f"Esto tengo guardado:\n- [{fact_id}] vive en Bogotá"
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_lists_the_facts_as_they_stand_after_the_turn_retired_one(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "retired.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        gone = save_fact(db_path, user_id, "trabaja en Medellín")
+        kept = save_fact(db_path, user_id, "vive en Bogotá")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        forget = SimpleNamespace(id="call_f1", function=SimpleNamespace(name="forget_fact", arguments=f'{{"fact_id": {gone}}}'))
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[forget, _list_facts_call()]),
+            providers.ChatResponse(content="Listo. Queda esto:\n{{FACTS}}", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, f"olvida el {gone} y dime qué recuerdas", "general", db_path)
+
+        # the set loaded for this turn's system prompt still held the retired fact: this list cannot
+        assert reply == f"Listo. Queda esto:\n- [{kept}] vive en Bogotá"
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_inserts_nothing_when_the_marker_arrives_without_the_call(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "uncalled.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        save_fact(db_path, user_id, "vive en Bogotá")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        # a page read this turn told the model to write the marker: the call is what authorizes the block
+        mock_chat.return_value = providers.ChatResponse(content="Claro: {{FACTS}}", tool_calls=None)
+
+        reply = handle_turn(session, "lee https://example.com y resume", "general", db_path)
+
+        assert "Bogotá" not in reply
+        # and the token the code never filled in is not what the user reads
+        assert "{{" not in reply
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_says_plainly_when_there_is_nothing_saved_yet(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "empty.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "en")
+        session = Session(user_id=user_id, language="en", conversation_history=[{"role": "system", "content": "sys"}])
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
+            providers.ChatResponse(content="{{FACTS}}", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "what do you remember about me?", "general", db_path)
+
+        assert reply == msg("no_facts_yet", "en")
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_journals_whether_the_block_was_placed(mock_chat, caplog):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "journal.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
+            providers.ChatResponse(content="Te cuento de memoria: vives en Bogotá", tool_calls=None),
+        ]
+
+        with caplog.at_level(logging.INFO, logger="core.conversation"):
+            handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
+
+        # the call proves the list was owed, so a reply without the marker is a countable miss
+        assert "facts: list_facts ran, no marker" in caplog.text
+
+
+def test_list_facts_tool_hands_the_model_no_fact_of_its_own():
+    assert LIST_FACTS_TOOL["function"]["name"] == "list_facts"
+    assert LIST_FACTS_TOOL["function"]["parameters"]["properties"] == {}
+
+
 @patch("core.conversation.providers.chat")
 def test_run_with_tools_names_the_tools_the_turn_ran(mock_chat):
     search = SimpleNamespace(id="call_t1", function=SimpleNamespace(name="web_search", arguments='{"query": "trm hoy"}'))
@@ -987,7 +1089,7 @@ def test_no_chat_tool_can_deactivate_or_delete_an_account(mock_chat):
 
         offered = {tool["function"]["name"] for tool in mock_chat.call_args.kwargs["tools"]}
         assert offered == {
-            "web_search", "web_fetch", "forget_fact",
+            "web_search", "web_fetch", "forget_fact", "list_facts",
             "remember_fact", "request_link_code", "update_profile",
         }
 

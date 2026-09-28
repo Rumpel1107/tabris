@@ -44,7 +44,8 @@ ids, has shown no problem, and keeps being recited by the model as today.
 | State | What the system detects | What the user sees | What the user can do | How the operator learns |
 |---|---|---|---|---|
 | No active facts | The user has no active facts | A plain statement that nothing is saved yet, in their own language | Tell Tabris something to remember | Not an error; nothing to learn |
-| The model never calls `list_facts` | Nothing — with no call, nothing says a list was owed | The old failure: a free-text answer in the model's own numbering | Ask again, naming memory explicitly | **Invisible on purpose.** Knowing a list was owed means reading the user's intent, which is the classifier open question 2 declines. What makes it noticeable is the block's fixed shape: a reply about memory without it is a miss the owner can see |
+| The model never calls `list_facts`, and recites the facts itself | Exact, when the reply copies the stored text of three or more facts — or of both, when only two are stored. The copy is the evidence; a paraphrase is not detected | A corrected reply built on the call; or, if the forced turn recites again, the model's own list — the old failure for that turn | Ask again, naming memory explicitly | A journal line naming the miss. **Corrected 2026-09-25:** this row first said the miss was invisible and that the block's fixed shape made it noticeable. Neither held — the system prompt has always rendered facts in that same shape, so the model reproduces it exactly, and the first live exercise saw it recite rather than call in two questions out of three |
+| The model never calls `list_facts`, and paraphrases instead of copying | Nothing — telling a paraphrase from ordinary conversation about the same subject needs reading the prose | The old failure: a free-text answer in the model's own numbering | Ask again, naming memory explicitly | **Unenforced and declared.** Matching by resemblance would fire on a long conversation about the very subject a fact records. All 24 recitals in the stored history copied the text verbatim |
 | `list_facts` ran and the reply carries no marker | Exact: the call proves the intent, the marker is absent | A corrected reply; if the correction comes back without a marker too, the reply as the model wrote it — the old failure for that turn | Ask again | A journal line naming the miss, countable because the call proves the intent |
 | The model writes its own list beside the marker | Nothing — telling a paraphrase of the facts from any other prose needs reading the prose, which no fence here does | The exact block, plus a renumbered paraphrase next to it | Ask again | **Invisible on purpose.** What lowers it is that the model is never handed a freshly formatted copy at the moment it composes |
 | The marker comes back in different case or spacing | The one pattern that decides everywhere tolerates it | The correct block; never a raw token | Nothing | Nothing — handled in place |
@@ -79,13 +80,19 @@ ids, has shown no problem, and keeps being recited by the model as today.
   what it recognizes is a marker, what it does not is not. The first marker becomes the block, any
   other marker-shaped token is removed before the block is inserted, and no such token reaches the
   user — whether or not the tool ran.
+- **AC8** — Given `list_facts` did not run in the turn, when the reply copies the stored text of three
+  or more of the user's facts — or of both of them, when only two are stored — then the miss is
+  logged and the reply is asked for once more with the call forced; the corrected reply passes
+  through every check the first one did, and if it copies them again it is sent as the model wrote
+  it. A reply carrying one such fact, or two out of more, is left alone: at that count a recital
+  cannot be told from a mention.
 
 ## Open questions
 
 | # | Question | Status | Resolution / why deferred |
 |---|---|---|---|
 | 1 | Does this cover the Profile section? | resolved | No — facts only. It carries no ids and no reported problem |
-| 2 | Should the call to `list_facts` be forced, the way 35j forces `web_search`? | deferred | Left to the instruction. AC6's journal line cannot decide it — it counts turns where the call already happened, while forcing would fix the turns with no call at all, and telling those apart means classifying the user's intent. The decision rests on how often the owner sees a memory answer arrive without the block, in use |
+| 2 | Should the call to `list_facts` be forced, the way 35j forces `web_search`? | resolved 2026-09-25 | Yes, but from the reply rather than from the intent (AC8). The evidence arrived on the first live exercise instead of over weeks of use: the model called the tool in one of three memory questions, reciting the facts itself in the other two — once copying the format from its own stored history, once from the system prompt. What made it decidable without classifying intent is that a recital copies the stored text: over 143 stored replies, 24 carry three or more facts verbatim and every one of them is a recital, while the only replies carrying one or two are memory-management confirmations. Classifying the user's intent before the answer stays rejected: it costs a call on every turn, and the reply already carries the evidence |
 | 3 | Should the tool return the rendered block along with the instruction? | resolved | No — instruction only. Handing the model the exact text it is told not to write is the pull DEF-2 established: an example of a format teaches that format |
 | 4 | Should the marker carry a per-turn random value, so a page cannot forge one? | deferred | It would close abuse case 2 properly and remove the collision with a user who asks about the token itself. It rests on the model copying a random token exactly, which is a measurement nobody has taken — a probe, and its own piece of work |
 
