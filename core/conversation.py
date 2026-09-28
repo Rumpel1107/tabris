@@ -284,16 +284,18 @@ LINK_CORRECTION = (
 
 
 FRESHNESS_CORRECTION = (
-    "The question asks for a value that can have changed since your training, and no search "
-    "brought anything back this turn. Do not present the value from memory. Search for it now; "
-    "if the search brings nothing, say plainly that you could not obtain it."
+    "No search brought anything back this turn. If this message asks for a value that can have "
+    "changed since your training, search for it now and do not present it from memory; if the "
+    "search brings nothing, say plainly that you could not obtain it. If the message asks for no "
+    "such value, answer what was actually asked, without searching."  # DEF-14
 )
 
 
 FRESHNESS_REWRITE = (
-    "Nothing this turn backs that value, and the search did not run. Write the answer again "
-    "without it: keep everything you did verify, and say plainly that this value could not be "
-    "obtained now. Do not state it from memory."
+    "Write the answer again without any value that can have changed and that nothing this turn "
+    "verified: keep everything you did verify, and say plainly that such a value could not be "
+    "obtained now. Do not state it from memory. If the answer holds no such value, send it back "
+    "as it is."  # DEF-14
 )
 
 
@@ -325,7 +327,7 @@ class TurnResult:
     tools_ran: list = field(default_factory=list)
 
 
-def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False, language="en"):
+def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, force_search=False, language="en", correct_when_unsearched=True):
     # one budget for the whole turn: what one search reads, the next one no longer has
     budget = TextBudget(config.SEARCH_TEXT_BUDGET)
     # what the turn searched and whether anything came back: the net reads the first, the journal the second
@@ -365,7 +367,9 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
             # write the answer without the value; only a model that refuses both has its reply withheld.
             # A search that ran and brought nothing is the model's to state, and the journal counts it.
             answer = response.content or ""
-            if force_search and not searches and not read_a_page:
+            # DEF-14: a turn the classifier could not classify is forced to search, never corrected —
+            # the correction states as fact that a changing value was asked for, and that may be false
+            if force_search and correct_when_unsearched and not searches and not read_a_page:
                 if fresh_stage == 0 and not last_round:
                     fresh_stage = 1
                     logger.info("freshness: forced search missing, corrected")
@@ -518,6 +522,7 @@ def handle_turn(session, user_input, role, db_path, persona=None, images=()):
             },
             seen_urls=seen_urls,
             force_search=verdict != "stable",
+            correct_when_unsearched=verdict == "fresh",
             language=session.language,
         )
     except Exception:

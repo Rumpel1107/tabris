@@ -1320,6 +1320,22 @@ def test_run_with_tools_corrects_a_forced_turn_that_answered_without_searching(m
 
 
 @patch("core.conversation.providers.chat")
+def test_run_with_tools_leaves_an_unclassified_turn_alone_when_no_search_ran(mock_chat, caplog):
+    mock_chat.return_value = providers.ChatResponse(content="Esto es lo que recuerdo de ti: ...", tool_calls=None)
+
+    with caplog.at_level(logging.INFO, logger="core.conversation"):
+        result = run_with_tools(
+            "general", [{"role": "user", "content": "¿qué recuerdas de mí?"}],
+            tools=[WEB_SEARCH_TOOL], force_search=True, correct_when_unsearched=False, language="es",
+        )
+
+    # the classifier abstained, so the premise behind the correction is not established (DEF-14)
+    assert result.reply == "Esto es lo que recuerdo de ti: ..."
+    assert mock_chat.call_count == 1
+    assert "forced search missing" not in caplog.text
+
+
+@patch("core.conversation.providers.chat")
 def test_run_with_tools_asks_for_the_answer_without_the_value_it_could_not_verify(mock_chat, caplog):
     mock_chat.side_effect = [
         providers.ChatResponse(content="The meeting is tomorrow. El dólar hoy está a 4.100", tool_calls=None),
