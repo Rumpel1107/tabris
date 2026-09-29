@@ -55,33 +55,34 @@ comparing against the outgoing tag before it shipped, which is what was done.
 | 9 | **35j** — Fresh data outranks what the model remembers: closed in `v0.2.0`. What remains is the journal watch its own slice 3 names — two weeks of `freshness:` lines decide whether the first persona rule can go, and each real miss joins the probe's lot | 🔶 waiting on the journal, not on code |
 | 10 | **35k** — A precise claim the turn never received: first slice is a probe measuring how often a stable fact is misremembered; also unifies the correction cycles now living side by side (D8 in `docs/35j/plan.md`) | ⬜ |
 | 11 | **35l** — A fresh value can still be wrong: needs 35j in service first; decide what makes a search result verified | ⬜ |
-| 12 | **35p** — Decide from the journal whether the `list_facts` path earns its place: a month of `facts: list_facts ran` against `facts: recited without the call` says how often the model uses the tool at all. Few or none, and the marker, the tool and the substitution come out, leaving the renderer and the persona line that actually fixed the recital; a usable fraction, and slices 3 and 4 are what raise it. The counting window opens the day the version carrying 35h is deployed, not the day it was built | ⬜ |
+| 12 | **35q** — Standing orders as their own kind of memory, executed by code: the model reads the instruction once and stores it in a fixed shape — a time, a topic to search, the first message of the day — and from then on the code applies it without asking the model again. Agreed 2026-09-22 and given its number after DEF-15, which is the evidence: an order that lives as a distilled fact can be retired by the next merge and nobody is told. Not a tool built for the daily report — it has to serve "every day at seven remind me about the pill" for any user | ⬜ |
+| 13 | **35p** — Decide from the journal whether the `list_facts` path earns its place: a month of `facts: list_facts ran` against `facts: recited without the call` says how often the model uses the tool at all. Few or none, and the marker, the tool and the substitution come out, leaving the renderer and the persona line that actually fixed the recital; a usable fraction, and slices 3 and 4 are what raise it. The counting window opens the day the version carrying 35h is deployed, not the day it was built | ⬜ |
 
 ## Phase 4 — Always-on (pre-freeze)
 
 | # | Item | Status |
 |---|---|---|
-| 13 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
-| 14 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
-| 15 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
-| 16 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
-| 17 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first | ⬜ |
-| 18 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
-| 19 | **39b** — Second transcription provider: reassess Gemini 3.5 Transcribe as Groq's fallback | ⬜ |
-| 20 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
-| 21 | **38b** — An empty model reply costs the whole turn: `strip_time_stamp` receives `None` and raises, and the line sits outside the rollback, so the user's own message stays in the history. Found reviewing item 35h slice 1 on 2026-09-25; the hole predates it and has never been seen in production | ⬜ |
+| 14 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
+| 15 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
+| 16 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
+| 17 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
+| 18 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first. **Item 35q's execution half lands here**: an order that says "every day at seven" needs the same "what is due" machinery | ⬜ |
+| 19 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
+| 20 | **39b** — Second transcription provider: reassess Gemini 3.5 Transcribe as Groq's fallback | ⬜ |
+| 21 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
+| 22 | **38b** — An empty model reply costs the whole turn: `strip_time_stamp` receives `None` and raises, and the line sits outside the rollback, so the user's own message stays in the history. Found reviewing item 35h slice 1 on 2026-09-25; the hole predates it and has never been seen in production | ⬜ |
 
 ## Phase 5 — After the freeze (backlog, not started)
 
 | # | Item | Status |
 |---|---|---|
-| 22 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
-| 23 | **47** — Notion integration via its API | ⬜ |
-| 24 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
-| 25 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
-| 26 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
-| 27 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
-| 28 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
-| 29 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
-| 30 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
-| 31 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
+| 23 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
+| 24 | **47** — Notion integration via its API | ⬜ |
+| 25 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
+| 26 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
+| 27 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
+| 28 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
+| 29 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
+| 30 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
+| 31 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
+| 32 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
