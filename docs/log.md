@@ -8,6 +8,41 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-09-25 to 2026-09-28 — The stored facts get a renderer, and the item stops there
+
+Item 35h, slices 1 and 2. `run_with_tools` now returns what the turn ran beside the reply; a
+`list_facts` tool tells the model where to put the list and hands it no fact; the code substitutes
+the block as the last step of the reply, reading the facts again at that moment so a fact retired
+earlier in the same message is already gone from it. One renderer builds both that block and the
+facts in the system prompt, so a fact whose text breaks a line, or carries a bracketed number, is
+neutralized for the model as well as for the user.
+
+The item was then closed at slice 2 rather than finished, because the first live exercise reversed
+its premise. Ten memory questions against copies of the real database: the model never called the
+tool, and recited all thirteen facts with their real ids, word for word, none rewritten. The
+evidence that opened the item — a recital renumbered and resummarized — was taken under a persona
+that *asked* for a numbering the stored form did not have. Rewriting that one line is what fixed
+it; the tool and the marker guarantee the same thing only on the turns the model chooses to call
+them, and with a fresh user it does. Slices 3 and 4 became item 35p, to be decided from a month of
+journal, and the counter that gives that month its denominator shipped with slice 2.
+
+Two rules came out of it, both now in the method: the instruction a model is given today is quoted
+and judged before a fence is designed, and a line of text in a prompt is a slice — it goes first
+when changing it alone could make the rest unnecessary.
+
+## 2026-09-28 — A memory question was being answered with the exchange rate
+
+DEF-14, found exercising 35h and fixed before either reached production. The freshness classifier
+has no class for a question about stored state and abstains; 35j D6 reads an abstention as `fresh`,
+and the correction that follows tells the model, as a fact, that a value which can have changed was
+asked for. On a memory question that premise is false, so the model took a subject from its window
+— the rate it had been asked about earlier — and answered that instead.
+
+Rewording the two instructions was tried first and reverted on review: made conditional they hand
+the verdict back to the model, and the rewrite's new escape clause instructed exactly the
+word-for-word return that the withhold check punishes. What holds is the stage split (D10): an
+unclassified turn is still forced to search, never corrected, and gets a journal line instead.
+
 ## 2026-09-24 — The old deployment is retired, closing 37b
 
 Item 37b, slice 5, the last piece of the move to the rented host (D13). M3's seven-day window from

@@ -34,10 +34,11 @@ the running order has no gap:
 Phase 2 (API-based, zero local-model dependency) is closed. Most of Phase 3 is closed too —
 memory, internet access, Discord — but the freeze Phase 3+4 were meant to close before does not
 land until everything below through Phase 4 is done (workspace `PLAN.md` P4: Tabris runs in
-production today, but production use alone does not close these items). **A deploy freeze is
-separately in effect since 2026-09-23**, agreed with the owner, until enough finished work
-accumulates for one release worth shipping — items already built and reviewed but not yet
-deployed are marked below.
+production today, but production use alone does not close these items). **The deploy freeze of
+2026-09-23 ended on 2026-09-29 with `v0.2.0`**, which carried what it had been holding: item 35j's
+forced search and its correction cycle, item 35h's stored-fact recital, and DEF-14. The freeze did
+what it was for — one release instead of six — at the cost of a batch large enough to be worth
+comparing against the outgoing tag before it shipped, which is what was done.
 
 ## Phase 3 — Memory, internet, Discord (pre-freeze)
 
@@ -49,9 +50,9 @@ deployed are marked below.
 | 4 | **35e** — A self-description that stays true as the code changes: derive the capabilities block from the tool definitions already sent on every call | ⬜ |
 | 5 | **35f** — Search its own stored conversation: a tool beside `web_search`, SQL over `messages` scoped by user, by topic or by date. Foundation for 35g and 35k | ⬜ |
 | 6 | **35g** — What deserves to be a fact: an exploration ending in a written decision about the distillation's churn; needs 35f first | ⬜ |
-| 7 | **35h** — Recite stored memory deterministically: a `list_facts` tool rendered by code instead of trusting the model's own numbering | ⬜ |
+| 7 | **35h** — Recite stored memory deterministically: a `list_facts` tool rendered by code instead of trusting the model's own numbering | ✅ closed 2026-09-28 at slice 2; the rest became item 35p |
 | 8 | **35o** — Act on the fact the user meant when they name a number: the model can read "el 3" as the third line rather than id 3, and the integer the tool receives looks valid either way; decide the control — confirm before retiring, or hand back the fact's content before acting. Needs 35h in service first | ⬜ |
-| 9 | **35j** — Fresh data outranks what the model remembers, slice 3 (close): correct `docs/defects.md` DEF-11's wording, mark the item, cut the tag and verify live — held by the deploy freeze above | 🔶 slices 1-2 done, not deployed |
+| 9 | **35j** — Fresh data outranks what the model remembers: closed in `v0.2.0`. What remains is the journal watch its own slice 3 names — two weeks of `freshness:` lines decide whether the first persona rule can go, and each real miss joins the probe's lot | 🔶 waiting on the journal, not on code |
 | 10 | **35k** — A precise claim the turn never received: first slice is a probe measuring how often a stable fact is misremembered; also unifies the correction cycles now living side by side (D8 in `docs/35j/plan.md`) | ⬜ |
 | 11 | **35l** — A fresh value can still be wrong: needs 35j in service first; decide what makes a search result verified | ⬜ |
 | 12 | **35p** — Decide from the journal whether the `list_facts` path earns its place: a month of `facts: list_facts ran` against `facts: recited without the call` says how often the model uses the tool at all. Few or none, and the marker, the tool and the substitution come out, leaving the renderer and the persona line that actually fixed the recital; a usable fraction, and slices 3 and 4 are what raise it. The counting window opens the day the version carrying 35h is deployed, not the day it was built | ⬜ |

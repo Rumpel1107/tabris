@@ -6,15 +6,13 @@ grouped by what a reader would notice, each written in the change that earns it.
 Nothing before `v0.1.15` is reconstructed here — that history lives in the tags, in `PLAN.md` and
 in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent detail nobody recorded.*
 
-## [Unreleased]
-
-### Changed
-- A question the freshness classifier cannot classify is still searched before it is answered, but it is no longer sent back to the model to be corrected. Asked what it remembered, Tabris was answering with the day's exchange rate instead: the correction states that a value which can have changed was asked for, and on a question about stored memory that is not true, so the model looked for something to search and took it from the conversation. Those turns now reach the user answered, and the journal counts them.
+## [v0.2.0] — 2026-09-29
 
 ### Added
 - Asking what Tabris remembers now gets the stored list written by the code, not retyped by the model: every saved fact, with the id it actually carries in the database, read at the moment the answer is sent — so a fact retired earlier in the same message is already gone from the list. A fact whose text runs onto a second line, or carries a number in brackets, is shown on one line with only its real id, which also changes how those facts are shown to the model itself.
 
 ### Changed
+- A question the freshness classifier cannot classify is still searched before it is answered, but it is no longer sent back to the model to be corrected. Asked what it remembered, Tabris was answering with the day's exchange rate instead: the correction states that a value which can have changed was asked for, and on a question about stored memory that is not true, so the model looked for something to search and took it from the conversation. Those turns now reach the user answered, and the journal counts them.
 - A question whose answer can have changed is no longer answered from memory when the model skips the search it was told to run. The answer goes back to the model twice: first to search, then — if it still did not — to write the same answer again without the value nothing backs, so everything else that was asked still arrives. Only an answer that comes back word for word is withheld, and the notice then names what the turn did apply, such as a fact saved or a profile updated. A search that ran and found nothing, or a page read successfully, is not this case: the reply arrives as the model wrote it.
 
 ## [v0.1.20] — 2026-09-15
