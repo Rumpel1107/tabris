@@ -1319,20 +1319,44 @@ def test_run_with_tools_corrects_a_forced_turn_that_answered_without_searching(m
     assert messages[2]["role"] == "system"
 
 
+@pytest.mark.parametrize("question, answer", [
+    ("¿qué recuerdas de mí?", "Esto es lo que recuerdo de ti: ..."),
+    ("what do you remember about me?", "Here is what I remember about you: ..."),
+])
 @patch("core.conversation.providers.chat")
-def test_run_with_tools_leaves_an_unclassified_turn_alone_when_no_search_ran(mock_chat, caplog):
-    mock_chat.return_value = providers.ChatResponse(content="Esto es lo que recuerdo de ti: ...", tool_calls=None)
+def test_run_with_tools_leaves_an_unclassified_turn_alone_when_no_search_ran(mock_chat, question, answer, caplog):
+    mock_chat.return_value = providers.ChatResponse(content=answer, tool_calls=None)
 
     with caplog.at_level(logging.INFO, logger="core.conversation"):
         result = run_with_tools(
-            "general", [{"role": "user", "content": "¿qué recuerdas de mí?"}],
+            "general", [{"role": "user", "content": question}],
             tools=[WEB_SEARCH_TOOL], force_search=True, correct_when_unsearched=False, language="es",
         )
 
     # the classifier abstained, so the premise behind the correction is not established (DEF-14)
-    assert result.reply == "Esto es lo que recuerdo de ti: ..."
+    assert result.reply == answer
     assert mock_chat.call_count == 1
     assert "forced search missing" not in caplog.text
+    assert "freshness: unclassified and unsearched" in caplog.text
+
+
+@patch("core.conversation.freshness.classify")
+@patch("core.conversation.providers.chat")
+def test_handle_turn_corrects_only_a_verdict_the_classifier_confirmed(mock_chat, mock_classify):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "verdict.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        mock_classify.return_value = "no verdict"
+        mock_chat.return_value = providers.ChatResponse(content="Lo que recuerdo de ti es esto", tool_calls=None)
+
+        reply = handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
+
+    # the wiring is the fix: an unclassified turn is forced to search and never corrected (DEF-14)
+    assert reply == "Lo que recuerdo de ti es esto"
+    assert mock_chat.call_count == 1
+    assert mock_chat.call_args_list[0][1]["tool_choice"] == FORCED_SEARCH
 
 
 @patch("core.conversation.providers.chat")

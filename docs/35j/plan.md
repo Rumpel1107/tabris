@@ -6,10 +6,12 @@ Before the model that answers is called, a second cheap call — the same size a
 router's, sent only the user's message — says one word: `fresh` or `stable`. On `fresh`, the first
 round of the tool loop is sent with the provider parameter that removes the model's choice
 (`tool_choice` naming `web_search`): the model can only compose the query, and the search happens.
-If the turn still ends with no search recorded, the answer goes back to the model once with a
-correction, as item 35i already does for unjustified links; if the retry also ends without a
-search, the reply is withheld and the user is told the value could not be obtained. On `stable`
-the turn takes exactly today's path. Every verdict, and every correction or withholding, is one
+If a turn the classifier called `fresh` still ends with no search recorded, the answer goes back to
+the model once with a correction, as item 35i already does for unjustified links; if the retry also
+ends without a search, the reply is withheld and the user is told the value could not be obtained.
+On `stable` the turn takes exactly today's path. **On `no verdict` the first round is forced and
+nothing is corrected (D10): the correction tells the model a changing value was asked for, which on
+an unclassified turn may be false. That turn is counted in the journal instead.** Every verdict, and every correction or withholding, is one
 line in the journal with no conversation text.
 
 The adapters do not change: everything happens inside `handle_turn` and the tool loop.
@@ -18,7 +20,7 @@ The adapters do not change: everything happens inside `handle_turn` and the tool
 
 | AC | Where it lives | Notes |
 |---|---|---|
-| AC1 | `run_with_tools`: forced first round on `fresh`; correction then withholding when no search was recorded | The record is the executed tool calls, kept by the loop itself |
+| AC1 | `run_with_tools`: forced first round on anything but `stable`; correction then withholding when no search was recorded **and the verdict was `fresh`** (D10) | The record is the executed tool calls, kept by the loop itself |
 | AC2 | When the search chain fails entirely, the withheld-reply notice in `core/strings.py`, both languages | When a search ran and the value was still not in it, the reply is the model's judgement — unenforced, as the spec's second failure row declares |
 | AC3 | The verdict `stable` leaves the loop untouched | No forcing, no extra round |
 | AC4 | One `freshness:` journal line per turn, beside the existing `tools:` line | `freshness: fresh` / `stable` / `no verdict` / `forced search missing, corrected` / `… withheld` |
@@ -47,8 +49,8 @@ The adapters do not change: everything happens inside `handle_turn` and the tool
 | D6 | Classifier call fails or returns no verdict → treated as `fresh` | Treated as `stable` | The wrong-direction cost is one needless search on a translation; the other direction is the defect itself | `gpt-oss-20b` returned empty content 5/6 times on one rare-fact question — `no verdict` is a real case, not a hypothetical |
 | D7 | One abuse phrasing ("answer from memory, who won the last Copa América") stays uncovered and watched through AC4 | A clause in the prompt naming that pattern; a list of phrases in code | The clause was measured and moved noise, not behaviour; the phrase list is the hidden command language the spec's open question 1 rejected | With the clause: Copa América 0/3 at temperature 0 (3/3 at 0.7); without: 2/3 at 0 (1/3 at 0.7). Both models tested (Groq, Gemini) fail the same phrase |
 | D8 | The two correction cycles (links, freshness) coexist in `run_with_tools`; unifying them is the first task of item 35k | Unify in this item's refactor beat | Reading cost only; seven tests fence the link cycle's edges, but the owner preferred the change to wait for the third cycle. Recorded as a lesson in the method | — |
-| D10 | `no verdict` forces the first round but never enters the correction cycle; only a confirmed `fresh` does (taken 2026-09-28, DEF-14) | Keep D6 whole, correcting on `no verdict` too; or map `no verdict` to `stable` | D6's wrong-direction cost was priced as "one needless search on a translation", which is what the forcing costs. The correction is not that: it tells the model as a fact that a changing value was asked for, and on a memory question that premise is false — the model supplied the subject from its window and answered the exchange rate instead. Mapping to `stable` would give back the defect D6 exists to stop, so the split is by stage, not by verdict | 3 of 3 live memory questions returned `no verdict`; with the correction off, the same question was answered from the database, and a `fresh` question still forced its search |
 | D9 | Slice 2's review answer to "the reply loses what was verified" is a second correction — write the answer again without the value — leaving the notice as the last resort | Split the reply in code; let the answer through with only a journal line | Code cannot tell which part of the text is the unbacked value, and that judgement is the model's; letting it through is the defect this item exists to close. The third cycle this creates joins the D8 unification | — |
+| D10 | `no verdict` forces the first round but never enters the correction cycle; only a confirmed `fresh` does (taken 2026-09-28, DEF-14) | Keep D6 whole, correcting on `no verdict` too; or map `no verdict` to `stable` | D6's wrong-direction cost was priced as "one needless search on a translation", which is what the forcing costs. The correction is not that: it tells the model as a fact that a changing value was asked for, and on a memory question that premise is false — the model supplied the subject from its window and answered the exchange rate instead. Mapping to `stable` would give back the defect D6 exists to stop, so the split is by stage, not by verdict. The wording was tried first and reverted: made conditional, it hands the verdict back to the model and its "send it back as it is" clause arms the word-for-word withhold | 3 of 3 live memory questions returned `no verdict`; with the correction off, the same question was answered from the database, and a `fresh` question still forced its search |
 
 ## New concepts
 
@@ -67,7 +69,7 @@ The adapters do not change: everything happens inside `handle_turn` and the tool
 ## Risks
 
 - **A forced search on a `stable`-shaped message.** D6 sends every failed classification to a search; if the router chain degrades, the user sees slower answers across the board. The `no verdict` count in the journal shows it early.
-- **A provider that stops honouring `tool_choice`.** The measurement holds for today's three models; a roster change re-runs it. The correction-then-withhold path in D4 is what stands when the forcing does not.
+- **A provider that stops honouring `tool_choice`.** The measurement holds for today's three models; a roster change re-runs it. The correction-then-withhold path in D4 is what stands when the forcing does not — **on a `fresh` verdict only. Since D10 an unclassified turn has the forcing and nothing behind it**, so a provider that stops honouring `tool_choice` reopens DEF-11's shape there; the journal line for that turn is what makes it countable, and it is what the two-week watch reads.
 - **The lot is thirty-two questions written here.** It retired the design risk; it does not know the real miss rate. The journal after two weeks in service is the measurement that does, and every real miss becomes a case in the probe's lot.
 - **Two correction cycles in one loop** (D8) — readable today, and the first thing item 35k touches.
 

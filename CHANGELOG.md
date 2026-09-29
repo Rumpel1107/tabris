@@ -8,6 +8,9 @@ in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent deta
 
 ## [Unreleased]
 
+### Changed
+- A question the freshness classifier cannot classify is still searched before it is answered, but it is no longer sent back to the model to be corrected. Asked what it remembered, Tabris was answering with the day's exchange rate instead: the correction states that a value which can have changed was asked for, and on a question about stored memory that is not true, so the model looked for something to search and took it from the conversation. Those turns now reach the user answered, and the journal counts them.
+
 ### Added
 - Asking what Tabris remembers now gets the stored list written by the code, not retyped by the model: every saved fact, with the id it actually carries in the database, read at the moment the answer is sent — so a fact retired earlier in the same message is already gone from the list. A fact whose text runs onto a second line, or carries a number in brackets, is shown on one line with only its real id, which also changes how those facts are shown to the model itself.
 

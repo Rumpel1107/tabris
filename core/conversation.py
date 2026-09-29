@@ -284,18 +284,16 @@ LINK_CORRECTION = (
 
 
 FRESHNESS_CORRECTION = (
-    "No search brought anything back this turn. If this message asks for a value that can have "
-    "changed since your training, search for it now and do not present it from memory; if the "
-    "search brings nothing, say plainly that you could not obtain it. If the message asks for no "
-    "such value, answer what was actually asked, without searching."  # DEF-14
+    "The question asks for a value that can have changed since your training, and no search "
+    "brought anything back this turn. Do not present the value from memory. Search for it now; "
+    "if the search brings nothing, say plainly that you could not obtain it."
 )
 
 
 FRESHNESS_REWRITE = (
-    "Write the answer again without any value that can have changed and that nothing this turn "
-    "verified: keep everything you did verify, and say plainly that such a value could not be "
-    "obtained now. Do not state it from memory. If the answer holds no such value, send it back "
-    "as it is."  # DEF-14
+    "Nothing this turn backs that value, and the search did not run. Write the answer again "
+    "without it: keep everything you did verify, and say plainly that this value could not be "
+    "obtained now. Do not state it from memory."
 )
 
 
@@ -367,8 +365,10 @@ def run_with_tools(role, messages, tools, extra_executors=None, seen_urls=None, 
             # write the answer without the value; only a model that refuses both has its reply withheld.
             # A search that ran and brought nothing is the model's to state, and the journal counts it.
             answer = response.content or ""
-            # DEF-14: a turn the classifier could not classify is forced to search, never corrected —
-            # the correction states as fact that a changing value was asked for, and that may be false
+            if force_search and not correct_when_unsearched and not searches and not read_a_page:
+                # DEF-14: the correction asserts a changing value was asked for, and on a turn the
+                # classifier could not classify that may be false — so it is counted, not corrected
+                logger.info("freshness: unclassified and unsearched, left as the model wrote it")
             if force_search and correct_when_unsearched and not searches and not read_a_page:
                 if fresh_stage == 0 and not last_round:
                     fresh_stage = 1
