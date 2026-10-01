@@ -8,6 +8,25 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-09-30 to 2026-10-01 — Item 35q's tasks, and what the reviewers found in its documents
+
+The tasks for item 35q were drafted, and `tools/review.py` ran on the framing, the plan and the
+tasks before any code, as the method's Phase 4 gate requires ($0.48, two reviewers). Of 26
+findings, 15 were distinct and all held up; every one was resolved in conversation. Four changed
+the design rather than its wording, and each is a decision in `docs/35q/plan.md`: the buttons were
+dropped and the user answers a proposal in words, read by the model and applied by code only under
+conditions it can check (D12); the shared numbering uses the facts table's own counter, so a
+rollback to an earlier tag cannot hand one number to two things (D13); a save or an application is
+reported by a line marked 📌 that the model cannot imitate (D14); and the review that moves the
+owner's stored orders now comes before changing one, because until it runs those orders are as
+exposed to a merge as before. The first draft had called the item's fifth slice the answer to
+DEF-15 while those orders were still facts.
+
+The same run found personal data in this public repository, written in earlier sessions as
+evidence (DEF-16). It was removed from the history, and every project now imports its
+`CONTRIBUTING.md` and constitution into the agent's context instead of linking them — the cause
+was a rule in force that no session writing documents had ever loaded.
+
 ## 2026-09-25 to 2026-09-28 — The stored facts get a renderer, and the item stops there
 
 Item 35h, slices 1 and 2. `run_with_tools` now returns what the turn ran beside the reply; a

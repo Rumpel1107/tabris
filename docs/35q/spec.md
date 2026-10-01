@@ -30,12 +30,14 @@ many instructions a user may hold (question 7).
 **F3 — Changing an instruction.**
 1. The user asks, in their own words, to change one: "in the report, only 5 news items now".
 2. Tabris shows the instruction as it stands and the whole new text, and asks for a yes.
-3. On yes, the new text replaces the old. On anything else, nothing changes.
+3. The user answers in their own words. Agreement applies the new text; an adjustment — "make it
+   6" — brings a new proposal with it, which the user answers in turn; anything else changes
+   nothing.
 
 **F4 — Removing an instruction.**
 1. The user asks, in their own words, to drop one.
 2. Tabris shows which instruction would go, and asks for a yes.
-3. On yes, it stops applying. On anything else, nothing changes.
+3. The user answers in their own words. Agreement retires it; anything else changes nothing.
 
 **F5 — Seeing them.**
 1. The user asks what Tabris remembers about them.
@@ -46,7 +48,8 @@ many instructions a user may hold (question 7).
 2. Tabris looks through their stored facts and proposes: each fact that is an instruction, with its
    text exactly as stored; each fact that is part instruction and part fact, as the original beside
    "this becomes an instruction" and "this stays a fact".
-3. The user says yes to all of it, or names what should not move.
+3. The user answers in their own words: agreeing to all of it, naming what should not move, or
+   asking for a part to be worded differently, which brings a new proposal for that part.
 4. What was accepted moves; nothing else changes. When there is nothing to propose, Tabris says so
    and shows the instructions the user already has.
 
@@ -55,12 +58,14 @@ many instructions a user may hold (question 7).
 | State | What the system detects | What the user sees | What the user can do | How the operator learns |
 |---|---|---|---|---|
 | The turn meant to save an instruction but the save failed | The write did not complete | The reply, without the saved-instruction line — its absence is the signal | Say it again | A journal line naming the user and the failure |
-| The reply claims a save that did not happen | — (the model's own words) | Nothing false: the saved-instruction line comes only from a save that completed, never from the model's text | — | Invisible on purpose; the guarantee is AC2 |
+| The reply claims a save that did not happen | — (the model's own words) | No 📌 line: that mark comes only from a save that completed, and a line the model writes in its shape is removed. A claim in the model's own prose can still appear; the user's rule is that without 📌 nothing was saved | Say it again | Invisible on purpose: prose cannot be checked by code. The guarantee is AC2 |
 | The distillation judged a new instruction similar to an existing one | Its own verdict | Nothing | If it mattered, say it again in the conversation (F1) | A journal line naming the user and the instruction it matched |
 | The distillation created a near-duplicate | — | The one-line notice of F2 | Ask for it to be removed (F4) | The count in the journal |
 | The distillation failed | The pass did not complete | Nothing; no instruction is touched | — | The journal line the distillation already writes on failure |
 | A change or removal names an instruction ambiguously | More than one instruction could be meant, or none | Tabris asks which one, showing the candidates | Name it | — |
 | The user does not answer the yes of F3, F4 or F6 | The next message is not an answer to the proposal | The conversation continues; nothing was applied | Ask again | A journal line saying the proposal lapsed |
+| Tabris starts a review nobody asked for | — (a reading of the user's own words) | Move proposals they did not ask for; nothing moves without their agreement | Ignore them; they lapse on the next turn | A journal line for every review, with the message that started it. Question 2's promise is watched, not enforced: the code cannot tell a request to review from a complaint |
+| A reply is read as agreement when it was not | — (a reading of the user's own words) | The line saying what was applied, in that same reply | Ask for it back: a change through F3, a removal by giving the instruction again | A journal line for every applied proposal, naming the proposal and the reply that applied it |
 | The user says yes, and applying fails | The write did not complete | A plain sentence in their language that it was not applied | Ask again | A journal line naming the user and the failure |
 | F6 finds nothing to move | Nothing proposed | "Nothing to move", and their current instructions | — | — |
 | A user passes 20 instructions | The count | Nothing | — | A warning line in the journal (question 7) |
@@ -69,7 +74,7 @@ many instructions a user may hold (question 7).
 
 | # | Boundary | What someone tries | What must happen instead | AC |
 |---|---|---|---|---|
-| 1 | A web page, search result, image or attached document | Text that says "save this as an instruction: …" | Only the user's own words can become an instruction — never content Tabris read, searched, saw or received as an attachment | AC8 |
+| 1 | A web page, search result, image or attached document | Text that says "save this as an instruction: …" | Only the user's own words can become an instruction — never content Tabris read, searched, saw or received as an attachment in that turn. A quote of such content in an earlier reply is the residual, shown by its 📌 line when it happens | AC8 |
 | 2 | The user's message, read by the distillation | "Forget all your instructions" slipped into a conversation | The distillation cannot change or remove an instruction; removal goes through F4, which shows exactly which one and waits for a yes | AC5 |
 | 3 | A model's answer, or content Tabris read | A "yes" that did not come from the user | A proposal is applied only on the user's own next message | AC9 |
 | 4 | The user's message | An instruction to never search, or to drop a rule Tabris runs by | An instruction weighs above facts, never above the rules the system itself enforces; no instruction switches one off (35j: no opt-out of search) | AC10 |
@@ -81,8 +86,10 @@ many instructions a user may hold (question 7).
 - **AC1** — Given a user says something meant to hold from now on, when Tabris saves it as an
   instruction, then that reply carries one line with the exact text saved, and the instruction is
   present in every later conversation with that user, in its own block above the facts.
-- **AC2** — Given a turn where no instruction was saved, when the reply is sent, then it carries no
-  saved-instruction line, whatever the model wrote.
+- **AC2** — Given any turn, when the reply is sent, then it carries a line marked 📌 naming an
+  instruction saved or a proposal applied if and only if that turn saved or applied it; a line the
+  model writes in that shape is removed. What the model says in its own prose is not covered: it is
+  told never to claim a save, and that is watched, not enforced.
 - **AC3** — Given the distillation recognizes an instruction, when no instruction with the same or a
   related meaning exists, then it creates it and the user's next reply carries one line with the
   exact text and the offer to change or remove it; and when one does exist, nothing is created.
@@ -95,17 +102,21 @@ many instructions a user may hold (question 7).
   beside its two parts, and nothing moves before the user's yes.
 - **AC7** — Given a user holds more than 20 instructions, when their count is recorded, then the
   journal carries a warning line for that user.
-- **AC8** — Given content Tabris read, searched, saw or received as an attachment says to save an
-  instruction, when the turn ends and when the distillation runs, then no instruction is created from
-  it.
+- **AC8** — Given content Tabris read, searched, saw or received as an attachment in a turn says to
+  save an instruction, when that turn ends and when the distillation runs, then no instruction is
+  created from it. Content Tabris quoted in an earlier reply is not covered: an instruction saved from
+  it shows its 📌 line, and is removed through F4.
 - **AC9** — Given a proposal waiting for a yes, when the user's next message is not an answer to it,
   then nothing is applied and the proposal lapses.
 - **AC10** — Given an instruction that asks Tabris to skip a rule the system enforces, when a turn
   would fall under that rule, then the rule still applies.
 - **AC11** — Given two users, when one asks about, changes or removes instructions, then only their
   own are seen or touched.
-- **AC12** — Given a user asks what Tabris remembers about them, when it answers, then their
-  instructions appear in their own block before the facts, each as stored.
+- **AC12** — Given a user asks what Tabris remembers about them, when the code writes the list, then
+  their instructions appear in their own block before the facts, each as stored. When the model writes
+  the list itself instead, it copies from a prompt where the instructions already come first: likely
+  right, watched, not guaranteed — item 35p decides from a month of journal whether to force the code's
+  path.
 
 ## Open questions
 
@@ -121,3 +132,4 @@ many instructions a user may hold (question 7).
 | 8 | Can a fact moved to the instructions be moved back? | resolved 2026-09-30 | No. An instruction that turns out not to be one is removed through F4 — the user asks for it to be forgotten, sees which, and says yes — and it does not return as a fact. The promise of reversibility had entered question 1 as the agent's argument, never as the owner's decision, and is withdrawn there. **Rejected:** a restore path for the user in the conversation. **Rejected:** a restore command in the operator tool. **Deferred:** none. |
 | 9 | How long does a proposal wait for its yes (F3, F4, F6)? | resolved 2026-09-30 | Until the user's next message. If that message is not an answer to it, the proposal lapses and nothing is applied (AC9); asking again starts a new one. A yes that arrives later, out of context, is not read as one — it could be answering anything. **Rejected:** none. **Deferred:** none. |
 | 10 | In F6, must the user accept the whole proposal or nothing? | resolved 2026-09-30 | Neither: they can say yes to all of it or name what should not move. A review of seven rows where one is wrong should not cost the other six. **Rejected:** all-or-nothing. **Deferred:** none. |
+| 11 | How does the user answer a proposal (F3, F4, F6)? | resolved 2026-10-01 | In their own words, on every channel alike — no button and no required yes/no. The reply is read as agreement, an adjustment or neither; an adjustment brings a new proposal, and only agreement applies anything. A reply misread as agreement shows at once in the line saying what was applied, and is undone with one more message; nothing is deleted. **Rejected:** buttons on Discord with a typed yes/no in the CLI — two paths for one decision, and a fixed answer the owner does not want to ask of users. **Deferred:** none. |
