@@ -40,5 +40,5 @@
 - [x] No slice leaves code that nothing calls
 - [x] The phase documents were read against each other; contradictions resolved or recorded
 - [x] No `[NEEDS CLARIFICATION]` marker is left unresolved
-- [ ] Every claim here was confirmed in conversation before it was written down — **not yet true: this list was drafted from the three closed documents and the code, and is read with the owner before any slice is built**
+- [x] Every claim here was confirmed in conversation before it was written down — by the owner on 2026-10-01, on the strength of the reviewers' 15 findings walked through one by one. The literal test commands and the bounded waits were not walked through; each slice's own review reads them again
 - [x] `tools/review.py` ran on the phase documents with the spec as contract, before any code; every finding is resolved or recorded — run 2026-09-30 over the framing, the plan and this list, two reviewers, $0.48: 26 findings, 15 distinct, every one resolved in conversation on 2026-10-01 and folded into the spec, the plan (D12 to D14, and dated corrections to D3 and D11) and this list. One correction round and no re-review, by the owner's rule
