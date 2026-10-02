@@ -165,6 +165,34 @@ proposals and the execution are one piece.
 - **Quality inside a reply** — "verify proper names", "no duplicate links" — stays a request to the
   model, fenced only where a fence already exists.
 
-**Open, for the Spec:** whether the distillation may still create an instruction without asking, now
-that creating one is a proposal; and how other assistants carry out standing rules — the research
-for this half is not done yet.
+**Research for this half (2026-10-02):**
+
+- **OpenClaw** structures a standing order much like the three parts above — scope, trigger
+  (schedule, event or condition), approval gates, escalation — and asks the agent to
+  "Execute-Verify-Report". The order is injected into every session and the verifying is the agent's
+  own; nothing outside the model checks it. Time-based triggers go through its scheduler —
+  [Automation](https://docs.openclaw.ai/automation.md),
+  [Standing Orders](https://docs.openclaw.ai/automation/standing-orders.md).
+- **Hermes** carries out scheduled jobs only: a gateway ticking every 60 seconds launches what is due
+  in a fresh session — [Cron](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron).
+  Nothing found for a rule a message triggers.
+- **Claude Code** draws the same line this amendment does: instructions in `CLAUDE.md` the model will
+  probably follow, hooks that run whether or not it cooperates —
+  [Hooks explained](https://blakecrosley.com/blog/claude-code-hooks-explained),
+  [CLAUDE.md vs hooks](https://www.aicodex.to/articles/claude-md-vs-hooks). A compliance figure for
+  instructions quoted there (70–90%) is a third party's, unmeasured; this item's own is 3 of 20.
+- **Rasa Mantle** enforces three things in its runtime loop: ordered steps, where the framework holds
+  a step pointer and fixed steps run "with no model call at all"; tools gated by a condition, removed
+  from the model's list when it does not hold; and conditional instructions, stripped from the prompt
+  when they do not apply — [Guarantees](https://mantle.rasa.com/maestro/guarantees.md).
+- **Read together:** the two assistants Tabris is modelled on rely on the prompt for message-triggered
+  orders, which is what this item measured failing; where a guarantee exists, code decides.
+
+**Open, for the Spec:**
+
+- Whether the distillation may still create an instruction without asking, now that creating one is
+  a proposal.
+- Whether the prompt carries every instruction on every turn, or only those whose trigger holds on
+  this one, worded as this turn's task (Mantle's conditional instructions). It would take from the
+  model the decision of whether an instruction applies — where the 2026-10-02 report failed — and
+  helps the parts code cannot force.
