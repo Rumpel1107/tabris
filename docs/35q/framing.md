@@ -104,7 +104,8 @@ A direction, not a design:
 Each with where it lives and what it waits on:
 
 - **The code executing an order** (a time of day, "every day at seven") → item 39. Waits on its
-  "what is due now" machinery.
+  "what is due now" machinery. *Narrowed on 2026-10-02: only an order that needs Tabris to speak
+  first stays out — see the amendment below.*
 - **Clearing transient or expired facts, long multi-subject rows, what is stored in excess** → 35g.
 - **Trying another model for the distillation** → 35g's first measurement.
 - **Repeating the moving pass periodically** → deferred, not rejected. Decided once there is evidence
@@ -113,3 +114,57 @@ Each with where it lives and what it waits on:
 ## Decision
 
 Build.
+
+---
+
+## Amendment, 2026-10-02 — an instruction is carried out, not only kept
+
+**Why the scope widened.** On 2026-10-02 the owner's daily report arrived in full shape with no
+search behind it: the turn's message was a greeting, the freshness classifier read it `stable`, and
+the model wrote sourced, dated figures it never looked up. A probe rebuilt that turn from a backup of
+production — same history, facts and clock — and read only the model's first response, 10 runs per
+cell:
+
+| Prompt | Greeting in Spanish | Greeting in English |
+|---|---|---|
+| Today's (instruction among the facts) | 6 of 10 searched | 1 of 10 |
+| The planned block above the facts, with persona line 5 pointing at it | 0 of 10 | 3 of 10 |
+
+In every run that did not search, the model recognised the report and either wrote it without the
+search or promised to fetch it and stopped. The instruction asks for the searches and persona line 17
+forbids a figure no search returned: both present and correct, so wording is not the lever. Storing
+an instruction apart and weighing it above the facts keeps it from being lost, and does nothing to get
+it carried out. The owner's call: this item ensures instructions are carried out, as far as code
+allows, and was paused at slice 1 to widen; it is one item and not two because the store, the
+proposals and the execution are one piece.
+
+**In scope, added — a direction, not a design:**
+
+- **Interpreted once, carried out by code.** When an instruction is created, the model translates it
+  into three parts: *when* it applies, the *steps* it requires beyond writing, and what the *reply*
+  must contain. From then on code evaluates those parts on every turn, and a model is consulted only
+  where interpretation is genuinely needed.
+- **Any trigger, not one kind.** Always on; by count or clock ("the third message of the day", "on
+  Mondays"); by literal text ("whenever I say blue"); by meaning ("when I ask for a product"). The
+  first three are decided by code. The last is decided by a classifier shaped like the freshness one,
+  given the user's message and the instruction's condition — measurable, and only as reliable as the
+  measurement says.
+- **Steps forced, not hoped for.** A step fixed in advance is run by code before the model is called;
+  an open one is forced as a tool call, one round per step; whatever is left is checked after.
+- **A literal reply is the code's.** "Say X" is added or checked by code.
+- **Reliability is told, not implied.** Each instruction knows which of its parts code guarantees and
+  which depend on a model, and the user can be told so.
+- **Creating one is a proposal.** The user sees the translation — the exact text and its three parts —
+  and confirms, rejects or adjusts it in words, on the proposal machinery already designed for
+  changing and removing (plan D12).
+
+**Out of scope, still:**
+
+- **An instruction that needs Tabris to speak first** — "at seven, without my writing" → item 39. The
+  rule fits the three parts; sending a message unprompted is that item's piece.
+- **Quality inside a reply** — "verify proper names", "no duplicate links" — stays a request to the
+  model, fenced only where a fence already exists.
+
+**Open, for the Spec:** whether the distillation may still create an instruction without asking, now
+that creating one is a proposal; and how other assistants carry out standing rules — the research
+for this half is not done yet.

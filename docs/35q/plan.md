@@ -1,5 +1,8 @@
 # Plan — 35q · Standing orders survive the distillation
 
+> **Reopened 2026-10-02** with the widened scope (`framing.md`, amendment). D13, which slice 1
+> built, stands; the rest is revisited when the Design is.
+
 ## Approach
 
 Instructions get a store of their own, numbered from the same counter as facts. Three ways in: the

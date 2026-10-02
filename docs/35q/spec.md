@@ -1,5 +1,8 @@
 # Spec — 35q · Standing orders survive the distillation
 
+> **Reopened 2026-10-02** with the widened scope (`framing.md`, amendment). What follows was agreed
+> before it and stands until the reopened Spec says otherwise.
+
 ## Purpose and scope
 
 A standing instruction a user gives Tabris is kept apart from the facts it remembers about them,
