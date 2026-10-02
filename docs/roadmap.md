@@ -55,34 +55,35 @@ comparing against the outgoing tag before it shipped, which is what was done.
 | 9 | **35j** — Fresh data outranks what the model remembers: closed in `v0.2.0`. What remains is the journal watch its own slice 3 names — two weeks of `freshness:` lines decide whether the first persona rule can go, and each real miss joins the probe's lot | 🔶 waiting on the journal, not on code |
 | 10 | **35k** — A precise claim the turn never received: first slice is a probe measuring how often a stable fact is misremembered; also unifies the correction cycles now living side by side (D8 in `docs/35j/plan.md`) | ⬜ |
 | 11 | **35l** — A fresh value can still be wrong: needs 35j in service first; decide what makes a search result verified | ⬜ |
-| 12 | **35q** — Standing instructions as their own kind of memory: kept apart from the facts so no merge can retire one (DEF-15), weighed above them, changed or removed only on the user's own agreement. Executing one on a schedule is item 39, not this one. Trail in `docs/35q/` | 🔶 Tasks closed 2026-10-01; Build next, from slice 1 |
-| 13 | **35p** — Decide from the journal whether the `list_facts` path earns its place: a month of `facts: list_facts ran` against `facts: recited without the call` says how often the model uses the tool at all. Few or none, and the marker, the tool and the substitution come out, leaving the renderer and the persona line that actually fixed the recital; a usable fraction, and slices 3 and 4 are what raise it. The counting window opens the day the version carrying 35h is deployed, not the day it was built. Item 35q adds the instructions to the same count, from the day its slice 1 is deployed | ⬜ |
+| 12 | **35q** — Standing instructions as their own kind of memory: kept apart from the facts so no merge can retire one (DEF-15), weighed above them, changed or removed only on the user's own agreement. Executing one on a schedule is item 39, not this one. Whether the steps an instruction requires are actually run — on 2026-10-02 the daily report arrived in its full shape with no search behind it, its figures sourced and dated — is not this item either: its slice 2 measures whether the block alone gets them run, and below 9 of 10 a new item opens for code to check them. Trail in `docs/35q/` | 🔶 Tasks closed 2026-10-01; Build next, from slice 1 |
+| 13 | **35r** — The fact tools held back by code, not by their description: `remember_fact` and `update_profile` refused outside the turn's first round and on a message carrying an image or a document, each refusal a journal line — the fence item 35q's slice 3 builds for `save_instruction`, reused. Today only the tool's description asks the model to wait for the user. Needs 35q's slice 3 first | ⬜ |
+| 14 | **35p** — Decide from the journal whether the `list_facts` path earns its place: a month of `facts: list_facts ran` against `facts: recited without the call` says how often the model uses the tool at all. Few or none, and the marker, the tool and the substitution come out, leaving the renderer and the persona line that actually fixed the recital; a usable fraction, and slices 3 and 4 are what raise it. The counting window opens the day the version carrying 35h is deployed, not the day it was built. Item 35q adds the instructions to the same count, from the day its slice 1 is deployed | ⬜ |
 
 ## Phase 4 — Always-on (pre-freeze)
 
 | # | Item | Status |
 |---|---|---|
-| 14 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
-| 15 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
-| 16 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. The owner's shape for the channel (2026-09-30): an admin user defined in configuration receives them; item 35q's instruction-count warning is one of its first signals. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
-| 17 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
-| 18 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first. **Item 35q's execution half lands here**: an order that says "every day at seven" needs the same "what is due" machinery | ⬜ |
-| 19 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
-| 20 | **39b** — Transcription you can act on: reassess Gemini 3.5 Transcribe as Groq's fallback, and measure the primary's accuracy, which the owner reports as often wrong — unmeasured so far, and dearer since item 35q, where a transcribed voice note can save an instruction or agree to a proposal | ⬜ |
-| 21 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
-| 22 | **38b** — An empty model reply costs the whole turn: `strip_time_stamp` receives `None` and raises, and the line sits outside the rollback, so the user's own message stays in the history. Found reviewing item 35h slice 1 on 2026-09-25; the hole predates it and has never been seen in production | ⬜ |
+| 15 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
+| 16 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
+| 17 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. The owner's shape for the channel (2026-09-30): an admin user defined in configuration receives them; item 35q's instruction-count warning is one of its first signals. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
+| 18 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |
+| 19 | **39** — Scheduled messages — Tabris speaking first: a cheap reminder and a costly recurring briefing, built as one Feature with the reminder shipped and verified first. **Item 35q's execution half lands here**: an order that says "every day at seven" needs the same "what is due" machinery | ⬜ |
+| 20 | **39a** — Deliver a suspended person their export as a direct-message attachment; needs item 39's "check what is due" machinery | ⬜ |
+| 21 | **39b** — Transcription you can act on: reassess Gemini 3.5 Transcribe as Groq's fallback, and measure the primary's accuracy, which the owner reports as often wrong — unmeasured so far, and dearer since item 35q, where a transcribed voice note can save an instruction or agree to a proposal | ⬜ |
+| 22 | **39c** — Is DeepSeek still the right primary for `general`/`memory`? Needs the owner judging real outputs side by side, not a probe | ⬜ |
+| 23 | **38b** — An empty model reply costs the whole turn: `strip_time_stamp` receives `None` and raises, and the line sits outside the rollback, so the user's own message stays in the history. Found reviewing item 35h slice 1 on 2026-09-25; the hole predates it and has never been seen in production | ⬜ |
 
 ## Phase 5 — After the freeze (backlog, not started)
 
 | # | Item | Status |
 |---|---|---|
-| 23 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
-| 24 | **47** — Notion integration via its API | ⬜ |
-| 25 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
-| 26 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
-| 27 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
-| 28 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
-| 29 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
-| 30 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
-| 31 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
-| 32 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
+| 24 | **46** — Google Workspace integration (Calendar, Gmail, Drive) via OAuth | ⬜ |
+| 25 | **47** — Notion integration via its API | ⬜ |
+| 26 | **47a** — File tools: read and write inside a working directory; prerequisite for 47b | ⬜ |
+| 27 | **47b** — Terminal client, reusing the link-code identity; needs 47a | ⬜ |
+| 28 | **48** — CLI UX remainder: `Ctrl+C` saves memory on exit, streaming responses | ⬜ |
+| 29 | **49** — PM / Dev / Tutor role structure on top of the role→provider map | ⬜ |
+| 30 | **50** — Specialized agents by strength (research, documents, images, video) as budget allows | ⬜ |
+| 31 | **51** — Multi-provider parallel search aggregation; revisit only if single-provider quality proves insufficient | ⬜ |
+| 32 | **52** — Add Brave as a second search provider, sequential fallback after Tavily | ⬜ |
+| 33 | **53** — Spoken replies (text-to-speech), post-freeze | ⬜ |
