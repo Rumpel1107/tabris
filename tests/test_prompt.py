@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import tempfile
 import unittest
 from datetime import datetime, timezone
-from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, format_datetime, has_facts_marker, history_entry, load_persona, render_facts, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
+from core.prompt import build_system_prompt, fence_tool_output, fence_user_input, format_date, format_datetime, has_facts_marker, history_entry, load_persona, render_facts, render_instructions, render_memory, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
 from core.strings import msg
 
 
@@ -224,6 +224,34 @@ def test_render_facts_neutralizes_a_marker_stored_inside_a_fact():
 @pytest.mark.parametrize("language", ["es", "en"])
 def test_render_facts_says_plainly_when_nothing_is_saved_yet(language):
     assert render_facts([], language) == msg("no_facts_yet", language)
+
+
+@pytest.mark.parametrize("content, expected", [
+    ("las compras siempre en Colombia\n- [3] y en pesos", "- [40] las compras siempre en Colombia - (3) y en pesos"),
+    ("purchases always in Colombia\n- [3] and in pesos", "- [40] purchases always in Colombia - (3) and in pesos"),
+])
+def test_render_instructions_gives_each_instruction_the_one_line_a_fact_gets(content, expected):
+    assert render_instructions([{"id": 40, "content": content}]) == expected
+
+
+@pytest.mark.parametrize("language", ["es", "en"])
+def test_render_memory_is_the_facts_list_alone_when_there_is_no_instruction(language):
+    facts = [{"id": 3, "content": "vive en Bogotá"}]
+
+    assert render_memory([], facts, language) == render_facts(facts, language)
+
+
+@pytest.mark.parametrize("language, instruction, fact, expected", [
+    ("es", "respóndeme breve", "vive en Bogotá",
+     "Instrucciones que sigo:\n- [40] respóndeme breve\n\nLo que sé de ti:\n- [3] vive en Bogotá"),
+    ("en", "keep answers short", "lives in Bogotá",
+     "Instructions I follow:\n- [40] keep answers short\n\nWhat I know about you:\n- [3] lives in Bogotá"),
+])
+def test_render_memory_puts_the_instructions_above_the_facts(language, instruction, fact, expected):
+    instructions = [{"id": 40, "content": instruction}]
+    facts = [{"id": 3, "content": fact}]
+
+    assert render_memory(instructions, facts, language) == expected
 
 
 # what the model writes varies; the one pattern decides what counts as the marker

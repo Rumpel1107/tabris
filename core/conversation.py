@@ -11,9 +11,9 @@ from zoneinfo import ZoneInfo
 
 from core import freshness, memory_manager, providers
 from core.account import deletion_deadline
-from core.db import create_link_code, deactivate_message, get_facts, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
+from core.db import create_link_code, deactivate_message, get_facts, get_instructions, get_last_message_time, get_user, get_user_channels, save_fact, save_message, update_user_profile
 from core.onboarding import resolve_location
-from core.prompt import build_system_prompt, FACTS_MARKER, facts_copied, fence_tool_output, fence_user_input, format_date, has_facts_marker, render_facts, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
+from core.prompt import build_system_prompt, FACTS_MARKER, facts_copied, fence_tool_output, fence_user_input, format_date, has_facts_marker, render_memory, stamp_time, strip_facts_markers, strip_time_stamp, substitute_facts_block
 from core.search import FailedFetch, TextBudget, web_fetch, web_search
 from core.strings import MESSAGES, msg
 from core.text import drop_unverifiable_links, find_urls, hosts_of, untraceable_urls
@@ -460,7 +460,7 @@ def _place_facts_block(reply, tools_ran, db_path, user_id, language, turn_facts=
         logger.info("facts: list_facts ran, no marker")
         return reply
     try:
-        block = render_facts(get_facts(db_path, user_id), language)
+        block = render_memory(get_instructions(db_path, user_id), get_facts(db_path, user_id), language)
     except Exception:
         # the answer is already paid for: the user gets it without the list, and knows why
         logger.exception("facts: the stored facts could not be read, list not placed")

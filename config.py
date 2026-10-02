@@ -70,6 +70,7 @@ MEMORY_TRIGGER_EXCHANGES = 15
 MEMORY_TRIGGER_SECONDS = 1200
 MEMORY_MAX_NEW_FACTS = 5
 MEMORY_MAX_RETIRE_IDS = 15  # retiring is reversible and bounded to facts already shown to the model; adding is the injection-relevant half
+INSTRUCTIONS_WARN_AT = 20   # active instructions per user past which every save writes a warning line (item 35q, D11)
 
 # --- Database Configuration ---
 DB_BUSY_TIMEOUT_MS = 5000   # ms a connection waits for a locked DB before failing (0 = fail instantly)

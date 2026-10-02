@@ -44,6 +44,21 @@ def render_facts(facts: list, language: str) -> str:
     return "\n".join(f"- [{fact['id']}] {_one_line(fact['content'])}" for fact in facts)
 
 
+def render_instructions(instructions: list) -> str:
+    """The instructions as the code writes them, with the one-line treatment a fact gets (item 35q)."""
+    return "\n".join(f"- [{row['id']}] {_one_line(row['content'])}" for row in instructions)
+
+
+def render_memory(instructions: list, facts: list, language: str) -> str:
+    """What the recital places: the instructions first, under their own heading, then the facts."""
+    if not instructions:
+        return render_facts(facts, language)
+    return (
+        f"{msg('instructions_heading', language)}\n{render_instructions(instructions)}\n\n"
+        f"{msg('facts_heading', language)}\n{render_facts(facts, language)}"
+    )
+
+
 def _one_line(content: str) -> str:
     """A fact occupies one line and carries nothing else shaped like an id or like the marker (item 35h)."""
     one_line = " ".join(content.splitlines())

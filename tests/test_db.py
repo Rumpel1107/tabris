@@ -1,16 +1,19 @@
 import config
 import contextlib
+import logging
 import os
 import pytest
 import sqlite3
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_messages_before, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_last_message_time, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import deactivate_fact, deactivate_message, deactivate_user, create_link_code, create_user, create_user_with_channel, delete_messages_before, delete_user_completely, find_link_code, find_user_by_key, get_deactivated_users, get_facts, get_instructions, get_last_message_time, get_messages, get_user, get_user_channels, get_user_records, init_db, reactivate_user, redeem_link_code, register_user_channel, retire_instruction, save_fact, save_instruction, save_message, update_user_profile, _connect
 
 
 class TestInitDb(unittest.TestCase):
@@ -137,6 +140,9 @@ def test_get_user_records_returns_everything_stored():
         retired_id = save_fact(db_path, user_id, "likes tea")
         deactivate_fact(db_path, user_id, retired_id)
         save_fact(db_path, user_id, "lives in Panama")
+        retired_instruction = save_instruction(db_path, user_id, "answer in English")
+        retire_instruction(db_path, user_id, retired_instruction)
+        save_instruction(db_path, user_id, "answer briefly")
         undone_id = save_message(db_path, user_id, "assistant", "a reply never read")
         deactivate_message(db_path, user_id, undone_id)
         save_message(db_path, user_id, "user", "hola")
@@ -145,6 +151,7 @@ def test_get_user_records_returns_everything_stored():
 
         assert records["user"]["name"] == "Ana"
         assert {fact["content"] for fact in records["facts"]} == {"likes tea", "lives in Panama"}
+        assert {row["content"] for row in records["instructions"]} == {"answer in English", "answer briefly"}
         assert {message["content"] for message in records["messages"]} == {"a reply never read", "hola"}
         assert records["channels"] == ["discord"]
 
@@ -615,8 +622,8 @@ def _rows_of_user(db_path, user_id):
     with contextlib.closing(_connect(db_path)) as conn:
         return {
             table: conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {column}=?", (user_id,)).fetchone()[0]
-            for table, column in (("users", "id"), ("facts", "user_id"), ("messages", "user_id"),
-                                  ("user_channels", "user_id"), ("link_codes", "user_id"))
+            for table, column in (("users", "id"), ("facts", "user_id"), ("instructions", "user_id"),
+                                  ("messages", "user_id"), ("user_channels", "user_id"), ("link_codes", "user_id"))
         }
 
 
@@ -625,6 +632,7 @@ def test_delete_user_completely_leaves_no_row_in_any_table(tmp_path):
     init_db(db_path)
     user_id = create_user_with_channel(db_path, "Ana", "discord", "key-1")
     save_fact(db_path, user_id, "likes tea")
+    save_instruction(db_path, user_id, "answer briefly")
     save_message(db_path, user_id, "user", "hola")
     create_link_code(db_path, user_id)
 
@@ -644,7 +652,7 @@ def test_delete_user_completely_touches_nobody_else(tmp_path):
 
     delete_user_completely(db_path, leaving)
 
-    assert _rows_of_user(db_path, staying) == {"users": 1, "facts": 1, "messages": 1, "user_channels": 1, "link_codes": 0}
+    assert _rows_of_user(db_path, staying) == {"users": 1, "facts": 1, "instructions": 0, "messages": 1, "user_channels": 1, "link_codes": 0}
 
 
 class _ConnectionFailingOnTheUserRow:
@@ -681,7 +689,86 @@ def test_delete_user_completely_is_all_or_nothing(tmp_path):
         with pytest.raises(sqlite3.OperationalError):
             delete_user_completely(db_path, user_id)
 
-    assert _rows_of_user(db_path, user_id) == {"users": 1, "facts": 1, "messages": 0, "user_channels": 1, "link_codes": 0}
+    assert _rows_of_user(db_path, user_id) == {"users": 1, "facts": 1, "instructions": 0, "messages": 0, "user_channels": 1, "link_codes": 0}
+
+
+def test_an_instruction_never_takes_the_number_of_a_fact_being_written_at_the_same_time(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Ana", "es")
+    holder = sqlite3.connect(db_path, isolation_level=None)
+    holder.execute("BEGIN IMMEDIATE")
+    fact_id = holder.execute("INSERT INTO facts (user_id, content) VALUES (?, 'likes tea')", (user_id,)).lastrowid
+    saved = []
+    writer = threading.Thread(target=lambda: saved.append(save_instruction(db_path, user_id, "answer briefly")))
+
+    writer.start()
+    time.sleep(0.3)  # the writer reaches the counter while the fact is still uncommitted
+    holder.execute("COMMIT")
+    holder.close()
+    writer.join()
+
+    assert saved == [fact_id + 1]
+
+
+def test_a_fact_saved_by_unchanged_code_after_an_instruction_takes_a_number_no_instruction_holds(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Ana", "es")
+    first_fact = save_fact(db_path, user_id, "likes tea")
+    instruction_id = save_instruction(db_path, user_id, "answer briefly")
+
+    # save_fact is what the code of an earlier tag runs, after a rollback, against this same database
+    later_fact = save_fact(db_path, user_id, "lives in Panama")
+
+    assert [first_fact, instruction_id, later_fact] == [1, 2, 3]
+
+
+def test_a_database_that_never_stored_a_fact_still_numbers_its_first_instruction(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Ana", "es")
+
+    instruction_id = save_instruction(db_path, user_id, "answer briefly")
+    fact_id = save_fact(db_path, user_id, "likes tea")
+
+    assert [instruction_id, fact_id] == [1, 2]
+
+
+def test_retire_instruction_touches_only_the_owners_row(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    ana = create_user(db_path, "Ana", "es")
+    rumpel = create_user(db_path, "Rumpel", "es")
+    kept = save_instruction(db_path, ana, "answer briefly")
+    gone = save_instruction(db_path, ana, "answer in English")
+
+    retire_instruction(db_path, rumpel, kept)
+    retire_instruction(db_path, ana, gone)
+
+    assert [row["id"] for row in get_instructions(db_path, ana)] == [kept]
+    assert get_instructions(db_path, rumpel) == []
+
+
+def test_save_instruction_journals_the_count_and_warns_past_the_line(tmp_path, caplog):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Ana", "es")
+
+    with patch.object(config, "INSTRUCTIONS_WARN_AT", 1), caplog.at_level(logging.INFO, logger="core.db"):
+        save_instruction(db_path, user_id, "answer briefly")
+        save_instruction(db_path, user_id, "answer in English")
+
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("INFO", f"instructions: user {user_id} holds 1"),
+        ("INFO", f"instructions: user {user_id} holds 2"),
+        ("WARNING", f"instructions: user {user_id} holds 2, past the warning line of 1"),
+    ]
+
+
+def test_save_instruction_refuses_a_path_that_is_not_a_database(tmp_path):
+    with pytest.raises(sqlite3.OperationalError):
+        save_instruction(str(tmp_path), 1, "answer briefly")
 
 
 def test_redeem_rejects_deactivated_account_even_with_a_valid_code(tmp_path):

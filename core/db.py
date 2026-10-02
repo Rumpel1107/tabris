@@ -1,8 +1,11 @@
 import config
 import contextlib
+import logging
 import os
 import secrets
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 _LINK_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"   # no 0/O/1/I/L to avoid ambiguity when typed
 
@@ -39,7 +42,17 @@ def init_db(db_path):
                 retired_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-            
+
+            -- no AUTOINCREMENT: the id is taken from the facts' counter (item 35q, D13)
+            CREATE TABLE IF NOT EXISTS instructions (
+                id         INTEGER PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                content    TEXT NOT NULL,
+                is_active  INTEGER NOT NULL DEFAULT 1,
+                retired_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             CREATE TABLE IF NOT EXISTS messages (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -137,6 +150,54 @@ def get_facts(db_path, user_id):
             (user_id,)
         ).fetchall()
         return [dict(row) for row in rows]
+
+def save_instruction(db_path: str, user_id: int, content: str) -> int:
+    """Store a standing instruction under the next number of the facts' own counter, so one number names one item (item 35q, D13)."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.isolation_level = None
+        # the lock comes before the read: a fact written meanwhile commits first, and the number counts past it
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='facts'").fetchone()
+            instruction_id = (row["seq"] if row else 0) + 1
+            if row:
+                conn.execute("UPDATE sqlite_sequence SET seq=? WHERE name='facts'", (instruction_id,))
+            else:
+                # no fact was ever stored, so the counter save_fact reads does not exist yet
+                conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('facts', ?)", (instruction_id,))
+            conn.execute(
+                "INSERT INTO instructions (id, user_id, content) VALUES (?, ?, ?)",
+                (instruction_id, user_id, content)
+            )
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        held = conn.execute(
+            "SELECT COUNT(*) FROM instructions WHERE user_id=? AND is_active=1", (user_id,)
+        ).fetchone()[0]
+    logger.info(f"instructions: user {user_id} holds {held}")
+    if held > config.INSTRUCTIONS_WARN_AT:
+        logger.warning(f"instructions: user {user_id} holds {held}, past the warning line of {config.INSTRUCTIONS_WARN_AT}")
+    return instruction_id
+
+def get_instructions(db_path: str, user_id: int) -> list[dict]:
+    """Return the user's active instructions, oldest first."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT * FROM instructions WHERE user_id=? AND is_active=1 ORDER BY id",
+            (user_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+def retire_instruction(db_path: str, user_id: int, instruction_id: int) -> None:
+    """Retire one instruction, scoped to its owner; nothing is deleted."""
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute(
+            "UPDATE instructions SET is_active=0, retired_at=datetime('now') WHERE id=? AND user_id=?",
+            (instruction_id, user_id)
+        )
+        conn.commit()
 
 def save_message(db_path, user_id, role, content, attachment=None) -> int:
     with contextlib.closing(_connect(db_path)) as conn:
@@ -254,6 +315,7 @@ def delete_user_completely(db_path: str, user_id: int) -> None:
             conn.execute("DELETE FROM user_channels WHERE user_id=?", (user_id,))
             conn.execute("DELETE FROM messages WHERE user_id=?", (user_id,))
             conn.execute("DELETE FROM facts WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM instructions WHERE user_id=?", (user_id,))
             conn.execute("DELETE FROM users WHERE id=?", (user_id,))
 
 
@@ -341,6 +403,9 @@ def get_user_records(db_path: str, user_id: int) -> dict:
         facts = conn.execute(
             "SELECT * FROM facts WHERE user_id=? ORDER BY id", (user_id,)
         ).fetchall()
+        instructions = conn.execute(
+            "SELECT * FROM instructions WHERE user_id=? ORDER BY id", (user_id,)
+        ).fetchall()
         messages = conn.execute(
             "SELECT * FROM messages WHERE user_id=? ORDER BY id", (user_id,)
         ).fetchall()
@@ -348,6 +413,7 @@ def get_user_records(db_path: str, user_id: int) -> dict:
             "user": dict(user) if user else None,
             "channels": [row["channel"] for row in channels],
             "facts": [dict(row) for row in facts],
+            "instructions": [dict(row) for row in instructions],
             "messages": [dict(row) for row in messages],
         }
 

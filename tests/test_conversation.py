@@ -15,7 +15,7 @@ from unittest.mock import patch
 from config import MEMORY_TRIGGER_EXCHANGES, MEMORY_TRIGGER_SECONDS
 from core import providers
 from core.conversation import _place_facts_block, build_messages, choose_role, FORGET_FACT_TOOL, handle_turn, LIST_FACTS_TOOL, REMEMBER_FACT_TOOL, REQUEST_LINK_CODE_TOOL, route_message, run_in_background, run_with_tools, safe_handle_turn, should_trigger_memory, undo_last_turn, UPDATE_PROFILE_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL
-from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_message, update_user_profile, _connect
+from core.db import create_user, find_link_code, get_facts, get_messages, get_user, init_db, redeem_link_code, register_user_channel, save_fact, save_instruction, save_message, update_user_profile, _connect
 from core.memory_manager import MemoryChanges
 from core.search import FailedFetch
 from core.onboarding import ResolvedLocation
@@ -760,6 +760,29 @@ def test_handle_turn_writes_the_stored_facts_itself_when_list_facts_ran(mock_cha
         reply = handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
 
         assert reply == f"Esto tengo guardado:\n- [{fact_id}] vive en Bogotá"
+
+
+@patch("core.conversation.providers.chat")
+def test_handle_turn_lists_the_instructions_above_the_facts_when_list_facts_ran(mock_chat):
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "instructions.db")
+        init_db(db_path)
+        user_id = create_user(db_path, "Rumpel", "es")
+        fact_id = save_fact(db_path, user_id, "vive en Bogotá")
+        instruction_id = save_instruction(db_path, user_id, "las compras siempre en Colombia")
+        session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
+        mock_chat.side_effect = [
+            providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
+            providers.ChatResponse(content="Esto tengo guardado:\n{{FACTS}}", tool_calls=None),
+        ]
+
+        reply = handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
+
+        assert reply == (
+            "Esto tengo guardado:\n"
+            f"Instrucciones que sigo:\n- [{instruction_id}] las compras siempre en Colombia\n\n"
+            f"Lo que sé de ti:\n- [{fact_id}] vive en Bogotá"
+        )
 
 
 @patch("core.conversation.providers.chat")
