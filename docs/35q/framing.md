@@ -153,7 +153,8 @@ proposals and the execution are one piece.
   an open one is forced as a tool call, one round per step; whatever is left is checked after.
 - **A literal reply is the code's.** "Say X" is added or checked by code.
 - **Reliability is told, not implied.** Each instruction knows which of its parts code guarantees and
-  which depend on a model, and the user can be told so.
+  which depend on a model, and the user can be told so. **Corrected 2026-10-07:** told to the
+  operator, never to the user (spec question 16).
 - **Creating one is a proposal.** The user sees the translation — the exact text and its three parts —
   and confirms, rejects or adjusts it in words, on the proposal machinery already designed for
   changing and removing (plan D12).

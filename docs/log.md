@@ -8,6 +8,23 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-02 to 2026-10-09 — Item 35q widens from keeping instructions to carrying them out
+
+Slice 1 — the store, the shared counter and the recital — was built and verified live on
+2026-10-02, and the item paused there. The probe slice 2 runs before its code rebuilt one of the
+owner's daily-report turns from a backup of production: the instruction asked for searches and the
+persona forbade a figure no search returned, yet the turn ran the searches 3 times in 20 with the
+instruction in its own block, against 7 in 20 with it among the facts. Wording was not the lever, so
+the item widened: an instruction is translated once into when it applies, its steps and what the
+reply must contain, and code enforces those parts on every turn (`docs/35q/framing.md`, amendment).
+
+The Spec was rewritten for it between 2026-10-07 and 09, questions 12 to 21. Every creation is now a
+proposal the user agrees to, the distillation's included; a check of meaning decides whether an
+instruction applies only once it measures 9 of 10 per language; two contradicting instructions never
+stand together. Three routing models were read about for that check — Laya needs a GPU and OpenAI's
+Decisions API is in early access, so only Jev is probed beside the current roster (`plan.md`,
+header).
+
 ## 2026-09-30 to 2026-10-01 — Item 35q's tasks, and what the reviewers found in its documents
 
 The tasks for item 35q were drafted, and `tools/review.py` ran on the framing, the plan and the

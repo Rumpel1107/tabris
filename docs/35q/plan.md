@@ -2,6 +2,17 @@
 
 > **Reopened 2026-10-02** with the widened scope (`framing.md`, amendment). D13, which slice 1
 > built, stands; the rest is revisited when the Design is.
+>
+> **Carried into the Design, 2026-10-07.** The check of meaning (spec question 15) is probed with the
+> current `router` roster and with Jev side by side, in both languages, against the spec's floor;
+> the better one stays, the current one on a tie, since Jev is reached through OpenRouter's decisions
+> endpoint — in alpha, and a call shape the project does not have. Set aside after reading: Laya,
+> self-hosted and needing a GPU (one benchmark measured 49 s a decision on a CPU-only VPS), and
+> OpenAI's Decisions API, in early access only — [Jev vs LLM](https://openrouter.ai/blog/tutorials/jev-vs-llm-when-to-use-each/),
+> [Laya vs Jev](https://flowtivity.ai/blog/laya-open-source-jev-alternative/),
+> [OpenAI Decisions API](https://www.eesel.ai/blog/openai-decisions-api). D3 rests on the turn's
+> first round having seen nothing from outside; a step code runs before the model is called breaks
+> that premise, and D3 is restated here.
 
 ## Approach
 
