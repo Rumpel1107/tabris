@@ -8,6 +8,24 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-14 to 2026-10-15 — Item 35q's Design measures the check of meaning and the translation
+
+The Spec gained questions 22 to 27: one condition and one action per instruction; a repeat offered
+as replace, keep both or leave; an order adjusted with what it orders; code runs only steps that
+read; and the reply stays the model's — every reply check waits on a real instruction that needs it.
+
+The check of meaning went to Jev with `deepseek-chat` behind it (D15): both missed nothing once one
+ambiguous case was dropped, while the `router`'s links sat at the floor's edge. The translation went
+to GPT-6 Luna with Claude Haiku behind it (D19): direct instructions translate right, but no model
+translates the owner's stored rows reliably, mostly because the rows no longer say what he meant —
+DEF-15's class — so the proposal is what refines them.
+
+Not to repeat: the first translation round, $0.36, was discarded for three defects in the probe's
+own scoring that its first answers already showed, and the second cost $0.77 against an estimate of
+$0.40, two reasoning models at five to six times catalog prices. `tools/probe_translation.py` now
+saves every answer as it arrives and scores saved answers again for free. DeepSeek was down during
+the second round, so its two models wait (D19); what that incident showed went to item 39c.
+
 ## 2026-10-02 to 2026-10-09 — Item 35q widens from keeping instructions to carrying them out
 
 Slice 1 — the store, the shared counter and the recital — was built and verified live on
