@@ -32,7 +32,8 @@ Its one re-run found, in all three reviewers, a clarification step that saved an
 time zone (DEF-18); by the method the work went back to Build with it and closed without a third
 round. The re-run's other findings were rejected with their reasons: the cascade sits only in the
 table's creation, but no database that matters ever created the table without it — production runs
-`v0.2.0`, and the local one never had the table.
+`v0.2.0`, and the local one never had the table. `v0.2.1` went into service on 2026-10-17, and
+Tabris answered on Discord.
 
 Not to repeat: the first full run went without a pause, and Groq and Gemini refused 52 and 56 of
 72 calls; refused calls cost nothing, but the run had to be repeated. And the conversation ran in
