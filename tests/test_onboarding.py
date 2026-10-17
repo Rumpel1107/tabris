@@ -21,12 +21,12 @@ from unittest.mock import patch
 @patch("core.onboarding.providers.chat")
 def test_resolve_location_reads_city_and_timezone_from_one_call(mock_chat):
     mock_chat.return_value = providers.ChatResponse(
-        content="City: Madrid, Cundinamarca, Colombia\nTimezone: America/Bogota", tool_calls=None)
+        content="City: Albany, New York, United States\nTimezone: America/New_York", tool_calls=None)
 
-    resolved = resolve_location("vivo en Madrid Cundinamarca en Colombia")
+    resolved = resolve_location("vivo en Albany Nueva York en Estados Unidos")
 
-    assert resolved.city == "Madrid, Cundinamarca, Colombia"
-    assert resolved.timezone == "America/Bogota"
+    assert resolved.city == "Albany, New York, United States"
+    assert resolved.timezone == "America/New_York"
     assert resolved.ambiguous is False
     # one call is the fix itself: separate calls over the same text each picked their own place
     assert mock_chat.call_count == 1
@@ -38,14 +38,40 @@ def test_resolve_location_reads_city_and_timezone_from_one_call(mock_chat):
 @patch("core.onboarding.providers.chat")
 def test_resolve_location_is_ambiguous_without_a_real_timezone(mock_chat, timezone_answer):
     mock_chat.return_value = providers.ChatResponse(
-        content=f"City: Madrid\nTimezone: {timezone_answer}", tool_calls=None)
+        content=f"City: Funza\nTimezone: {timezone_answer}", tool_calls=None)
 
-    assert resolve_location("vivo en Madrid").ambiguous is True
+    assert resolve_location("vivo en Funza").ambiguous is True
 
 
 @patch("core.onboarding.providers.chat", side_effect=Exception("boom"))
 def test_resolve_location_returns_none_when_every_provider_fails(mock_chat):
-    assert resolve_location("vivo en Madrid") is None
+    assert resolve_location("vivo en Funza") is None
+
+
+@pytest.mark.parametrize("text", ["Claro, me mudé a Springfield Illinois", "Sure, I moved to Springfield Illinois"])
+@patch("core.onboarding.providers.chat")
+def test_resolve_location_asks_again_when_the_reply_has_no_city_line(mock_chat, text):
+    mock_chat.side_effect = [
+        providers.ChatResponse(content="City is Springfield, Illinois\nTimezone: America/Chicago", tool_calls=None),
+        providers.ChatResponse(content="City: Springfield, Illinois, United States\nTimezone: America/Chicago", tool_calls=None),
+    ]
+
+    resolved = resolve_location(text)
+
+    assert resolved == ResolvedLocation(city="Springfield, Illinois, United States", timezone="America/Chicago", ambiguous=False)
+    assert mock_chat.call_count == 2
+
+
+@pytest.mark.parametrize("text", ["Claro, me mudé a Springfield Illinois", "Sure, I moved to Springfield Illinois"])
+@patch("core.onboarding.providers.chat")
+def test_resolve_location_is_ambiguous_when_no_reply_has_a_city_line(mock_chat, text):
+    mock_chat.return_value = providers.ChatResponse(content="Timezone: America/Chicago", tool_calls=None)
+
+    resolved = resolve_location(text)
+
+    assert resolved.ambiguous is True
+    assert resolved.timezone == ""
+    assert mock_chat.call_count == 2
 
 
 class TestDetectLanguage(unittest.TestCase):
@@ -246,19 +272,32 @@ def test_clear_location_resolves_the_profile_and_reads_it_back():
 
 def test_ambiguous_location_reasks_and_combines_answer():
     session = Session(language="es", onboarding_step="location", pending_name="Oscar")
-    unclear = ResolvedLocation(city="Madrid", timezone="", ambiguous=True)
-    resolved = ResolvedLocation(city="Madrid, Colombia", timezone="America/Bogota", ambiguous=False)
+    unclear = ResolvedLocation(city="Albany", timezone="", ambiguous=True)
+    resolved = ResolvedLocation(city="Albany, Nueva York", timezone="America/New_York", ambiguous=False)
 
     with patch("core.onboarding.resolve_location", return_value=unclear):
-        reply = advance_onboarding(session, "Madrid", None)
+        reply = advance_onboarding(session, "Albany", None)
     with patch("core.onboarding.resolve_location", return_value=resolved) as mock_resolve:
-        advance_onboarding(session, "Colombia", None)
+        advance_onboarding(session, "Nueva York", None)
 
     assert reply == msg("ask_location_clarify", "es", agent=config.AGENT_NAME)
-    mock_resolve.assert_called_once_with("Madrid, Colombia")
-    assert session.pending_city == "Madrid, Colombia"
-    assert session.pending_timezone == "America/Bogota"
+    mock_resolve.assert_called_once_with("Albany, Nueva York")
+    assert session.pending_city == "Albany, Nueva York"
+    assert session.pending_timezone == "America/New_York"
     assert session.onboarding_step == "confirm"
+
+
+@pytest.mark.parametrize("language, answer", [("es", "no sé"), ("en", "no idea")])
+def test_a_clarification_still_ambiguous_asks_for_the_city_again(language, answer):
+    session = Session(language=language, onboarding_step="location_clarify", pending_name="Oscar", pending_location="Albany")
+    still_unclear = ResolvedLocation(city=f"Albany, {answer}", timezone="", ambiguous=True)
+
+    with patch("core.onboarding.resolve_location", return_value=still_unclear):
+        reply = advance_onboarding(session, answer, None)
+
+    assert reply == msg("ask_location", language, agent=config.AGENT_NAME)
+    assert session.onboarding_step == "location"
+    assert (session.pending_city, session.pending_timezone) == ("", "")
 
 
 def test_unresolvable_location_keeps_the_step_and_asks_to_retry_later():

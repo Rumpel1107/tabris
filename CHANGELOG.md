@@ -6,6 +6,12 @@ grouped by what a reader would notice, each written in the change that earns it.
 Nothing before `v0.1.15` is reconstructed here — that history lives in the tags, in `PLAN.md` and
 in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent detail nobody recorded.*
 
+## [v0.2.1] — 2026-10-17
+
+### Fixed
+- Saying where you live, at sign-up or when changing city, can no longer store your whole sentence as the city. When the model's answer comes back without the city line, Tabris asks it once more without telling you; only if that answer lacks it too does it ask you which country or region you meant.
+- A sign-up whose city is still unclear after Tabris asks for the country now asks for the city again, instead of saving the account without a time zone — such an account failed on every message after it.
+
 ## [v0.2.0] — 2026-09-29
 
 ### Added

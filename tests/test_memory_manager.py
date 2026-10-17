@@ -267,12 +267,12 @@ def test_analyze_accepts_a_real_consolidation(mock_chat, db):
 @patch("core.providers.chat")
 def test_prompt_carries_the_profile_so_it_is_not_relearned(mock_chat, db):
     db_path, user_id = db
-    update_user_profile(db_path, user_id, location="Bogotá", timezone="America/Bogota")
+    update_user_profile(db_path, user_id, location="New York", timezone="America/New_York")
     mock_chat.return_value = _resp("HAS_CHANGES: no")
     analyze_memory([], db_path, user_id, language="es")
     prompt_sent = mock_chat.call_args[0][1][0]["content"]
-    assert "Bogotá" in prompt_sent
-    assert "America/Bogota" in prompt_sent
+    assert "New York" in prompt_sent
+    assert "America/New_York" in prompt_sent
 
 
 # --- apply_memory_changes: writes only ---
@@ -339,10 +339,10 @@ def test_apply_retires_only_when_the_pass_saved_something_new(db, wording):
     save_fact(db_path, user_id, "Trabaja en TaxL")
     merged_id = get_facts(db_path, user_id)[1]["id"]
 
-    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[wording, "Vive en Bogotá"], retire_ids=[kept_id, merged_id]))
+    apply_memory_changes(db_path, user_id, MemoryChanges(new_facts=[wording, "Vive en New York"], retire_ids=[kept_id, merged_id]))
 
     # a real replacement was saved: the merge goes through, except for the fact retired by its own wording
-    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording, "Vive en Bogotá"]
+    assert [f["content"] for f in get_facts(db_path, user_id)] == [wording, "Vive en New York"]
 
 
 def test_forget_fact_retires_and_returns_content(db):

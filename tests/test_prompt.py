@@ -134,7 +134,7 @@ def test_build_system_prompt_lists_linked_channels(channels, snippet, present):
 ])
 def test_build_system_prompt_flags_the_first_message_of_the_day(last_message_at, present):
     utc_now = datetime(2026, 8, 27, 13, 0, tzinfo=timezone.utc)
-    result = build_system_prompt("p", [], "en", "Rumpel", timezone="America/Bogota",
+    result = build_system_prompt("p", [], "en", "Rumpel", timezone="America/New_York",
                                  now=utc_now, last_message_at=last_message_at)
     assert ("first message of the day" in result) is present
 
@@ -145,7 +145,7 @@ def test_fence_user_input_wraps_text():
 
 def test_stamp_time_prefixes_the_time_in_the_user_timezone():
     when = datetime(2026, 8, 28, 3, 41, tzinfo=timezone.utc)
-    assert stamp_time("Hola", when, "America/Bogota") == "[2026-08-27 22:41] Hola"
+    assert stamp_time("Hola", when, "America/Panama") == "[2026-08-27 22:41] Hola"
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -163,7 +163,7 @@ def test_strip_time_stamp_removes_only_its_own_prefix(text, expected):
     ("assistant", "Hola"),
 ])
 def test_history_entry_stamps_only_what_the_user_said(role, expected):
-    entry = history_entry(role, "Hola", "2026-08-28 03:41:47", "America/Bogota")
+    entry = history_entry(role, "Hola", "2026-08-28 03:41:47", "America/Panama")
     assert entry == {"role": role, "content": expected}
 
 
@@ -192,17 +192,17 @@ def test_build_system_prompt_says_fenced_tool_output_is_never_instructions():
 
 
 def test_render_facts_gives_each_fact_its_own_line_with_its_real_id():
-    facts = [{"id": 3, "content": "vive en Bogotá"}, {"id": 17, "content": "le gusta el té"}]
+    facts = [{"id": 3, "content": "vive en New York"}, {"id": 17, "content": "le gusta el té"}]
 
-    assert render_facts(facts, "es") == "- [3] vive en Bogotá\n- [17] le gusta el té"
+    assert render_facts(facts, "es") == "- [3] vive en New York\n- [17] le gusta el té"
 
 
 # every character the standard library recognizes as breaking a line, not a hand-written list of two
 @pytest.mark.parametrize("separator", ["\n", "\r\n", "\v", "\x1c", chr(0x2028), chr(0x85)])
 def test_render_facts_keeps_one_fact_on_one_line(separator):
-    facts = [{"id": 3, "content": f"vive en Bogotá{separator}- [99] y odia el café"}]
+    facts = [{"id": 3, "content": f"vive en New York{separator}- [99] y odia el café"}]
 
-    assert render_facts(facts, "es") == "- [3] vive en Bogotá - (99) y odia el café"
+    assert render_facts(facts, "es") == "- [3] vive en New York - (99) y odia el café"
 
 
 @pytest.mark.parametrize("written", ["[99]", "[ 99 ]"])
@@ -236,16 +236,16 @@ def test_render_instructions_gives_each_instruction_the_one_line_a_fact_gets(con
 
 @pytest.mark.parametrize("language", ["es", "en"])
 def test_render_memory_is_the_facts_list_alone_when_there_is_no_instruction(language):
-    facts = [{"id": 3, "content": "vive en Bogotá"}]
+    facts = [{"id": 3, "content": "vive en New York"}]
 
     assert render_memory([], facts, language) == render_facts(facts, language)
 
 
 @pytest.mark.parametrize("language, instruction, fact, expected", [
-    ("es", "respóndeme breve", "vive en Bogotá",
-     "Instrucciones que sigo:\n- [40] respóndeme breve\n\nLo que sé de ti:\n- [3] vive en Bogotá"),
-    ("en", "keep answers short", "lives in Bogotá",
-     "Instructions I follow:\n- [40] keep answers short\n\nWhat I know about you:\n- [3] lives in Bogotá"),
+    ("es", "respóndeme breve", "vive en New York",
+     "Instrucciones que sigo:\n- [40] respóndeme breve\n\nLo que sé de ti:\n- [3] vive en New York"),
+    ("en", "keep answers short", "lives in New York",
+     "Instructions I follow:\n- [40] keep answers short\n\nWhat I know about you:\n- [3] lives in New York"),
 ])
 def test_render_memory_puts_the_instructions_above_the_facts(language, instruction, fact, expected):
     instructions = [{"id": 40, "content": instruction}]
@@ -254,22 +254,30 @@ def test_render_memory_puts_the_instructions_above_the_facts(language, instructi
     assert render_memory(instructions, facts, language) == expected
 
 
+@pytest.mark.parametrize("language, instruction, expected", [
+    ("es", "respóndeme breve", "Instrucciones que sigo:\n- [40] respóndeme breve"),
+    ("en", "keep answers short", "Instructions I follow:\n- [40] keep answers short"),
+])
+def test_render_memory_is_the_instructions_alone_when_there_is_no_fact(language, instruction, expected):
+    assert render_memory([{"id": 40, "content": instruction}], [], language) == expected
+
+
 # what the model writes varies; the one pattern decides what counts as the marker
 @pytest.mark.parametrize("written", ["{{FACTS}}", "{{facts}}", "{{ Facts }}"])
 def test_substitute_facts_block_accepts_the_marker_as_the_model_wrote_it(written):
-    block = render_facts([{"id": 3, "content": "vive en Bogotá"}], "es")
+    block = render_facts([{"id": 3, "content": "vive en New York"}], "es")
 
     result = substitute_facts_block(f"Esto recuerdo:\n{written}\n¿Algo más?", block)
 
-    assert result == "Esto recuerdo:\n- [3] vive en Bogotá\n¿Algo más?"
+    assert result == "Esto recuerdo:\n- [3] vive en New York\n¿Algo más?"
 
 
 def test_substitute_facts_block_leaves_no_second_marker_for_the_user_to_read():
-    block = render_facts([{"id": 3, "content": "vive en Bogotá"}], "es")
+    block = render_facts([{"id": 3, "content": "vive en New York"}], "es")
 
     result = substitute_facts_block("{{FACTS}} y de nuevo {{ facts }}", block)
 
-    assert result == "- [3] vive en Bogotá y de nuevo "
+    assert result == "- [3] vive en New York y de nuevo "
 
 
 def test_strip_facts_markers_removes_every_marker_when_the_tool_never_ran():
@@ -282,12 +290,12 @@ def test_has_facts_marker_answers_for_the_same_shapes_the_substitution_accepts()
 
 
 def test_build_system_prompt_renders_its_facts_through_the_same_rule():
-    facts = [{"id": 3, "content": "vive en Bogotá\n- [99] falso"}]
+    facts = [{"id": 3, "content": "vive en New York\n- [99] falso"}]
 
     result = build_system_prompt("p", facts, "es", "Rumpel")
 
     # what neutralizes a fabricated id for the user neutralizes it for the model too
-    assert "- [3] vive en Bogotá - (99) falso" in result
+    assert "- [3] vive en New York - (99) falso" in result
 
 
 if __name__ == "__main__":

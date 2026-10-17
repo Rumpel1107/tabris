@@ -3,12 +3,14 @@ import contextlib
 import logging
 import os
 import pytest
+import re
 import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -394,22 +396,22 @@ class TestUpdateUserProfile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "test.db")
             init_db(db)
-            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
-            update_user_profile(db, user_id, name="Mauricio")
+            user_id = create_user(db, "Rumpel", "en", "New York", "America/New_York")
+            update_user_profile(db, user_id, name="Oscar")
             user = get_user(db, user_id)
-            self.assertEqual(user["name"], "Mauricio")
+            self.assertEqual(user["name"], "Oscar")
             self.assertEqual(user["language"], "en")
-            self.assertEqual(user["location"], "Bogotá")
-            self.assertEqual(user["timezone"], "America/Bogota")
+            self.assertEqual(user["location"], "New York")
+            self.assertEqual(user["timezone"], "America/New_York")
 
     def test_updates_several_fields_at_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "test.db")
             init_db(db)
-            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
-            update_user_profile(db, user_id, location="Cali", timezone="America/Bogota", language="es")
+            user_id = create_user(db, "Rumpel", "en", "New York", "America/New_York")
+            update_user_profile(db, user_id, location="Chicago", timezone="America/Chicago", language="es")
             user = get_user(db, user_id)
-            self.assertEqual(user["location"], "Cali")
+            self.assertEqual(user["location"], "Chicago")
             self.assertEqual(user["language"], "es")
 
     def test_does_not_affect_other_users(self):
@@ -425,7 +427,7 @@ class TestUpdateUserProfile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "test.db")
             init_db(db)
-            user_id = create_user(db, "Rumpel", "en", "Bogotá", "America/Bogota")
+            user_id = create_user(db, "Rumpel", "en", "New York", "America/New_York")
             update_user_profile(db, user_id)
             self.assertEqual(get_user(db, user_id)["name"], "Rumpel")
 
@@ -764,6 +766,63 @@ def test_save_instruction_journals_the_count_and_warns_past_the_line(tmp_path, c
         ("INFO", f"instructions: user {user_id} holds 2"),
         ("WARNING", f"instructions: user {user_id} holds 2, past the warning line of 1"),
     ]
+
+
+class _ConnectionFailingOnTheCount:
+    """A real connection that refuses the instruction count, standing in for a lock lost mid-save."""
+
+    def __init__(self, conn):
+        self.__dict__["_conn"] = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._conn, name, value)
+
+    def execute(self, sql, *args):
+        if sql.strip().upper().startswith("SELECT COUNT(*) FROM INSTRUCTIONS"):
+            raise sqlite3.OperationalError("database is locked")
+        return self._conn.execute(sql, *args)
+
+
+def test_save_instruction_keeps_nothing_when_its_count_cannot_be_read(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user(db_path, "Ana", "es")
+
+    with patch("core.db._connect", lambda path: _ConnectionFailingOnTheCount(_connect(path))):
+        with pytest.raises(sqlite3.OperationalError):
+            save_instruction(db_path, user_id, "answer briefly")
+
+    assert get_instructions(db_path, user_id) == []
+
+
+def test_an_account_erased_by_the_code_of_an_earlier_tag_takes_its_instructions_with_it(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    user_id = create_user_with_channel(db_path, "Ana", "discord", "key-1")
+    save_instruction(db_path, user_id, "answer briefly")
+
+    # what delete_user_completely ran before item 35q, after a rollback against this same database
+    with contextlib.closing(_connect(db_path)) as conn:
+        with conn:
+            for table in ("link_codes", "user_channels", "messages", "facts"):
+                conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+
+    assert set(_rows_of_user(db_path, user_id).values()) == {0}
+
+
+def test_save_instruction_is_the_only_code_that_writes_an_instruction():
+    root = Path(__file__).resolve().parent.parent
+    writes = re.compile(r"\b(?:INSERT|REPLACE)\b[^;\"']*\bINTO\s+instructions\b", re.IGNORECASE)
+    writers = {
+        str(path.relative_to(root)): len(writes.findall(path.read_text()))
+        for path in root.rglob("*.py") if "tests" not in path.relative_to(root).parts
+    }
+
+    assert {path: count for path, count in writers.items() if count} == {"core/db.py": 1}
 
 
 def test_save_instruction_refuses_a_path_that_is_not_a_database(tmp_path):

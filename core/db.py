@@ -44,9 +44,10 @@ def init_db(db_path):
             );
 
             -- no AUTOINCREMENT: the id is taken from the facts' counter (item 35q, D13)
+            -- ON DELETE CASCADE: the account erase of a tag before 35q does not know this table
             CREATE TABLE IF NOT EXISTS instructions (
                 id         INTEGER PRIMARY KEY,
-                user_id    INTEGER NOT NULL REFERENCES users(id),
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 content    TEXT NOT NULL,
                 is_active  INTEGER NOT NULL DEFAULT 1,
                 retired_at TEXT,
@@ -169,13 +170,14 @@ def save_instruction(db_path: str, user_id: int, content: str) -> int:
                 "INSERT INTO instructions (id, user_id, content) VALUES (?, ?, ?)",
                 (instruction_id, user_id, content)
             )
+            # counted inside the transaction: a save the journal cannot count is no save
+            held = conn.execute(
+                "SELECT COUNT(*) FROM instructions WHERE user_id=? AND is_active=1", (user_id,)
+            ).fetchone()[0]
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")
             raise
-        held = conn.execute(
-            "SELECT COUNT(*) FROM instructions WHERE user_id=? AND is_active=1", (user_id,)
-        ).fetchone()[0]
     logger.info(f"instructions: user {user_id} holds {held}")
     if held > config.INSTRUCTIONS_WARN_AT:
         logger.warning(f"instructions: user {user_id} holds {held}, past the warning line of {config.INSTRUCTIONS_WARN_AT}")

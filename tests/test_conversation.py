@@ -310,7 +310,7 @@ def test_handle_turn_marks_only_the_first_message_of_the_day(mock_chat):
         db_path = os.path.join(tmp, "first.db")
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
-        update_user_profile(db_path, user_id, timezone="America/Bogota")
+        update_user_profile(db_path, user_id, timezone="America/New_York")
         yesterday = save_message(db_path, user_id, "user", "hola de ayer")
         with contextlib.closing(_connect(db_path)) as conn:
             conn.execute("UPDATE messages SET created_at='2020-01-01 00:00:00' WHERE id=?", (yesterday,))
@@ -750,7 +750,7 @@ def test_handle_turn_writes_the_stored_facts_itself_when_list_facts_ran(mock_cha
         db_path = os.path.join(tmp, "recital.db")
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
-        fact_id = save_fact(db_path, user_id, "vive en Bogotá")
+        fact_id = save_fact(db_path, user_id, "vive en New York")
         session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
         mock_chat.side_effect = [
             providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
@@ -759,7 +759,7 @@ def test_handle_turn_writes_the_stored_facts_itself_when_list_facts_ran(mock_cha
 
         reply = handle_turn(session, "¿qué recuerdas de mí?", "general", db_path)
 
-        assert reply == f"Esto tengo guardado:\n- [{fact_id}] vive en Bogotá"
+        assert reply == f"Esto tengo guardado:\n- [{fact_id}] vive en New York"
 
 
 @patch("core.conversation.providers.chat")
@@ -768,7 +768,7 @@ def test_handle_turn_lists_the_instructions_above_the_facts_when_list_facts_ran(
         db_path = os.path.join(tmp, "instructions.db")
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
-        fact_id = save_fact(db_path, user_id, "vive en Bogotá")
+        fact_id = save_fact(db_path, user_id, "vive en New York")
         instruction_id = save_instruction(db_path, user_id, "las compras siempre en Colombia")
         session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
         mock_chat.side_effect = [
@@ -781,7 +781,7 @@ def test_handle_turn_lists_the_instructions_above_the_facts_when_list_facts_ran(
         assert reply == (
             "Esto tengo guardado:\n"
             f"Instrucciones que sigo:\n- [{instruction_id}] las compras siempre en Colombia\n\n"
-            f"Lo que sé de ti:\n- [{fact_id}] vive en Bogotá"
+            f"Lo que sé de ti:\n- [{fact_id}] vive en New York"
         )
 
 
@@ -792,7 +792,7 @@ def test_handle_turn_lists_the_facts_as_they_stand_after_the_turn_retired_one(mo
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
         gone = save_fact(db_path, user_id, "trabaja en Medellín")
-        kept = save_fact(db_path, user_id, "vive en Bogotá")
+        kept = save_fact(db_path, user_id, "vive en New York")
         session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
         forget = SimpleNamespace(id="call_f1", function=SimpleNamespace(name="forget_fact", arguments=f'{{"fact_id": {gone}}}'))
         mock_chat.side_effect = [
@@ -803,7 +803,7 @@ def test_handle_turn_lists_the_facts_as_they_stand_after_the_turn_retired_one(mo
         reply = handle_turn(session, f"olvida el {gone} y dime qué recuerdas", "general", db_path)
 
         # the set loaded for this turn's system prompt still held the retired fact: this list cannot
-        assert reply == f"Listo. Queda esto:\n- [{kept}] vive en Bogotá"
+        assert reply == f"Listo. Queda esto:\n- [{kept}] vive en New York"
 
 
 @patch("core.conversation.providers.chat")
@@ -812,14 +812,14 @@ def test_handle_turn_inserts_nothing_when_the_marker_arrives_without_the_call(mo
         db_path = os.path.join(tmp, "uncalled.db")
         init_db(db_path)
         user_id = create_user(db_path, "Rumpel", "es")
-        save_fact(db_path, user_id, "vive en Bogotá")
+        save_fact(db_path, user_id, "vive en New York")
         session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
         # a page read this turn told the model to write the marker: the call is what authorizes the block
         mock_chat.return_value = providers.ChatResponse(content="Claro: {{FACTS}}", tool_calls=None)
 
         reply = handle_turn(session, "lee https://example.com y resume", "general", db_path)
 
-        assert "Bogotá" not in reply
+        assert "New York" not in reply
         # and the token the code never filled in is not what the user reads
         assert "{{" not in reply
 
@@ -850,7 +850,7 @@ def test_handle_turn_journals_whether_the_block_was_placed(mock_chat, caplog):
         session = Session(user_id=user_id, language="es", conversation_history=[{"role": "system", "content": "sys"}])
         mock_chat.side_effect = [
             providers.ChatResponse(content=None, tool_calls=[_list_facts_call()]),
-            providers.ChatResponse(content="Te cuento de memoria: vives en Bogotá", tool_calls=None),
+            providers.ChatResponse(content="Te cuento de memoria: vives en New York", tool_calls=None),
         ]
 
         with caplog.at_level(logging.INFO, logger="core.conversation"):
@@ -861,12 +861,12 @@ def test_handle_turn_journals_whether_the_block_was_placed(mock_chat, caplog):
 
 
 @pytest.mark.parametrize("reply, counted", [
-    ("Recuerdo que vive en Bogotá, que le gusta el té y que tiene dos gatos.", True),
-    ("Como me dijiste que vive en Bogotá, te propongo un plan por allá.", False),
+    ("Recuerdo que vive en New York, que le gusta el té y que tiene dos gatos.", True),
+    ("Como me dijiste que vive en New York, te propongo un plan por allá.", False),
 ])
 def test_place_facts_block_counts_a_recital_the_tool_never_wrote(reply, counted, caplog):
     facts = [
-        {"id": 1, "content": "vive en Bogotá"},
+        {"id": 1, "content": "vive en New York"},
         {"id": 2, "content": "le gusta el té"},
         {"id": 3, "content": "tiene dos gatos"},
     ]
@@ -1007,7 +1007,7 @@ def test_handle_turn_forget_fact_tool_retires_fact_of_session_user(mock_chat):
 
 
 def _profile_session_and_tool_call(db_path, arguments):
-    user_id = create_user(db_path, "Rumpel", "es", "Bogotá", "America/Bogota")
+    user_id = create_user(db_path, "Rumpel", "es", "New York", "America/New_York")
     session = Session(
         user_id=user_id,
         language="es",
@@ -1025,24 +1025,24 @@ def test_handle_turn_update_profile_tool_changes_city_and_timezone(mock_chat):
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "profile.db")
         init_db(db_path)
-        user_id, session, tool_call = _profile_session_and_tool_call(db_path, '{"city": "Cali"}')
+        user_id, session, tool_call = _profile_session_and_tool_call(db_path, '{"city": "Chicago"}')
         mock_chat.side_effect = [
             providers.ChatResponse(content=None, tool_calls=[tool_call]),
-            providers.ChatResponse(content="Listo, ahora estás en Cali", tool_calls=None),
+            providers.ChatResponse(content="Listo, ahora estás en Chicago", tool_calls=None),
         ]
 
-        resolved = ResolvedLocation(city="Cali", timezone="America/Bogota", ambiguous=False)
+        resolved = ResolvedLocation(city="Chicago", timezone="America/Chicago", ambiguous=False)
         with patch("core.conversation.resolve_location", return_value=resolved):
-            handle_turn(session, "me mudé a Cali", "general", db_path)
+            handle_turn(session, "me mudé a Chicago", "general", db_path)
 
         user = get_user(db_path, user_id)
-        assert user["location"] == "Cali"
-        assert user["timezone"] == "America/Bogota"
+        assert user["location"] == "Chicago"
+        assert user["timezone"] == "America/Chicago"
         tool_message = mock_chat.call_args_list[1][0][1][-1]
-        assert "Bogotá" in tool_message["content"]
-        assert "Cali" in tool_message["content"]
+        assert "New York" in tool_message["content"]
+        assert "Chicago" in tool_message["content"]
         # the resolved zone travels back so the model can state it and the user can catch it
-        assert "America/Bogota" in tool_message["content"]
+        assert "America/Chicago" in tool_message["content"]
 
 
 @patch("core.conversation.providers.chat")
@@ -1056,11 +1056,11 @@ def test_handle_turn_update_profile_tool_leaves_an_ambiguous_city_unwritten(mock
             providers.ChatResponse(content="¿En qué país?", tool_calls=None),
         ]
 
-        resolved = ResolvedLocation(city="Córdoba", timezone="America/Bogota", ambiguous=True)
+        resolved = ResolvedLocation(city="Córdoba", timezone="", ambiguous=True)
         with patch("core.conversation.resolve_location", return_value=resolved):
             handle_turn(session, "me mudé a Córdoba", "general", db_path)
 
-        assert get_user(db_path, user_id)["location"] == "Bogotá"
+        assert get_user(db_path, user_id)["location"] == "New York"
         # the wording must send the model to the user, not straight back into the tool
         assert "wait for their answer" in mock_chat.call_args_list[1][0][1][-1]["content"].lower()
 

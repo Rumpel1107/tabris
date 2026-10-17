@@ -111,7 +111,7 @@ def test_reactivate_account_finds_the_export_after_a_profile_rename():
 
         with patch("core.account.config.EXPORTS_DIR", exports_dir):
             path = deactivate_account(db_path, user_id)
-            update_user_profile(db_path, user_id, name="Mauricio")
+            update_user_profile(db_path, user_id, name="Raul")
             reactivate_account(db_path, user_id)
 
         assert not os.path.exists(path)

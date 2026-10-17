@@ -53,10 +53,10 @@ def render_memory(instructions: list, facts: list, language: str) -> str:
     """What the recital places: the instructions first, under their own heading, then the facts."""
     if not instructions:
         return render_facts(facts, language)
-    return (
-        f"{msg('instructions_heading', language)}\n{render_instructions(instructions)}\n\n"
-        f"{msg('facts_heading', language)}\n{render_facts(facts, language)}"
-    )
+    block = f"{msg('instructions_heading', language)}\n{render_instructions(instructions)}"
+    if not facts:
+        return block
+    return f"{block}\n\n{msg('facts_heading', language)}\n{render_facts(facts, language)}"
 
 
 def _one_line(content: str) -> str:

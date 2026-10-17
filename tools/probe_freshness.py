@@ -62,7 +62,7 @@ CASES = [
     # rare: stable but easy to remember wrongly; measured for item 35k, not for this one
     _rare("¿Qué dice el artículo 64 del Código Sustantivo del Trabajo?", "es"),
     _rare("¿Cuál fue la TRM del 31 de diciembre de 2019?", "es"),
-    _rare("¿Cuántos habitantes tenía Bogotá en el censo de 2018?", "es"),
+    _rare("¿Cuántos habitantes tenía New York en el censo de 2020?", "es"),
     _rare("Cítame textualmente el primer artículo de la Constitución de 1991.", "es"),
     _rare("¿En qué año se fundó Medellín?", "es"),
     _rare("What is the exact boiling point of ethanol at sea level?", "en"),

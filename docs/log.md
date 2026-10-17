@@ -8,6 +8,37 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-15 to 2026-10-16 — The owner's personal data leaves the current files, and the router keeps its roster
+
+`presend`, run over the repository, found the owner's personal terms in 12 committed files (DEF-17).
+He replaced most of them by hand from the list of lines it printed; where a value had to stay
+coherent — a place and its time zone — the agent read only the lines he named. The location prompt's examples moved to Albany, and the prompt into
+`location_prompt` so `tools/probe_location.py` measures what production sends. The history keeps
+the old lines, by his decision.
+
+The same probe, with freshness and the check of meaning, measured Claude Haiku 5.5 and GPT-6 Luna
+as router candidates; the roster stays (D16). The question behind it — fewer roles — turned on his
+point that the cost of a role is each model to keep watching, which item 38 now carries as a
+periodic check against the providers' catalogs.
+
+The review of item 35q's slice 1, joined to this fix, was sent by hand: `review.py` sends the diff
+and the files of a commit unchecked, and both still carried the owner's terms in old test lines.
+The payload held the slice's code, the tests as they stand and the fix's files, checked by
+`presend` first. It brought three corrections to slice 1 — the instructions erased with their
+account even by an earlier tag's code, their count taken inside the save, no empty facts line
+below them — and two to the location prompt that predate the fix: an example that broke its own
+rule on ambiguous names, and a reply without its city line stored the user's words as the city.
+Its one re-run found, in all three reviewers, a clarification step that saved an account with no
+time zone (DEF-18); by the method the work went back to Build with it and closed without a third
+round. The re-run's other findings were rejected with their reasons: the cascade sits only in the
+table's creation, but no database that matters ever created the table without it — production runs
+`v0.2.0`, and the local one never had the table.
+
+Not to repeat: the first full run went without a pause, and Groq and Gemini refused 52 and 56 of
+72 calls; refused calls cost nothing, but the run had to be repeated. And the conversation ran in
+two copies at once after a resume, both answering the same notice; the second found the first's
+edits only because a file changed under it.
+
 ## 2026-10-14 to 2026-10-15 — Item 35q's Design measures the check of meaning and the translation
 
 The Spec gained questions 22 to 27: one condition and one action per instruction; a repeat offered
@@ -351,7 +382,7 @@ elsewhere — a question that always admits yes — so the model retried the amb
 times until one bare city name slipped through and saved the wrong time zone for a Colombian user
 (34h); the question became a sufficiency check instead, and a retry loop gained a hard cap
 (`MAX_TOOL_ROUNDS`) that had never existed. Days later a city and its time zone disagreed outright
-— "Madrid" came back paired with `Europe/Madrid` for the same user — because three separate model
+— "Armenia" came back paired with `Asia/Armenia` for the same user — because three separate model
 calls decided city, country and time zone independently, with nothing forcing them to agree
 (34i); the fix collapsed them into one call that returns all three together, so they cannot
 disagree by construction. A whole sentence answering the name question was once stored verbatim as

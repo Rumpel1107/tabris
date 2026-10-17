@@ -52,8 +52,8 @@ def test_a_link_that_was_read_survives_being_written_differently(written):
 
 
 def test_the_same_address_encoded_and_decoded_is_one_address():
-    read = "https://es.wikipedia.org/wiki/Bogotá"
-    written = "https://es.wikipedia.org/wiki/Bogot%C3%A1"
+    read = "https://es.wikipedia.org/wiki/Zúrich"
+    written = "https://es.wikipedia.org/wiki/Z%C3%BArich"
     cleaned, dropped = drop_unverifiable_links(f"- Sobre la ciudad {written}", {read})
     assert dropped == 0
     assert written in cleaned
@@ -76,7 +76,7 @@ def test_an_invented_variant_of_a_real_link_is_not_taken_for_it():
 
 
 def test_a_reply_without_links_is_returned_untouched():
-    reply = "Son las 3 de la tarde en Bogotá."
+    reply = "Son las 3 de la tarde en New York."
     assert drop_unverifiable_links(reply, set()) == (reply, 0)
 
 
