@@ -130,22 +130,22 @@ def decisions_payload(model: str, condition: str, user_input: str) -> dict:
     }
 
 
-def decisions_verdict(body: dict) -> str | None:
+def decisions_verdict(body: dict, question: str = "applies") -> str | None:
     """A probability of one half or more reads as yes; a missing answer is no verdict."""
     try:
-        probability = float(body["answers"]["applies"]["noul"])
+        probability = float(body["answers"][question]["noul"])
     except (KeyError, TypeError, ValueError):
         return None
     return "yes" if probability >= 0.5 else "no"
 
 
-def call_decisions(model: str, condition: str, user_input: str) -> tuple[float, dict]:
+def call_decisions(payload: dict) -> tuple[float, dict]:
     """Make one real call to the decisions endpoint, returning how long it took and the parsed body."""
     started = time.monotonic()
     response = httpx.post(
         DECISIONS_URL,
         headers={"Authorization": f"Bearer {PROVIDER_CONFIG['openrouter']['api_key']}"},
-        json=decisions_payload(model, condition, user_input),
+        json=payload,
         timeout=90,
     )
     response.raise_for_status()
@@ -190,7 +190,7 @@ def main(argv=None) -> int:
             time.sleep(args.pause)
             try:
                 if client is None:
-                    seconds, body = call_decisions(args.model, case["condition"], case["text"])
+                    seconds, body = call_decisions(decisions_payload(args.model, case["condition"], case["text"]))
                     verdict, answer = decisions_verdict(body), body.get("answers")
                     cost += float((body.get("usage") or {}).get("cost") or 0)
                 else:

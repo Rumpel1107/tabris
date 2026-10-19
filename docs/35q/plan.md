@@ -18,6 +18,10 @@
 > 22, 23), comparing it for a contradiction or a repeat (20, 24) and recording what an order covers
 > (25) — is one step that every way in reuses, never one per flow; the owner's call. AC13 to AC21
 > have no home yet.
+>
+> **Carried into the Design, 2026-10-19.** The slice that builds the decisions call for the check of
+> meaning (D15) also moves the freshness classifier onto it, Jev first and the `router`'s links
+> behind (`docs/decisions.md` D17); `tools/probe_freshness.py` measures it before the change.
 
 ## Approach
 
@@ -110,7 +114,8 @@ from then on, in every conversation — and another user's memory.
   rule that memory writes auto-apply, which instructions no longer do.
 - `README.md` — the persistent-memory bullet.
 - `core/providers.py` and `config.py` — a call shape for the decisions endpoint, and the check's own
-  role (D15).
+  role (D15); `core/freshness.py` and the freshness classifier's own role on that call
+  (`docs/decisions.md` D17).
 - `tools/probe_meaning.py` and `tools/probe_translation.py` — kept. The slice that builds each call
   moves its prompt into `core/`, and the probe imports it from there, as `tools/probe_freshness.py`
   does.

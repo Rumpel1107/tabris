@@ -8,6 +8,22 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-19 — Item 35j's journal watch closes, and the freshness probe learns to fail
+
+Twenty-one days of `freshness:` lines in service: 97 verdicts, all 21 `fresh` turns searched, the
+net beneath the forcing never fired, and every turn got a verdict. The watch asked whether the
+persona rule against an unbacked figure could go, and those lines could not answer it: they show
+the forcing works, never a message classified `stable` that needed a search. The rule stays (D17).
+
+The probe's lot could not answer it either — every candidate had scored 64 to 66 of 66. It gained
+32 invented cases: fresh questions with no word of time, questions about prices that need no
+search, and two-message sequences run without and with the previous message. It now separates the
+four models it ran. Context helped only the second link and was set aside; Jev missed nothing and
+takes freshness over when item 35q builds its call.
+
+Not to repeat: the watch was named at close by the lines that existed, not by the question it had
+to answer, so it ran three weeks to answer half of it.
+
 ## 2026-10-15 to 2026-10-16 — The owner's personal data leaves the current files, and the router keeps its roster
 
 `presend`, run over the repository, found the owner's personal terms in 12 committed files (DEF-17).
