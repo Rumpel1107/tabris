@@ -8,6 +8,19 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-19 — Item 35q's Design measures the comparison
+
+A new or changed instruction is compared, pair by pair, with each one the user has, in a call of its
+own after the translation (D20). No single model met the floor on both judgments: `deepseek-chat`
+missed no contradiction but a fifth of the Spanish repeats under another condition, and Jev missed
+no repeat but read exceptions as contradictions. Each judgment went to the model that missed nothing
+in it (D22); the owner first chose one model for fewer pieces and changed his mind once told Jev's
+call is built anyway. An order's coverage went to `deepseek-chat` (D23), and a comparison that cannot
+run saves nothing, with a general line to the user (spec question 28, D24).
+
+Not to repeat: the split was chosen on the same 60 pairs that measured it; the slice that builds it
+confirms on new cases first.
+
 ## 2026-10-19 — Item 35j's journal watch closes, and the freshness probe learns to fail
 
 Twenty-one days of `freshness:` lines in service: 97 verdicts, all 21 `fresh` turns searched, the
