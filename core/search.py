@@ -1,12 +1,14 @@
 import config
-import httpx
 import ipaddress
 import logging
 import socket
+import time
 
 from ddgs import DDGS
 from lxml import html as lxml_html
 from urllib.parse import urljoin, urlparse
+
+from core import deadline
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ def _search_tavily(query, max_results=5, with_text=False):
     if with_text:
         # the page text rides along with the same call: no extra credit, about half a second
         payload["include_raw_content"] = True
-    response = httpx.post(
+    response = deadline.post(
         "https://api.tavily.com/search",
         headers={"Authorization": f"Bearer {config.TAVILY_API_KEY}"},
         json=payload,
@@ -121,9 +123,13 @@ def _check_url(url: str) -> None:
 
 def _get_following_redirects(url: str):
     """Walk the redirect chain by hand, so every hop is checked and not only the one the model gave."""
+    ends_at = time.monotonic() + config.PROVIDER_TIMEOUT   # DEF-19: one limit for the whole chain, not one per hop
     for _ in range(config.WEB_FETCH_MAX_REDIRECTS):
         _check_url(url)
-        response = httpx.get(url, timeout=config.PROVIDER_TIMEOUT, follow_redirects=False)
+        remaining = ends_at - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"the redirect chain ran past {config.PROVIDER_TIMEOUT} s")
+        response = deadline.get(url, timeout=remaining, follow_redirects=False)
         if not response.is_redirect:
             response.raise_for_status()
             return response

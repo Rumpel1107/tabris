@@ -8,6 +8,24 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-20 — A provider that keeps the line open no longer holds a turn (DEF-19)
+
+Item 39c had recorded two probe calls hanging past 90 s during DeepSeek's incident. A local server
+sending an empty line every 3 s held Tabris's real call for its whole 45 s, and DeepSeek documents
+sending empty lines while a request waits, for up to 10 minutes. Five real long DeepSeek replies
+took 7 to 11 s with no empty line, so a 15 s limit on the whole call cuts nothing that works today.
+The fix gives every connect, read and write only what is left of the call's limit; searches, page
+reads and transcriptions share it, and a redirect chain has one limit.
+
+The review ran twice (three reviewers, $0.11 and $0.17). The first round found the reply's head and
+the redirect chain outside the limit; the re-run found that the first version's shared client kept
+cookies across calls and users, and by the method the fix went back to Build with it and closes
+without a third round. Rejected with their reasons: a voice note cut while uploading — the upload
+goes from the server, at most about 1 MB; timeouts and streaming Tabris never uses.
+
+Not to repeat: replacing per-call `httpx.get` with a shared client changed more than the timeout —
+a client carries state, and the first version of the fix carried a cookie jar into every page read.
+
 ## 2026-10-19 — Item 35q's Design measures the comparison
 
 A new or changed instruction is compared, pair by pair, with each one the user has, in a call of its

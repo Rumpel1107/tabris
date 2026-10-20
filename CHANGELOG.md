@@ -6,6 +6,11 @@ grouped by what a reader would notice, each written in the change that earns it.
 Nothing before `v0.1.15` is reconstructed here — that history lives in the tags, in `PLAN.md` and
 in `docs/defects.md`. *Why: rebuilt from commit archaeology it would invent detail nobody recorded.*
 
+## [v0.2.2] — 2026-10-20
+
+### Fixed
+- When a model provider is overloaded and keeps the connection open without answering, Tabris now moves to the next model once the time limit passes, instead of waiting up to ten minutes for the provider to give up. Searches, reading a page and transcribing a voice note have the same limit, so a page built to answer one byte at a time can no longer hold a reply open indefinitely.
+
 ## [v0.2.1] — 2026-10-17
 
 ### Fixed

@@ -1,6 +1,7 @@
 import config
-import httpx
 import logging
+
+from core import deadline
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +10,7 @@ def _transcribe_groq(audio: bytes, filename: str, language: str | None) -> str:
     data = {"model": config.TRANSCRIBE_MODEL}
     if language:
         data["language"] = language
-    response = httpx.post(
+    response = deadline.post(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         headers={"Authorization": f"Bearer {config.GROQ_API_KEY}"},
         files={"file": (filename, audio, "application/octet-stream")},

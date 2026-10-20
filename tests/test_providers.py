@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import unittest
 from core import providers
 from core.providers import chat
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 
 class TestProvidersChat(unittest.TestCase):
@@ -57,6 +57,7 @@ class TestGetClient(unittest.TestCase):
             api_key=providers.PROVIDER_CONFIG["groq"]["api_key"],
             timeout=config.PROVIDER_TIMEOUT,
             max_retries=0,
+            http_client=ANY,
         )
     
     @patch("core.providers.OpenAI")

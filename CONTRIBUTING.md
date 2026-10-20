@@ -8,7 +8,7 @@ How this project is built and how to keep building it — for any collaborator, 
 channels/        thin adapters, one per channel — cli.py, discord_ch.py
                  started with `python -m channels.<name>`
 core/            channel-agnostic — conversation, onboarding, memory_manager, db,
-                 account, providers, search, prompt, session, strings, text
+                 account, providers, deadline, search, prompt, session, strings, text
 tools/           operator-side, unreachable from any chat — admin.py (account
                  lifecycle), backup.py, setup.sh
 deploy/          the service definition that keeps Tabris running unattended
@@ -80,7 +80,7 @@ The principles behind these — why the core stays channel-agnostic, why facts a
 why a model never enters a roster untested — are `memory/constitution.md`. This section is only
 the "how":
 
-- **Adding a provider** (model, search or transcription) means mirroring the existing structure in `core/providers.py`, `core/search.py` or `core/transcribe.py` and normalizing its response to the common shape — never special-casing a call site. A role that needs longer than the global `PROVIDER_TIMEOUT` declares its own `timeout` beside its providers; it is a property of the role, not of the payload, so two callers can never disagree about the same call.
+- **Adding a provider** (model, search or transcription) means mirroring the existing structure in `core/providers.py`, `core/search.py` or `core/transcribe.py` and normalizing its response to the common shape — never special-casing a call site. A role that needs longer than the global `PROVIDER_TIMEOUT` declares its own `timeout` beside its providers; it is a property of the role, not of the payload, so two callers can never disagree about the same call. Every call out through `httpx` — a model, a Tavily search, a page, a transcription — goes through `core/deadline.py`, so its timeout bounds the whole call, not each silence: a server that keeps the line open with empty lines is cut at the limit (DEF-19). A provider reached through a library with its own client, as DuckDuckGo's, is measured against a server that does that before it enters.
 - **Probing a roster candidate:** `probe_models list` reads the provider's live catalog — the only trustworthy source for a model id and for whether it takes images. `probe_models probe` calls it with a turn-shaped payload and reports whether it answered, how fast, and whether it read the image; add `--tool-choice` for any `general` or `vision` candidate, since a fresh turn forces the search tool on whichever link answers (item 35j) and a model that rejects the parameter turns every fresh turn into a failure (item 35n). Run it again whenever a provider changes its tiers or the size of a turn changes.
 - **Changing the freshness classifier:** its prompt lives in `core/freshness.py`, and `tools/probe_freshness.py` imports it from there, so what the probe measures is what production runs. Change the prompt or the `router` roster only after the probe has run against the new wording or model.
 - **Changing the location prompt** follows the same rule: `location_prompt` lives in `core/onboarding.py` and `tools/probe_location.py` imports it. A change to the `router` roster runs both probes. Groq and Gemini refuse a lot sent at full speed; `--pause 2.5` and `--pause 4.5` held for them on 2026-10-16.

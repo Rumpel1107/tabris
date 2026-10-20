@@ -45,7 +45,7 @@ def test_search_ddg_normalizes_results(mock_ddgs_class):
     (False, None, ""),
     (True, "La TRM de hoy es 3.126,08", "La TRM de hoy es 3.126,08"),
 ])
-@patch("core.search.httpx.post")
+@patch("core.search.deadline.post")
 def test_search_tavily_normalizes_results(mock_post, with_text, page, expected_text):
     mock_post.return_value.json.return_value = {
         "results": [
@@ -65,7 +65,7 @@ def test_search_tavily_normalizes_results(mock_post, with_text, page, expected_t
 
 
 @patch("core.search.DDGS")
-@patch("core.search.httpx.post")
+@patch("core.search.deadline.post")
 def test_search_uses_tavily_when_configured_first(mock_post, mock_ddgs_class):
     mock_post.return_value.json.return_value = {
         "results": [{"title": "T", "url": "https://t.co", "content": "from tavily", "score": 0.9}]
@@ -114,7 +114,7 @@ def _resolves_to(ip):
     return lambda host, port, *args, **kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
 
 
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_extracts_readable_text(mock_get):
     mock_get.return_value = _page(
         "<html><body><h1>Titulo</h1><p>Contenido real</p>"
@@ -137,14 +137,14 @@ def test_web_fetch_extracts_readable_text(mock_get):
     "file:///etc/passwd",
     "ftp://example.com/x",
 ])
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_refuses_anything_but_a_public_http_address(mock_get, url):
     result = web_fetch(url)
     mock_get.assert_not_called()
     assert "Refused" in result
 
 
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_follows_a_redirect_to_a_public_address(mock_get):
     mock_get.side_effect = [
         _page("", status_code=302, location="https://example.com/final"),
@@ -156,7 +156,7 @@ def test_web_fetch_follows_a_redirect_to_a_public_address(mock_get):
     assert mock_get.call_count == 2
 
 
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_refuses_a_redirect_into_the_private_network(mock_get):
     mock_get.return_value = _page("", status_code=302, location="http://192.168.1.1/admin")
     with patch("core.search.socket.getaddrinfo", _resolves_to("93.184.216.34")):
@@ -165,7 +165,19 @@ def test_web_fetch_refuses_a_redirect_into_the_private_network(mock_get):
     assert mock_get.call_count == 1
 
 
-@patch("core.search.httpx.get")
+@patch("core.search.config.WEB_FETCH_MAX_REDIRECTS", 5)
+@patch("core.search.config.PROVIDER_TIMEOUT", 15)
+@patch("core.search.time.monotonic", side_effect=[0.0, 0.0, 10.0, 16.0])
+@patch("core.search.deadline.get")
+def test_web_fetch_holds_a_redirect_chain_to_one_timeout(mock_get, _clock):
+    mock_get.return_value = _page("", status_code=302, location="https://example.com/again")
+    with patch("core.search.socket.getaddrinfo", _resolves_to("93.184.216.34")):
+        result = web_fetch("https://example.com/articulo")
+    assert "Could not fetch" in result
+    assert [call.kwargs["timeout"] for call in mock_get.call_args_list] == [15.0, 5.0]
+
+
+@patch("core.search.deadline.get")
 def test_web_fetch_gives_up_on_a_redirect_loop(mock_get):
     mock_get.return_value = _page("", status_code=302, location="https://example.com/again")
     with patch("core.search.socket.getaddrinfo", _resolves_to("93.184.216.34")):
@@ -174,7 +186,7 @@ def test_web_fetch_gives_up_on_a_redirect_loop(mock_get):
     assert mock_get.call_count == config.WEB_FETCH_MAX_REDIRECTS
 
 
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_refuses_a_host_that_resolves_to_both_public_and_private(mock_get):
     def both(host, port, *args, **kwargs):
         return [
@@ -192,7 +204,7 @@ def test_web_fetch_refuses_a_host_that_resolves_to_both_public_and_private(mock_
     ("http://192.168.1.1/admin", "192.168.1.1"),
     ("https://invented.example/articulo?id=", "93.184.216.34"),
 ])
-@patch("core.search.httpx.get")
+@patch("core.search.deadline.get")
 def test_web_fetch_names_the_host_and_never_the_address_it_could_not_read(mock_get, url, resolves_to):
     # the message is a tool result, and every address in a tool result counts as a source: a failed
     # fetch must not be how an invented address becomes one

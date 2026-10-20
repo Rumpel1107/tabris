@@ -1,7 +1,9 @@
 import config
 import logging
 from dataclasses import dataclass
-from openai import OpenAI
+from openai import DefaultHttpxClient, OpenAI
+
+from core.deadline import DeadlineTransport
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ def _get_client(provider):
             api_key=settings["api_key"],
             timeout=config.PROVIDER_TIMEOUT,
             max_retries=0,  # our own fallback chain already handles a failed provider
+            http_client=DefaultHttpxClient(transport=DeadlineTransport()),  # DEF-19
         )
     return _clients[provider]
 
