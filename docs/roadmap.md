@@ -63,7 +63,7 @@ comparing against the outgoing tag before it shipped, which is what was done.
 
 | # | Item | Status |
 |---|---|---|
-| 15 | **37** — Deploy as an always-on service, slice 5: verify the missed-run catch-up (needs the machine off at the scheduled hour) | 🔶 |
+| 15 | **37** — Deploy as an always-on service: closed with slice 5, the missed-run catch-up verified by driving the timers' own trigger | ✅ closed 2026-10-22 |
 | 16 | **37a** — Recovery notice after an outage: tell each channel what was missed while the service was down | ⬜ |
 | 17 | **38** — Basic ops: operator alerts on a private channel (aggregated, no message content), and narrowing broad `except Exception` blocks. The owner's shape for the channel (2026-09-30): an admin user defined in configuration receives them; item 35q's instruction-count warning is one of its first signals. Added 2026-10-15: a periodic check of every model in `config.py` against each provider's live catalog (`probe_models list`), alerting when one leaves it — `deepseek-chat` already has; the owner's cost is each model to watch, not each role. Indexes, structured logging and async I/O stay deferred until real concurrent load | 🔶 |
 | 18 | **38a** — Service control: a function-calling tool to start/stop a named service, closed allowlist only | ⬜ |

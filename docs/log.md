@@ -8,6 +8,19 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-22 — Item 37 closes: a missed daily run is caught up when its timer starts
+
+Slice 5 had waited since 2026-08-20 for the machine to be off at 07:00 UTC; in six boots it never
+was. The mechanism was driven instead: systemd keeps the time of a timer's last run as the date of
+a stamp file, and when the timer is activated it runs at once if a scheduled time passed since then
+(`Persistent=`, `man systemd.timer`). Both stamps were set back to the previous day and each timer
+restarted: the erasure ran at once, then the backup, and both kept their next scheduled hour. A real
+reboot was set aside by the owner for what it takes down; that the timers start at boot, six boots
+had already shown.
+
+Not to repeat: a check named by an event nobody can arrange — the machine off at a set hour — stayed
+open two months, while the event's documented trigger reproduced it in one command.
+
 ## 2026-10-20 — A provider that keeps the line open no longer holds a turn (DEF-19)
 
 Item 39c had recorded two probe calls hanging past 90 s during DeepSeek's incident. A local server
