@@ -8,6 +8,34 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-23 — Item 35q leaves what the memory keeps to item 35g, and the translation is measured again
+
+An instruction can ask the memory to keep something — "keep a list of every book I finish"
+(invented) — and two of the owner's rows do; one was retired by a merge on 2026-10-16 and has been
+rewritten since. Item 35q carries out a condition, a reading step and a
+reply, so that part is translated as something Tabris cannot do and stays a fact (D25); what the
+memory keeps goes to item 35g, whose Framing now compares a row per entry with a graph memory.
+Pinning such rows was set aside in conversation: a record kept this way is a row that must change
+with every entry, so a pin either blocks the next entry or protects nothing.
+
+The translation's prompt said a save stays in the instruction's text, which would have handed the
+turn's model a request to save — the rejected option, back through another door. With the line
+changed, both links ran again: every memory case right, direct instructions unchanged, stored rows
+within a point (D26). The DeepSeek measurement D19 had deferred was dropped for what it could save.
+
+The same day the cap of steps a turn may run was dropped (spec question 31). Its first reason had
+gone when code took the steps over from the model, and the one left — the search quota every user
+shares — was not protected by it: a cap bounds one turn, not what a user spends over many. Item 35s
+guards the quota where it is spent: Tavily's free plan gives 1,000 searches a month, shared out each
+day by the active users, and past a share the search goes on through the fallback instead of being
+refused. The journal counts about 190 searches in September and 107 in October, which say little:
+the owner cannot yet use Tabris as he means to, which is what this work is for.
+
+Not to repeat: the abuse cases scored 1/6 and 4/6 while every answer was only `cannot` — the
+scorer counts instructions, so two refusals read as a miss. Read the misses before the score. And a
+limit is checked against what it is meant to protect: the step cap stood two weeks guarding a
+quota it could not bound.
+
 ## 2026-10-22 — Item 37 closes: a missed daily run is caught up when its timer starts
 
 Slice 5 had waited since 2026-08-20 for the machine to be off at 07:00 UTC; in six boots it never
