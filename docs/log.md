@@ -8,6 +8,18 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-10-24 — Item 35q's Design closes
+
+Read whole against the spec before its gate, the plan still described the item as it was before
+2026-10-02: an instruction saved at once and announced after (D5, D6, D9), where spec questions 12
+and 13 had made every new instruction a proposal. D29 restates them, and a proposal is one short
+sentence with three answers — save it, put it another way, drop it (spec question 33), its sentence
+written by the translation (D30), whose text measured on 2026-10-23 often left out when the
+instruction applies. The same reading gave abuse case 8 a control (D28) and AC13 a home (D27).
+
+Not to repeat: the widening marked what it replaced in the spec and left one line in the plan
+promising a revisit; fourteen decisions were added on top before anyone read the old ones again.
+
 ## 2026-10-23 — Item 35q leaves what the memory keeps to item 35g, and the translation is measured again
 
 An instruction can ask the memory to keep something — "keep a list of every book I finish"
