@@ -17,6 +17,7 @@ RestartSec=1
 RestartSteps=6
 RestartMaxDelaySec=60
 StartLimitIntervalSec=0
+OOMScoreAdjust=-900
 
 [Install]
 WantedBy=multi-user.target
