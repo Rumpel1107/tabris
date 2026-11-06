@@ -8,6 +8,14 @@
 > whoever runs Tabris (`CHANGELOG.md`). Why a decision was taken is `docs/decisions.md`; what is
 > pending is `docs/roadmap.md`.
 
+## 2026-11-06 — The roadmap is reordered by the owner's pains, and copying comes before building
+
+An exploration, no code. The owner asked whether an open-source assistant could replace or feed Tabris. Hermes Agent, OpenClaw and nanobot were checked that day: all MIT, all built for one person per instance, OpenClaw with over a hundred tracked vulnerabilities — so Tabris stays the base and copies pieces, the code where the licence allows, the idea otherwise. The roadmap became one ordered list from the pains he found in use, memory first (D18); new items 35t (why it forgets), 55 (MCP client) and 56 (repositories, test environment only). Closed rows 35h, 35j and 37 left the roadmap; `docs/priority.local.md`, the gitignored working order of 2026-09-24, is deleted: the roadmap's `#` column is the only order. Before item 35t runs, its conversations are his and other users' real rows: nothing of their content enters this repository, and any model run on them is a paid run that needs his yes.
+
+## 2026-11-03 — `tools/deploy.sh` refuses to run off the VPS
+
+The workbench moved off the VPS to the owner's homelab (his machines, kept in agent memory, not here — nothing product-specific moved). The script now checks `hostname` first and stops with its reason if it is not `rumpels-cloud`, before checking for root, so a deploy attempted from the wrong machine fails loudly instead of trying to install production on it.
+
 ## 2026-10-24 — Item 35q's Design closes
 
 Read whole against the spec before its gate, the plan still described the item as it was before

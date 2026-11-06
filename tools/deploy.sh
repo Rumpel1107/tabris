@@ -15,6 +15,12 @@ if [ $# -ne 1 ]; then
 fi
 TARGET=$1
 
+# Production lives only on the VPS; the workbench moved to the homelab (2026-11-02).
+if [ "$(hostname)" != "rumpels-cloud" ]; then
+    echo "this puts a version into production: run it on rumpels-cloud, not $(hostname)" >&2
+    exit 2
+fi
+
 if [ "$(id -u)" -ne 0 ]; then
     echo "run this with sudo: restarting the service needs root" >&2
     exit 2
